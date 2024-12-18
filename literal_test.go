@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 
-// this file is copied from spanner-dump to ensure compatibility, but the case of bool values are changed.
+// this file is copied from spanner-dump to ensure compatibility
 // https://github.com/cloudspannerecosystem/spanner-dump/blob/6983541f4cffd4f032e4577efdf27222f3a5df99/decoder_test.go
 
 package spanvalue

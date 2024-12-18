@@ -2,9 +2,10 @@ package iterx
 
 import (
 	"fmt"
-	"github.com/ngicks/go-iterator-helper/x/exp/xiter"
 	"iter"
 	"strings"
+
+	"github.com/ngicks/go-iterator-helper/x/exp/xiter"
 )
 
 func Joinf[T any](sep string, format string, seq iter.Seq[T]) string {
