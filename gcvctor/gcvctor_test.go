@@ -1,4 +1,4 @@
-package valuector_test
+package gcvctor_test
 
 import (
 	"encoding/base64"
@@ -13,7 +13,7 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	"github.com/apstndb/spanvalue/valuector"
+	"github.com/apstndb/spanvalue/gcvctor"
 )
 
 func must[T any](v T, err error) T {
@@ -31,7 +31,7 @@ func TestParseExpr(t *testing.T) {
 	}{
 		{
 			"NULL",
-			valuector.TypedNull(sppb.TypeCode_INT64),
+			gcvctor.SimpleTypedNull(sppb.TypeCode_INT64),
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_INT64),
 				Value: structpb.NewNullValue(),
@@ -39,7 +39,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			"TRUE",
-			valuector.BoolValue(true),
+			gcvctor.BoolValue(true),
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_BOOL),
 				Value: structpb.NewBoolValue(true),
@@ -47,7 +47,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			`FALSE`,
-			valuector.BoolValue(false),
+			gcvctor.BoolValue(false),
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_BOOL),
 				Value: structpb.NewBoolValue(false),
@@ -55,7 +55,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			"1",
-			valuector.Int64Value(1),
+			gcvctor.Int64Value(1),
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_INT64),
 				Value: structpb.NewStringValue("1"),
@@ -63,7 +63,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			`3.14`,
-			valuector.Float64Value(3.14),
+			gcvctor.Float64Value(3.14),
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT64),
 				Value: structpb.NewNumberValue(3.14),
@@ -71,7 +71,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			`"foo"`,
-			valuector.StringValue("foo"),
+			gcvctor.StringValue("foo"),
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_STRING),
 				Value: structpb.NewStringValue("foo"),
@@ -79,7 +79,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			`b"foo"`,
-			valuector.BytesValue([]byte("foo")),
+			gcvctor.BytesValue([]byte("foo")),
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_BYTES),
 				Value: structpb.NewStringValue(base64.StdEncoding.EncodeToString([]byte("foo"))),
@@ -87,7 +87,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			`DATE "1970-01-01"`,
-			valuector.DateValue(civil.Date{Year: 1970, Month: time.January, Day: 1}),
+			gcvctor.DateValue(civil.Date{Year: 1970, Month: time.January, Day: 1}),
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_DATE),
 				Value: structpb.NewStringValue("1970-01-01"),
@@ -95,7 +95,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			`TIMESTAMP "1970-01-01T00:00:00Z"`,
-			valuector.TimestampValue(time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)),
+			gcvctor.TimestampValue(time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)),
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_TIMESTAMP),
 				Value: structpb.NewStringValue("1970-01-01T00:00:00Z"),
@@ -106,7 +106,7 @@ func TestParseExpr(t *testing.T) {
 		// Note: Usually, JSON representation is not stable.
 		{
 			`JSON '{"foo":"bar"}'`,
-			must(valuector.JSONValue(map[string]string{"foo": "bar"})),
+			must(gcvctor.JSONValue(map[string]string{"foo": "bar"})),
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_JSON),
 				Value: structpb.NewStringValue(`{"foo":"bar"}`),
@@ -114,7 +114,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			`[1, 2, 3]`,
-			must(valuector.ArrayValue(valuector.Int64Value(1), valuector.Int64Value(2), valuector.Int64Value(3))),
+			must(gcvctor.ArrayValue(gcvctor.Int64Value(1), gcvctor.Int64Value(2), gcvctor.Int64Value(3))),
 			spanner.GenericColumnValue{
 				Type: typector.ElemTypeToArrayType(typector.CodeToSimpleType(sppb.TypeCode_INT64)),
 				Value: structpb.NewListValue(
@@ -130,9 +130,9 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			`(1, "foo", 3.14)`,
-			must(valuector.StructValue(
+			must(gcvctor.StructValue(
 				[]string{"", "", ""},
-				[]spanner.GenericColumnValue{valuector.Int64Value(1), valuector.StringValue("foo"), valuector.Float64Value(3.14)},
+				[]spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.StringValue("foo"), gcvctor.Float64Value(3.14)},
 			)),
 			spanner.GenericColumnValue{
 				Type: typector.StructTypeFieldsToStructType([]*sppb.StructType_Field{
@@ -153,9 +153,9 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			`STRUCT(1 AS int64_value, "foo" AS string_value, 3.14 AS float64_value)`,
-			must(valuector.StructValue(
+			must(gcvctor.StructValue(
 				[]string{"int64_value", "string_value", "float64_value"},
-				[]spanner.GenericColumnValue{valuector.Int64Value(1), valuector.StringValue("foo"), valuector.Float64Value(3.14)},
+				[]spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.StringValue("foo"), gcvctor.Float64Value(3.14)},
 			)),
 			spanner.GenericColumnValue{
 				Type: must(typector.NameCodeSlicesToStructType(
@@ -175,9 +175,9 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			`STRUCT<int64_value INT64, string_value STRING, float64_value FLOAT64>(1, "foo", 3.14)`,
-			must(valuector.StructValue(
+			must(gcvctor.StructValue(
 				[]string{"int64_value", "string_value", "float64_value"},
-				[]spanner.GenericColumnValue{valuector.Int64Value(1), valuector.StringValue("foo"), valuector.Float64Value(3.14)},
+				[]spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.StringValue("foo"), gcvctor.Float64Value(3.14)},
 			)),
 			spanner.GenericColumnValue{
 				Type: must(typector.NameCodeSlicesToStructType(
@@ -197,7 +197,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			"(1)",
-			valuector.Int64Value(1),
+			gcvctor.Int64Value(1),
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_INT64),
 				Value: structpb.NewStringValue("1"),
@@ -205,7 +205,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			"PENDING_COMMIT_TIMESTAMP()",
-			valuector.StringBasedValue(sppb.TypeCode_TIMESTAMP, "spanner.commit_timestamp()"),
+			gcvctor.StringBasedValue(sppb.TypeCode_TIMESTAMP, "spanner.commit_timestamp()"),
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_TIMESTAMP),
 				Value: structpb.NewStringValue("spanner.commit_timestamp()"),
@@ -218,5 +218,31 @@ func TestParseExpr(t *testing.T) {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestNullRawValueFromType_EnumerateSimpleTypes(t *testing.T) {
+	for rawcode, typename := range sppb.TypeCode_name {
+		if typename == "STRUCT" || typename == "ARRAY" {
+			continue
+		}
+		simpleType := typector.CodeToSimpleType(sppb.TypeCode(rawcode))
+		got := gcvctor.TypedNull(simpleType)
+		want := spanner.GenericColumnValue{Type: simpleType, Value: structpb.NewNullValue()}
+		t.Run(typename, func(t *testing.T) {
+			if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+				t.Errorf("diff (-want, +got) = %v", diff)
+			}
+		})
+	}
+}
+
+func TestNullRawValueFromType_ARRAY(t *testing.T) {
+	input := typector.ElemCodeToArrayType(sppb.TypeCode_STRING)
+	want := spanner.GenericColumnValue{Type: input, Value: structpb.NewNullValue()}
+	got := gcvctor.TypedNull(input)
+
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Errorf("diff (-want, +got) = %v", diff)
 	}
 }

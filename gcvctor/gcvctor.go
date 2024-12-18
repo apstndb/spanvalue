@@ -1,10 +1,11 @@
-package valuector
+package gcvctor
 
 import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"slices"
 	"strconv"
 	"time"
 
@@ -85,7 +86,7 @@ func JSONValue(v any) (spanner.GenericColumnValue, error) {
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
 func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if len(vs) == 0 {
-		return TypedNull(sppb.TypeCode_INT64), nil
+		return SimpleTypedNull(sppb.TypeCode_INT64), nil
 	}
 
 	typ := vs[0].Type
@@ -128,9 +129,23 @@ func StructValue(names []string, gcvs []spanner.GenericColumnValue) (spanner.Gen
 	}, nil
 }
 
-func TypedNull(code sppb.TypeCode) spanner.GenericColumnValue {
+func SimpleTypedNull(code sppb.TypeCode) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(code),
 		Value: structpb.NewNullValue(),
+	}
+}
+
+func TypedNull(typ *sppb.Type) spanner.GenericColumnValue {
+	var value *structpb.Value
+	if typ.GetCode() == sppb.TypeCode_STRUCT {
+		value = structpb.NewListValue(&structpb.ListValue{Values: slices.Repeat([]*structpb.Value{structpb.NewNullValue()}, len(typ.GetStructType().GetFields()))})
+	} else {
+		value = structpb.NewNullValue()
+	}
+
+	return spanner.GenericColumnValue{
+		Type:  typ,
+		Value: value,
 	}
 }
