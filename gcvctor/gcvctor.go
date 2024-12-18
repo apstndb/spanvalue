@@ -49,8 +49,12 @@ func StringValue(v string) spanner.GenericColumnValue {
 }
 
 func BytesValue(v []byte) spanner.GenericColumnValue {
+	return BytesBasedValue(typector.CodeToSimpleType(sppb.TypeCode_BYTES), v)
+}
+
+func BytesBasedValue(typ *sppb.Type, v []byte) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
-		Type:  typector.CodeToSimpleType(sppb.TypeCode_BYTES),
+		Type:  typ,
 		Value: structpb.NewStringValue(base64.StdEncoding.EncodeToString(v)),
 	}
 }
@@ -80,6 +84,17 @@ func JSONValue(v any) (spanner.GenericColumnValue, error) {
 		return spanner.GenericColumnValue{}, err
 	}
 	return StringBasedValue(sppb.TypeCode_JSON, string(b)), nil
+}
+
+func ProtoValue(fqn string, b []byte) spanner.GenericColumnValue {
+	return BytesBasedValue(typector.FQNToProtoType(fqn), b)
+}
+
+func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
+	return spanner.GenericColumnValue{
+		Type:  typector.FQNToEnumType(fqn),
+		Value: structpb.NewStringValue(strconv.FormatInt(v, 10)),
+	}
 }
 
 // ArrayValue constructs ARRAY GenericColumnValue.
