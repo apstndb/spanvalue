@@ -1,19 +1,21 @@
 package spanvalue
 
 import (
-	"cloud.google.com/go/spanner"
-	"cloud.google.com/go/spanner/apiv1/spannerpb"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
+
+	"cloud.google.com/go/spanner"
+	"cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/lox"
-	"github.com/apstndb/spanvalue/internal"
 	"github.com/ngicks/go-iterator-helper/hiter"
 	"github.com/ngicks/go-iterator-helper/x/exp/xiter"
 	"github.com/samber/lo"
 	"google.golang.org/protobuf/types/known/structpb"
-	"slices"
-	"strings"
+
+	"github.com/apstndb/spanvalue/internal"
 )
 
 // TODO: PGNumeric, PBJsonB,

@@ -1,12 +1,13 @@
 package spanvalue
 
 import (
-	"cloud.google.com/go/spanner/apiv1/spannerpb"
 	"fmt"
+	"strings"
+
+	"cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/lox"
 	"github.com/apstndb/spantype"
 	"google.golang.org/protobuf/types/known/structpb"
-	"strings"
 )
 
 func formatTypedStructParen(typ *spannerpb.Type, toplevel bool, fieldStrings []string) string {

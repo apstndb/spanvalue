@@ -1,14 +1,15 @@
 package spanvalue
 
 import (
-	"cloud.google.com/go/spanner"
-	"cloud.google.com/go/spanner/apiv1/spannerpb"
 	"encoding/base64"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"cloud.google.com/go/spanner"
+	"cloud.google.com/go/spanner/apiv1/spannerpb"
 )
 
 var SpannerCLICompatibleFormatConfig = FormatConfig{

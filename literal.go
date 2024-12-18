@@ -1,12 +1,14 @@
 package spanvalue
 
 import (
-	"cloud.google.com/go/spanner"
 	"errors"
 	"fmt"
-	"github.com/apstndb/spanvalue/internal"
 	"strconv"
 	"time"
+
+	"cloud.google.com/go/spanner"
+
+	"github.com/apstndb/spanvalue/internal"
 )
 
 func FormatRowLiteral(value *spanner.Row) ([]string, error) {
