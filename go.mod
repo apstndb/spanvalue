@@ -6,11 +6,11 @@ toolchain go1.23.2
 
 require (
 	cloud.google.com/go v0.116.0
-	cloud.google.com/go/spanner v1.71.0
+	cloud.google.com/go/spanner v1.73.0
 	github.com/apstndb/lox v0.0.0-20241102092239-40172f618f5c
 	github.com/apstndb/spantype v0.3.6
 	github.com/google/go-cmp v0.6.0
-	github.com/ngicks/go-iterator-helper v0.0.15
+	github.com/ngicks/go-iterator-helper v0.0.18
 	github.com/samber/lo v1.47.0
 	google.golang.org/protobuf v1.35.1
 )

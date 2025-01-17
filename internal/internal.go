@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/ngicks/go-iterator-helper/hiter"
+	"github.com/ngicks/go-iterator-helper/hiter/stringsiter"
 	"github.com/ngicks/go-iterator-helper/x/exp/xiter"
 	"github.com/samber/lo"
 
@@ -63,5 +63,5 @@ func ToBytesLiteral(v []byte) string {
 }
 
 func ToReadableBytesLiteral(v []byte) string {
-	return fmt.Sprintf(`b"%v"`, hiter.StringsCollect(2*len(v), xiter.Map(ByteToEscapeSequenceReadable, slices.Values(v))))
+	return fmt.Sprintf(`b"%v"`, stringsiter.Collect(xiter.Map(ByteToEscapeSequenceReadable, slices.Values(v))))
 }
