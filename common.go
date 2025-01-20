@@ -47,10 +47,10 @@ var _, _ NullableValue = spanner.NullString{}, (*spanner.NullString)(nil)
 var _, _ NullableValue = spanner.NullDate{}, (*spanner.NullDate)(nil)
 
 // FormatComplexFunc is a function to format spanner.GenericColumnValue.
-// If it returns errFallthrough, value will pass through to next step.
+// If it returns ErrFallthrough, value will pass through to next step.
 type FormatComplexFunc = func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error)
 
-var errFallthrough = errors.New("fallthrough")
+var ErrFallthrough = errors.New("fallthrough")
 
 func typeValueToGCV(typ *spannerpb.Type, value *structpb.Value) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{Type: typ, Value: value}
@@ -121,14 +121,14 @@ func FormatProtoAsCast(formatter Formatter, value spanner.GenericColumnValue, to
 		}
 		return fmt.Sprintf(`CAST(%v AS %v)`, internal.ToReadableBytesLiteral(b), value.Type.ProtoTypeFqn), nil
 	}
-	return "", errFallthrough
+	return "", ErrFallthrough
 }
 
 func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
 	if value.Type.GetCode() == spannerpb.TypeCode_ENUM {
 		return fmt.Sprintf(`CAST(%q AS %v)`, value.Value.GetStringValue(), value.Type.ProtoTypeFqn), nil
 	}
-	return "", errFallthrough
+	return "", ErrFallthrough
 }
 
 type Formatter interface {
@@ -190,7 +190,7 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 		return fc.FormatStruct.FormatStructParen(value.Type, toplevel, fieldStrings), nil
 	default:
 		for _, f := range fc.FormatComplexPlugins {
-			if s, err := f(fc, value, toplevel); !errors.Is(err, errFallthrough) {
+			if s, err := f(fc, value, toplevel); !errors.Is(err, ErrFallthrough) {
 				return s, err
 			}
 		}
