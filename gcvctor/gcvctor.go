@@ -41,6 +41,13 @@ func Float64Value(v float64) spanner.GenericColumnValue {
 	}
 }
 
+func Float32Value(v float32) spanner.GenericColumnValue {
+	return spanner.GenericColumnValue{
+		Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT32),
+		Value: structpb.NewNumberValue(float64(v)),
+	}
+}
+
 func StringValue(v string) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(sppb.TypeCode_STRING),
