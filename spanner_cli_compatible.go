@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/spanner"
-	"cloud.google.com/go/spanner/apiv1/spannerpb"
+	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 )
 
 var SpannerCLICompatibleFormatConfig = FormatConfig{
@@ -69,6 +69,6 @@ var (
 	_ FormatStructFieldFunc = FormatSimpleStructField
 )
 
-func FormatBracketStruct(typ *spannerpb.Type, toplevel bool, fieldStrings []string) string {
+func FormatBracketStruct(typ *sppb.Type, toplevel bool, fieldStrings []string) string {
 	return fmt.Sprintf("[%v]", strings.Join(fieldStrings, ", "))
 }

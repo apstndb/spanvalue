@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"cloud.google.com/go/spanner"
-	"cloud.google.com/go/spanner/apiv1/spannerpb"
+	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/lox"
 	"github.com/ngicks/go-iterator-helper/hiter"
 	"github.com/ngicks/go-iterator-helper/x/exp/xiter"
@@ -52,33 +52,33 @@ type FormatComplexFunc = func(formatter Formatter, value spanner.GenericColumnVa
 
 var ErrFallthrough = errors.New("fallthrough")
 
-func typeValueToGCV(typ *spannerpb.Type, value *structpb.Value) spanner.GenericColumnValue {
+func typeValueToGCV(typ *sppb.Type, value *structpb.Value) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{Type: typ, Value: value}
 }
 
 func simpleGCVToNullable(value spanner.GenericColumnValue) (NullableValue, error) {
 	switch value.Type.GetCode() {
-	case spannerpb.TypeCode_BOOL:
+	case sppb.TypeCode_BOOL:
 		return decodeScalar[spanner.NullBool](value)
-	case spannerpb.TypeCode_INT64, spannerpb.TypeCode_ENUM:
+	case sppb.TypeCode_INT64, sppb.TypeCode_ENUM:
 		return decodeScalar[spanner.NullInt64](value)
-	case spannerpb.TypeCode_FLOAT32:
+	case sppb.TypeCode_FLOAT32:
 		return decodeScalar[spanner.NullFloat32](value)
-	case spannerpb.TypeCode_FLOAT64:
+	case sppb.TypeCode_FLOAT64:
 		return decodeScalar[spanner.NullFloat64](value)
-	case spannerpb.TypeCode_TIMESTAMP:
+	case sppb.TypeCode_TIMESTAMP:
 		return decodeScalar[spanner.NullTime](value)
-	case spannerpb.TypeCode_DATE:
+	case sppb.TypeCode_DATE:
 		return decodeScalar[spanner.NullDate](value)
-	case spannerpb.TypeCode_STRING:
+	case sppb.TypeCode_STRING:
 		return decodeScalar[spanner.NullString](value)
-	case spannerpb.TypeCode_BYTES, spannerpb.TypeCode_PROTO:
+	case sppb.TypeCode_BYTES, sppb.TypeCode_PROTO:
 		return decodeScalar[NullBytes](value)
-	case spannerpb.TypeCode_NUMERIC:
+	case sppb.TypeCode_NUMERIC:
 		return decodeScalar[spanner.NullNumeric](value)
-	case spannerpb.TypeCode_JSON:
+	case sppb.TypeCode_JSON:
 		return decodeScalar[spanner.NullJSON](value)
-	case spannerpb.TypeCode_TYPE_CODE_UNSPECIFIED:
+	case sppb.TypeCode_TYPE_CODE_UNSPECIFIED:
 		fallthrough
 	default:
 		return nil, fmt.Errorf("unknown type: %v", value.Type.String())
@@ -104,8 +104,8 @@ func (fc *FormatConfig) formatSimpleColumn(value spanner.GenericColumnValue) (st
 	return fc.FormatNullable(nv)
 }
 
-func isComplexType(elemCode spannerpb.TypeCode) bool {
-	return spannerpb.TypeCode_STRUCT == elemCode || spannerpb.TypeCode_ARRAY == elemCode
+func isComplexType(elemCode sppb.TypeCode) bool {
+	return sppb.TypeCode_STRUCT == elemCode || sppb.TypeCode_ARRAY == elemCode
 }
 
 var (
@@ -114,7 +114,7 @@ var (
 )
 
 func FormatProtoAsCast(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
-	if value.Type.GetCode() == spannerpb.TypeCode_PROTO {
+	if value.Type.GetCode() == sppb.TypeCode_PROTO {
 		b, err := base64.StdEncoding.DecodeString(value.Value.GetStringValue())
 		if err != nil {
 			return "", err
@@ -125,7 +125,7 @@ func FormatProtoAsCast(formatter Formatter, value spanner.GenericColumnValue, to
 }
 
 func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
-	if value.Type.GetCode() == spannerpb.TypeCode_ENUM {
+	if value.Type.GetCode() == sppb.TypeCode_ENUM {
 		return fmt.Sprintf(`CAST(%q AS %v)`, value.Value.GetStringValue(), value.Type.ProtoTypeFqn), nil
 	}
 	return "", ErrFallthrough
@@ -148,15 +148,15 @@ type FormatStruct struct {
 	FormatStructParen FormatStructParenFunc
 }
 
-type FormatArrayFunc func(typ *spannerpb.Type, toplevel bool, elemStrings []string) string
-type FormatStructParenFunc func(typ *spannerpb.Type, toplevel bool, fieldStrings []string) string
-type FormatStructFieldFunc func(fc *FormatConfig, field *spannerpb.StructType_Field, value *structpb.Value) (string, error)
+type FormatArrayFunc func(typ *sppb.Type, toplevel bool, elemStrings []string) string
+type FormatStructParenFunc func(typ *sppb.Type, toplevel bool, fieldStrings []string) string
+type FormatStructFieldFunc func(fc *FormatConfig, field *sppb.StructType_Field, value *structpb.Value) (string, error)
 type FormatNullableFunc = func(value NullableValue) (string, error)
 
 func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel bool) (string, error) {
 	valType := value.Type
 	switch valType.GetCode() {
-	case spannerpb.TypeCode_ARRAY:
+	case sppb.TypeCode_ARRAY:
 		// Note: This format is not intended to be parseable.
 		if _, isNull := value.Value.Kind.(*structpb.Value_NullValue); isNull {
 			return fc.NullString, nil
@@ -173,11 +173,11 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 		}
 
 		return fc.FormatArray(value.Type, toplevel, elemStrings), nil
-	case spannerpb.TypeCode_STRUCT:
+	case sppb.TypeCode_STRUCT:
 		// Note: This format is not intended to be parseable.
 		// There is no NULL struct.
 		fieldStrings, err := hiter.TryCollect(xiter.Map2(
-			func(field *spannerpb.StructType_Field, value *structpb.Value) (string, error) {
+			func(field *sppb.StructType_Field, value *structpb.Value) (string, error) {
 				return fc.FormatStruct.FormatStructField(fc, field, value)
 			},
 			hiter.Pairs(
