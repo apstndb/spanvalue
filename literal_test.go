@@ -162,6 +162,15 @@ func TestDecodeColumnLiteral(t *testing.T) {
 			value: spanner.NullJSON{Value: jsonMessage{Msg: "\"foo\""}, Valid: true},
 			want:  `JSON "{\"msg\":\"\\\"foo\\\"\"}"`,
 		},
+		{
+			desc: "interval",
+			value: spanner.NullInterval{Interval: spanner.Interval{
+				Months: 13,
+				Days:   1,
+				Nanos:  big.NewInt((3600 + 60 + 1) * 1000 * 1000 * 1000),
+			}, Valid: true},
+			want: `INTERVAL "P1Y1M1DT1H1M1S"`,
+		},
 
 		// nullable
 		{
@@ -207,6 +216,11 @@ func TestDecodeColumnLiteral(t *testing.T) {
 		{
 			desc:  "null json",
 			value: spanner.NullJSON{Value: jsonMessage{}, Valid: false},
+			want:  `NULL`,
+		},
+		{
+			desc:  "null interval",
+			value: spanner.NullInterval{Valid: false},
 			want:  `NULL`,
 		},
 
@@ -264,6 +278,14 @@ func TestDecodeColumnLiteral(t *testing.T) {
 			},
 			want: `[JSON "{\"msg\":\"foo\"}", JSON "{\"msg\":\"bar\"}"]`,
 		},
+		{
+			desc: "array interval",
+			value: []spanner.NullInterval{
+				{Interval: spanner.Interval{Months: 1}, Valid: true},
+				{Interval: spanner.Interval{Days: 1}, Valid: true},
+			},
+			want: `[INTERVAL "P1M", INTERVAL "P1D"]`,
+		},
 
 		// array nullable
 		{
@@ -309,6 +331,11 @@ func TestDecodeColumnLiteral(t *testing.T) {
 		{
 			desc:  "null array json",
 			value: []spanner.NullJSON(nil),
+			want:  "NULL",
+		},
+		{
+			desc:  "null array interval",
+			value: []spanner.NullInterval(nil),
 			want:  "NULL",
 		},
 	} {

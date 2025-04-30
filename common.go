@@ -78,6 +78,8 @@ func simpleGCVToNullable(value spanner.GenericColumnValue) (NullableValue, error
 		return decodeScalar[spanner.NullNumeric](value)
 	case sppb.TypeCode_JSON:
 		return decodeScalar[spanner.NullJSON](value)
+	case sppb.TypeCode_INTERVAL:
+		return decodeScalar[spanner.NullInterval](value)
 	case sppb.TypeCode_TYPE_CODE_UNSPECIFIED:
 		fallthrough
 	default:

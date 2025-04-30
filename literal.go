@@ -59,6 +59,8 @@ func formatNullableValueLiteral(value NullableValue) (string, error) {
 		return fmt.Sprintf("DATE %q", v.Date.String()), nil
 	case spanner.NullJSON:
 		return fmt.Sprintf("JSON %q", v.String()), nil
+	case spanner.NullInterval:
+		return fmt.Sprintf("INTERVAL %q", v.String()), nil
 	default:
 		// Reject unknown type to guarantee round-trip
 		return "", errors.New("unknown type")
