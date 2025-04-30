@@ -10,6 +10,7 @@ import (
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/spantype/typector"
 	"github.com/google/go-cmp/cmp"
+	"github.com/samber/lo"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -110,6 +111,14 @@ func TestParseExpr(t *testing.T) {
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_JSON),
 				Value: structpb.NewStringValue(`{"foo":"bar"}`),
+			},
+		},
+		{
+			`INTERVAL "P1Y1M1DT1H1M1S"`,
+			gcvctor.IntervalValue(lo.Must(spanner.ParseInterval(`P1Y1M1DT1H1M1S`))),
+			spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_INTERVAL),
+				Value: structpb.NewStringValue(`P1Y1M1DT1H1M1S`),
 			},
 		},
 		{

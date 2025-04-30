@@ -85,6 +85,10 @@ func NumericValue(v *big.Rat) spanner.GenericColumnValue {
 	return StringBasedValue(sppb.TypeCode_NUMERIC, spanner.NumericString(v))
 }
 
+func IntervalValue(v spanner.Interval) spanner.GenericColumnValue {
+	return StringBasedValue(sppb.TypeCode_INTERVAL, v.String())
+}
+
 func JSONValue(v any) (spanner.GenericColumnValue, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
