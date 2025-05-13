@@ -169,7 +169,7 @@ func TestDecodeColumnLiteral(t *testing.T) {
 				Days:   1,
 				Nanos:  big.NewInt((3600 + 60 + 1) * 1000 * 1000 * 1000),
 			}, Valid: true},
-			want: `INTERVAL "P1Y1M1DT1H1M1S"`,
+			want: `CAST("P1Y1M1DT1H1M1S" AS INTERVAL)`,
 		},
 
 		// nullable
@@ -284,7 +284,7 @@ func TestDecodeColumnLiteral(t *testing.T) {
 				{Interval: spanner.Interval{Months: 1}, Valid: true},
 				{Interval: spanner.Interval{Days: 1}, Valid: true},
 			},
-			want: `[INTERVAL "P1M", INTERVAL "P1D"]`,
+			want: `[CAST("P1M" AS INTERVAL), CAST("P1D" AS INTERVAL)]`,
 		},
 
 		// array nullable

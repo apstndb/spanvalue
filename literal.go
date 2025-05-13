@@ -60,7 +60,8 @@ func formatNullableValueLiteral(value NullableValue) (string, error) {
 	case spanner.NullJSON:
 		return fmt.Sprintf("JSON %q", v.String()), nil
 	case spanner.NullInterval:
-		return fmt.Sprintf("INTERVAL %q", v.String()), nil
+		// Use CAST for INTERVAL. Literal notation is unintuitive for information preservation.
+		return fmt.Sprintf("CAST(%q AS INTERVAL)", v.String()), nil
 	default:
 		// Reject unknown type to guarantee round-trip
 		return "", errors.New("unknown type")
