@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"cloud.google.com/go/spanner"
+	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/apstndb/spanvalue/internal"
 )
@@ -24,6 +26,26 @@ var LiteralFormatConfig = &FormatConfig{
 	FormatArray:    FormatOptionallyTypedArray,
 	FormatStruct:   FormatTypedStruct,
 	FormatNullable: formatNullableValueLiteral,
+	FormatComplexPlugins: []FormatComplexFunc{
+		formatUUID(),
+		FormatProtoAsCast,
+		FormatEnumAsCast,
+	},
+}
+
+// formatUUID is workaround because google-cloud-go/spanner doesn't yet support UUID type.
+func formatUUID() FormatComplexFunc {
+	return func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
+		if value.Type.GetCode() != sppb.TypeCode_UUID {
+			return "", ErrFallthrough
+		}
+
+		if _, ok := value.Value.Kind.(*structpb.Value_NullValue); ok {
+			return "NULL", nil
+		}
+
+		return fmt.Sprintf("CAST(%q AS UUID)", value.Value.GetStringValue()), nil
+	}
 }
 
 var (

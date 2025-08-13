@@ -121,14 +121,14 @@ func FormatProtoAsCast(formatter Formatter, value spanner.GenericColumnValue, to
 		if err != nil {
 			return "", err
 		}
-		return fmt.Sprintf(`CAST(%v AS %v)`, internal.ToReadableBytesLiteral(b), value.Type.ProtoTypeFqn), nil
+		return fmt.Sprintf("CAST(%v AS `%v`)", internal.ToReadableBytesLiteral(b), value.Type.ProtoTypeFqn), nil
 	}
 	return "", ErrFallthrough
 }
 
 func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
 	if value.Type.GetCode() == sppb.TypeCode_ENUM {
-		return fmt.Sprintf(`CAST(%q AS %v)`, value.Value.GetStringValue(), value.Type.ProtoTypeFqn), nil
+		return fmt.Sprintf("CAST(%q AS `%v`)", value.Value.GetStringValue(), value.Type.ProtoTypeFqn), nil
 	}
 	return "", ErrFallthrough
 }
