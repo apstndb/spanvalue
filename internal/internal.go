@@ -6,16 +6,22 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/ngicks/go-iterator-helper/hiter/stringsiter"
 	"github.com/ngicks/go-iterator-helper/x/exp/xiter"
-	"github.com/samber/lo"
 
 	"github.com/apstndb/spanvalue/internal/iterx"
 )
 
 func ByteToEscapeSequenceReadable(b byte) string {
-	return lo.Ternary(strconv.IsPrint(rune(b)), string(b), fmt.Sprintf(`\x%02x`, b))
+	switch {
+	case b == '\\':
+		return `\\`
+	case 0x20 <= b && b <= 0x7E:
+		return string(b)
+	}
+	return fmt.Sprintf(`\x%02x`, b)
 }
 
 func Float64ToLiteral(v float64) string {
@@ -62,6 +68,19 @@ func ToBytesLiteral(v []byte) string {
 	return fmt.Sprintf(`b"%v"`, iterx.Joinf("", `\x%02x`, slices.Values(v)))
 }
 
+func smartQuote(s string) string {
+	hasSingle := strings.Contains(s, `'`)
+	hasDouble := strings.Contains(s, `"`)
+
+	useSingle := hasDouble && !hasSingle
+
+	if useSingle {
+		return fmt.Sprintf(`'%v'`, strings.ReplaceAll(s, `'`, `\'`))
+	}
+	return fmt.Sprintf(`"%v"`, strings.ReplaceAll(s, `"`, `\"`))
+}
+
 func ToReadableBytesLiteral(v []byte) string {
-	return fmt.Sprintf(`b"%v"`, stringsiter.Collect(xiter.Map(ByteToEscapeSequenceReadable, slices.Values(v))))
+	encoded := stringsiter.Collect(xiter.Map(ByteToEscapeSequenceReadable, slices.Values(v)))
+	return fmt.Sprintf(`b%v`, smartQuote(encoded))
 }

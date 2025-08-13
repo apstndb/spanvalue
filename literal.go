@@ -44,7 +44,7 @@ func formatNullableValueLiteral(value NullableValue) (string, error) {
 	case spanner.NullBool:
 		return strconv.FormatBool(v.Bool), nil
 	case NullBytes:
-		return internal.ToBytesLiteral(v), nil
+		return internal.ToReadableBytesLiteral(v), nil
 	case spanner.NullFloat32:
 		return internal.Float32ToLiteral(v.Float32), nil
 	case spanner.NullFloat64:

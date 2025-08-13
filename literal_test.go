@@ -59,8 +59,8 @@ func TestDecodeColumnLiteral(t *testing.T) {
 		},
 		{
 			desc:  "bytes",
-			value: []byte("abc\x01\xa0"),
-			want:  `b"\x61\x62\x63\x01\xa0"`,
+			value: []byte("\x61\x62\x63\x01\xa0"),
+			want:  `b"abc\x01\xa0"`,
 		},
 		{
 			desc:  "float64",
@@ -237,8 +237,8 @@ func TestDecodeColumnLiteral(t *testing.T) {
 		},
 		{
 			desc:  "array bytes",
-			value: [][]byte{{'a', 'b', 'c'}, {'d', 'e', 'f'}},
-			want:  `[b"\x61\x62\x63", b"\x64\x65\x66"]`,
+			value: [][]byte{{'"', 'a', 'b', 'c', '"'}, {'\'', 'd', 'e', 'f', '\''}},
+			want:  `[b'"abc"', b"'def'"]`,
 		},
 		{
 			desc:  "array float64",
