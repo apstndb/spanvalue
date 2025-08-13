@@ -8,7 +8,6 @@ import (
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/apstndb/spanvalue/internal"
 )
@@ -40,7 +39,7 @@ func formatUUID() FormatComplexFunc {
 			return "", ErrFallthrough
 		}
 
-		if _, ok := value.Value.Kind.(*structpb.Value_NullValue); ok {
+		if isNull(value) {
 			return "NULL", nil
 		}
 

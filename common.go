@@ -175,7 +175,7 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 	switch valType.GetCode() {
 	case sppb.TypeCode_ARRAY:
 		// Note: This format is not intended to be parseable.
-		if _, isNull := value.Value.Kind.(*structpb.Value_NullValue); isNull {
+		if isNull(value) {
 			return fc.NullString, nil
 		}
 
