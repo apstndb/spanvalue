@@ -29,6 +29,10 @@ import (
 
 	"cloud.google.com/go/civil"
 	"cloud.google.com/go/spanner"
+	"github.com/apstndb/spantype/typector"
+	"github.com/samber/lo"
+
+	"github.com/apstndb/spanvalue/gcvctor"
 )
 
 func mustParseTimeString(t *testing.T, timeStr string) time.Time {
@@ -223,7 +227,26 @@ func TestDecodeColumnLiteral(t *testing.T) {
 			value: spanner.NullInterval{Valid: false},
 			want:  `NULL`,
 		},
-
+		{
+			desc:  "proto",
+			value: gcvctor.ProtoValue("package.ProtoType", []byte("deadbeef")),
+			want:  "CAST(b\"deadbeef\" AS `package.ProtoType`)",
+		},
+		{
+			desc:  "enum",
+			value: gcvctor.EnumValue("package.EnumType", 42),
+			want:  "CAST(42 AS `package.EnumType`)",
+		},
+		{
+			desc:  "null proto",
+			value: gcvctor.TypedNull(typector.FQNToProtoType("package.ProtoType")),
+			want:  "NULL",
+		},
+		{
+			desc:  "null enum",
+			value: gcvctor.TypedNull(typector.FQNToEnumType("package.EnumType")),
+			want:  "NULL",
+		},
 		// array non-nullable
 		{
 			desc:  "empty array",
@@ -286,6 +309,16 @@ func TestDecodeColumnLiteral(t *testing.T) {
 			},
 			want: `[CAST("P1M" AS INTERVAL), CAST("P1D" AS INTERVAL)]`,
 		},
+		{
+			desc:  "array proto",
+			value: lo.Must(gcvctor.ArrayValue(gcvctor.ProtoValue("package.ProtoType", []byte("deadbeef")))),
+			want:  "[CAST(b\"deadbeef\" AS `package.ProtoType`)]",
+		},
+		{
+			desc:  "array enum",
+			value: lo.Must(gcvctor.ArrayValue(gcvctor.EnumValue("package.EnumType", 42))),
+			want:  "[CAST(42 AS `package.EnumType`)]",
+		},
 
 		// array nullable
 		{
@@ -336,6 +369,16 @@ func TestDecodeColumnLiteral(t *testing.T) {
 		{
 			desc:  "null array interval",
 			value: []spanner.NullInterval(nil),
+			want:  "NULL",
+		},
+		{
+			desc:  "null array proto",
+			value: gcvctor.TypedNull(typector.FQNToProtoType("package.ProtoType")),
+			want:  "NULL",
+		},
+		{
+			desc:  "null array enum",
+			value: gcvctor.TypedNull(typector.FQNToEnumType("package.EnumType")),
 			want:  "NULL",
 		},
 	} {

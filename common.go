@@ -115,22 +115,37 @@ var (
 	_ FormatComplexFunc = FormatEnumAsCast
 )
 
+func isNull(gcv spanner.GenericColumnValue) bool {
+	_, ok := gcv.Value.Kind.(*structpb.Value_NullValue)
+	return ok
+}
+
 func FormatProtoAsCast(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
-	if value.Type.GetCode() == sppb.TypeCode_PROTO {
-		b, err := base64.StdEncoding.DecodeString(value.Value.GetStringValue())
-		if err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("CAST(%v AS `%v`)", internal.ToReadableBytesLiteral(b), value.Type.ProtoTypeFqn), nil
+	if value.Type.GetCode() != sppb.TypeCode_PROTO {
+		return "", ErrFallthrough
 	}
-	return "", ErrFallthrough
+
+	if isNull(value) {
+		return "NULL", nil
+	}
+
+	b, err := base64.StdEncoding.DecodeString(value.Value.GetStringValue())
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("CAST(%v AS `%v`)", internal.ToReadableBytesLiteral(b), value.Type.ProtoTypeFqn), nil
 }
 
 func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
-	if value.Type.GetCode() == sppb.TypeCode_ENUM {
-		return fmt.Sprintf("CAST(%q AS `%v`)", value.Value.GetStringValue(), value.Type.ProtoTypeFqn), nil
+	if value.Type.GetCode() != sppb.TypeCode_ENUM {
+		return "", ErrFallthrough
 	}
-	return "", ErrFallthrough
+
+	if isNull(value) {
+		return "NULL", nil
+	}
+
+	return fmt.Sprintf("CAST(%v AS `%v`)", value.Value.GetStringValue(), value.Type.ProtoTypeFqn), nil
 }
 
 type Formatter interface {
