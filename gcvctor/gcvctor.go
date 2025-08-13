@@ -175,3 +175,14 @@ func TypedNull(typ *sppb.Type) spanner.GenericColumnValue {
 		Value: value,
 	}
 }
+
+func ElemTypeToEmptyArray(typ *sppb.Type) spanner.GenericColumnValue {
+	return spanner.GenericColumnValue{
+		Type:  typector.ElemTypeToArrayType(typ),
+		Value: structpb.NewListValue(&structpb.ListValue{}),
+	}
+}
+
+func ElemTypeCodeToEmptyArray(code sppb.TypeCode) spanner.GenericColumnValue {
+	return ElemTypeToEmptyArray(typector.CodeToSimpleType(code))
+}

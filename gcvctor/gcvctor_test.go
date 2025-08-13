@@ -213,6 +213,22 @@ func TestParseExpr(t *testing.T) {
 			},
 		},
 		{
+			"ARRAY<INT64>[]",
+			gcvctor.ElemTypeToEmptyArray(typector.CodeToSimpleType(sppb.TypeCode_INT64)),
+			spanner.GenericColumnValue{
+				Type:  typector.ElemCodeToArrayType(sppb.TypeCode_INT64),
+				Value: structpb.NewListValue(&structpb.ListValue{}),
+			},
+		},
+		{
+			"ARRAY<STRUCT<n INT64>>[]",
+			gcvctor.ElemTypeToEmptyArray(typector.NameCodeToStructType("n", sppb.TypeCode_INT64)),
+			spanner.GenericColumnValue{
+				Type:  typector.ElemTypeToArrayType(typector.NameCodeToStructType("n", sppb.TypeCode_INT64)),
+				Value: structpb.NewListValue(&structpb.ListValue{}),
+			},
+		},
+		{
 			"PENDING_COMMIT_TIMESTAMP()",
 			gcvctor.StringBasedValue(sppb.TypeCode_TIMESTAMP, "spanner.commit_timestamp()"),
 			spanner.GenericColumnValue{
