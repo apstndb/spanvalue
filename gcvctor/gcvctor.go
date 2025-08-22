@@ -11,6 +11,7 @@ import (
 
 	"github.com/apstndb/spantype"
 	gocmp "github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"cloud.google.com/go/civil"
@@ -87,6 +88,10 @@ func NumericValue(v *big.Rat) spanner.GenericColumnValue {
 
 func IntervalValue(v spanner.Interval) spanner.GenericColumnValue {
 	return StringBasedValue(sppb.TypeCode_INTERVAL, v.String())
+}
+
+func UUIDValue(v uuid.UUID) spanner.GenericColumnValue {
+	return StringBasedValue(sppb.TypeCode_UUID, v.String())
 }
 
 func JSONValue(v any) (spanner.GenericColumnValue, error) {

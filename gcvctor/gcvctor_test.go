@@ -10,6 +10,7 @@ import (
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/spantype/typector"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -119,6 +120,14 @@ func TestParseExpr(t *testing.T) {
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_INTERVAL),
 				Value: structpb.NewStringValue(`P1Y1M1DT1H1M1S`),
+			},
+		},
+		{
+			`UUID "858ebda5-f6df-4f5d-9151-aa98796053c4"`,
+			gcvctor.UUIDValue(uuid.MustParse("858ebda5-f6df-4f5d-9151-aa98796053c4")),
+			spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_UUID),
+				Value: structpb.NewStringValue(`858ebda5-f6df-4f5d-9151-aa98796053c4`),
 			},
 		},
 		{
