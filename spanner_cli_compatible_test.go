@@ -25,6 +25,7 @@ import (
 	"time"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/typepb"
 
@@ -142,6 +143,17 @@ func TestDecodeColumn(t *testing.T) {
 			want:  `null`,
 		},
 
+		{
+			desc:  "interval",
+			value: spanner.NullInterval{Interval: spanner.Interval{Days: 1}, Valid: true},
+			want:  `P1D`,
+		},
+
+		{
+			desc:  "uuid",
+			value: spanner.NullUUID{UUID: uuid.MustParse("858ebda5-f6df-4f5d-9151-aa98796053c4"), Valid: true},
+			want:  `858ebda5-f6df-4f5d-9151-aa98796053c4`,
+		},
 		// nullable
 		{
 			desc:  "null bool",
@@ -191,6 +203,18 @@ func TestDecodeColumn(t *testing.T) {
 		{
 			desc:  "null json",
 			value: spanner.NullJSON{Value: nil, Valid: false},
+			want:  "NULL",
+		},
+
+		{
+			desc:  "null interval",
+			value: spanner.NullInterval{},
+			want:  "NULL",
+		},
+
+		{
+			desc:  "null uuid",
+			value: spanner.NullUUID{},
 			want:  "NULL",
 		},
 
@@ -270,6 +294,22 @@ func TestDecodeColumn(t *testing.T) {
 			},
 			want: `[{"msg":"foo"}, {"msg":"bar"}]`,
 		},
+		{
+			desc: "array interval",
+			value: []spanner.NullInterval{
+				{Interval: spanner.Interval{Months: 1}, Valid: true},
+				{Interval: spanner.Interval{Days: 1}, Valid: true},
+			},
+			want: `[P1M, P1D]`,
+		},
+		{
+			desc: "array uuid",
+			value: []spanner.NullUUID{
+				{UUID: uuid.MustParse("858ebda5-f6df-4f5d-9151-aa98796053c4"), Valid: true},
+				{UUID: uuid.MustParse("bb747c86-9dd9-4ece-af46-8c64cb3946a9"), Valid: true},
+			},
+			want: `[858ebda5-f6df-4f5d-9151-aa98796053c4, bb747c86-9dd9-4ece-af46-8c64cb3946a9]`,
+		},
 
 		// array nullable
 		{
@@ -319,6 +359,18 @@ func TestDecodeColumn(t *testing.T) {
 		},
 		{
 			desc:  "null array json",
+			value: []spanner.NullJSON(nil),
+			want:  "NULL",
+		},
+
+		{
+			desc:  "null array interval",
+			value: []spanner.NullJSON(nil),
+			want:  "NULL",
+		},
+
+		{
+			desc:  "null array uuid",
 			value: []spanner.NullJSON(nil),
 			want:  "NULL",
 		},

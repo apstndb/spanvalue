@@ -54,6 +54,10 @@ func FormatNullableSpannerCLICompatible(value NullableValue) (string, error) {
 		return strings.Trim(v.String(), `"`), nil
 	case spanner.NullJSON:
 		return v.String(), nil
+	case spanner.NullInterval:
+		return v.String(), nil
+	case spanner.NullUUID:
+		return v.String(), nil
 	default:
 		return value.String(), nil
 	}
