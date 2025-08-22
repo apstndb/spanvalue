@@ -30,6 +30,7 @@ import (
 	"cloud.google.com/go/civil"
 	"cloud.google.com/go/spanner"
 	"github.com/apstndb/spantype/typector"
+	"github.com/google/uuid"
 	"github.com/samber/lo"
 
 	"github.com/apstndb/spanvalue/gcvctor"
@@ -175,6 +176,10 @@ func TestDecodeColumnLiteral(t *testing.T) {
 			}, Valid: true},
 			want: `CAST("P1Y1M1DT1H1M1S" AS INTERVAL)`,
 		},
+		{
+			desc:  "uuid",
+			value: spanner.NullUUID{UUID: uuid.MustParse("858ebda5-f6df-4f5d-9151-aa98796053c4"), Valid: true},
+			want:  `CAST("858ebda5-f6df-4f5d-9151-aa98796053c4" AS UUID)`},
 
 		// nullable
 		{
@@ -225,6 +230,11 @@ func TestDecodeColumnLiteral(t *testing.T) {
 		{
 			desc:  "null interval",
 			value: spanner.NullInterval{Valid: false},
+			want:  `NULL`,
+		},
+		{
+			desc:  "null uuid",
+			value: spanner.NullUUID{Valid: false},
 			want:  `NULL`,
 		},
 		{
@@ -310,6 +320,14 @@ func TestDecodeColumnLiteral(t *testing.T) {
 			want: `[CAST("P1M" AS INTERVAL), CAST("P1D" AS INTERVAL)]`,
 		},
 		{
+			desc: "array uuid",
+			value: []spanner.NullUUID{
+				{UUID: uuid.MustParse("858ebda5-f6df-4f5d-9151-aa98796053c4"), Valid: true},
+				{UUID: uuid.MustParse("bb747c86-9dd9-4ece-af46-8c64cb3946a9"), Valid: true},
+			},
+			want: `[CAST("858ebda5-f6df-4f5d-9151-aa98796053c4" AS UUID), CAST("bb747c86-9dd9-4ece-af46-8c64cb3946a9" AS UUID)]`,
+		},
+		{
 			desc:  "array proto",
 			value: lo.Must(gcvctor.ArrayValue(gcvctor.ProtoValue("package.ProtoType", []byte("deadbeef")))),
 			want:  "[CAST(b\"deadbeef\" AS `package.ProtoType`)]",
@@ -369,6 +387,11 @@ func TestDecodeColumnLiteral(t *testing.T) {
 		{
 			desc:  "null array interval",
 			value: []spanner.NullInterval(nil),
+			want:  "NULL",
+		},
+		{
+			desc:  "null array uuid",
+			value: []spanner.NullUUID(nil),
 			want:  "NULL",
 		},
 		{

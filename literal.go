@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"cloud.google.com/go/spanner"
-	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 
 	"github.com/apstndb/spanvalue/internal"
 )
@@ -26,25 +25,9 @@ var LiteralFormatConfig = &FormatConfig{
 	FormatStruct:   FormatTypedStruct,
 	FormatNullable: formatNullableValueLiteral,
 	FormatComplexPlugins: []FormatComplexFunc{
-		formatUUID(),
 		FormatProtoAsCast,
 		FormatEnumAsCast,
 	},
-}
-
-// formatUUID is workaround because google-cloud-go/spanner doesn't yet support UUID type.
-func formatUUID() FormatComplexFunc {
-	return func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
-		if value.Type.GetCode() != sppb.TypeCode_UUID {
-			return "", ErrFallthrough
-		}
-
-		if isNull(value) {
-			return "NULL", nil
-		}
-
-		return fmt.Sprintf("CAST(%q AS UUID)", value.Value.GetStringValue()), nil
-	}
 }
 
 var (
@@ -83,6 +66,8 @@ func formatNullableValueLiteral(value NullableValue) (string, error) {
 	case spanner.NullInterval:
 		// Use CAST for INTERVAL. Literal notation is unintuitive for information preservation.
 		return fmt.Sprintf("CAST(%q AS INTERVAL)", v.String()), nil
+	case spanner.NullUUID:
+		return fmt.Sprintf("CAST(%q AS UUID)", v.String()), nil
 	default:
 		// Reject unknown type to guarantee round-trip
 		return "", errors.New("unknown type")
