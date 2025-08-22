@@ -5,11 +5,11 @@ import (
 	"iter"
 	"strings"
 
-	"github.com/ngicks/go-iterator-helper/x/exp/xiter"
+	"github.com/ngicks/go-iterator-helper/hiter"
 )
 
 func Joinf[T any](sep string, format string, seq iter.Seq[T]) string {
-	return Join(sep, xiter.Map(func(v T) string {
+	return Join(sep, hiter.Map(func(v T) string {
 		return fmt.Sprintf(format, v)
 	}, seq))
 }

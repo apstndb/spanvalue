@@ -11,7 +11,6 @@ import (
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/lox"
 	"github.com/ngicks/go-iterator-helper/hiter"
-	"github.com/ngicks/go-iterator-helper/x/exp/xiter"
 	"github.com/samber/lo"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -195,7 +194,7 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 	case sppb.TypeCode_STRUCT:
 		// Note: This format is not intended to be parseable.
 		// There is no NULL struct.
-		fieldStrings, err := hiter.TryCollect(xiter.Map2(
+		fieldStrings, err := hiter.TryCollect(hiter.Map2(
 			func(field *sppb.StructType_Field, value *structpb.Value) (string, error) {
 				return fc.FormatStruct.FormatStructField(fc, field, value)
 			},
