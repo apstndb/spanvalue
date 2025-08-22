@@ -6,22 +6,39 @@ import (
 	"math"
 	"slices"
 	"strconv"
-	"strings"
+	"unicode"
 
+	"github.com/ngicks/go-iterator-helper/hiter"
 	"github.com/ngicks/go-iterator-helper/hiter/stringsiter"
-	"github.com/ngicks/go-iterator-helper/x/exp/xiter"
-
-	"github.com/apstndb/spanvalue/internal/iterx"
 )
 
+// ByteToEscapeSequenceReadable formats a byte as a string without quote processing
 func ByteToEscapeSequenceReadable(b byte) string {
+	return EscapeRune(rune(b), false, -1)
+}
+
+func EscapeRune(r rune, isString bool, quote rune) string {
 	switch {
-	case b == '\\':
-		return `\\`
-	case 0x20 <= b && b <= 0x7E:
-		return string(b)
+	case r == quote || r == '\\':
+		return `\` + string(r)
+	case isString && r == '\n':
+		return `\n`
+	case isString && r == '\r':
+		return `\r`
+	case isString && r == '\t':
+		return `\t`
+	case isString && unicode.IsPrint(r):
+		return string(r)
+	// Even if !isString, printable 7-bit characters can be printed as-is.
+	case 0x20 <= r && r <= 0x7E:
+		return string(r)
+	case r < 0x100:
+		return fmt.Sprintf(`\x%02x`, r)
+	case r > 0xFFFF:
+		return fmt.Sprintf(`\U%08x`, r)
+	default:
+		return fmt.Sprintf(`\u%04x`, r)
 	}
-	return fmt.Sprintf(`\x%02x`, b)
 }
 
 func Float64ToLiteral(v float64) string {
@@ -51,7 +68,7 @@ func Float32ToLiteral(v float32) string {
 }
 
 func ToAny[T any](seq iter.Seq[T]) iter.Seq[any] {
-	return xiter.Map(func(v T) any { return v }, seq)
+	return hiter.Map(func(v T) any { return v }, seq)
 }
 
 func Pointers[T any, E ~[]T](e E) iter.Seq[*T] {
@@ -64,23 +81,40 @@ func Pointers[T any, E ~[]T](e E) iter.Seq[*T] {
 	}
 }
 
-func ToBytesLiteral(v []byte) string {
-	return fmt.Sprintf(`b"%v"`, iterx.Joinf("", `\x%02x`, slices.Values(v)))
-}
-
-func smartQuote(s string) string {
-	hasSingle := strings.Contains(s, `'`)
-	hasDouble := strings.Contains(s, `"`)
-
-	useSingle := hasDouble && !hasSingle
-
-	if useSingle {
-		return fmt.Sprintf(`'%v'`, strings.ReplaceAll(s, `'`, `\'`))
+func suitableQuote(b []byte) rune {
+	var hasDouble bool
+	for _, r := range b {
+		switch r {
+		case '\'':
+			return '"'
+		case '"':
+			hasDouble = true
+		}
 	}
-	return fmt.Sprintf(`"%v"`, strings.ReplaceAll(s, `"`, `\"`))
+
+	if hasDouble {
+		return '\''
+	}
+
+	return '"'
 }
 
 func ToReadableBytesLiteral(v []byte) string {
-	encoded := stringsiter.Collect(xiter.Map(ByteToEscapeSequenceReadable, slices.Values(v)))
-	return fmt.Sprintf(`b%v`, smartQuote(encoded))
+	quote := suitableQuote(v)
+
+	encoded := stringsiter.Collect(hiter.Map(func(b byte) string {
+		return EscapeRune(rune(b), false, quote)
+	}, slices.Values(v)))
+
+	return fmt.Sprintf(`b%s%s%s`, string(quote), encoded, string(quote))
+}
+
+func ToStringLiteral(s string) string {
+	quote := suitableQuote([]byte(s))
+
+	encoded := stringsiter.Collect(hiter.Map(func(r rune) string {
+		return EscapeRune(r, true, quote)
+	}, slices.Values([]rune(s))))
+
+	return fmt.Sprintf(`%s%s%s`, string(quote), encoded, string(quote))
 }

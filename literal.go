@@ -44,7 +44,7 @@ var (
 func formatNullableValueLiteral(value NullableValue) (string, error) {
 	switch v := value.(type) {
 	case spanner.NullString:
-		return strconv.Quote(v.StringVal), nil
+		return internal.ToStringLiteral(v.StringVal), nil
 	case spanner.NullBool:
 		return strconv.FormatBool(v.Bool), nil
 	case NullBytes:
@@ -56,18 +56,18 @@ func formatNullableValueLiteral(value NullableValue) (string, error) {
 	case spanner.NullInt64:
 		return strconv.FormatInt(v.Int64, 10), nil
 	case spanner.NullNumeric:
-		return fmt.Sprintf("NUMERIC %q", spanner.NumericString(&v.Numeric)), nil
+		return fmt.Sprintf("NUMERIC %s", internal.ToStringLiteral(spanner.NumericString(&v.Numeric))), nil
 	case spanner.NullTime:
-		return fmt.Sprintf("TIMESTAMP %q", v.Time.Format(time.RFC3339Nano)), nil
+		return fmt.Sprintf("TIMESTAMP %s", internal.ToStringLiteral(v.Time.Format(time.RFC3339Nano))), nil
 	case spanner.NullDate:
-		return fmt.Sprintf("DATE %q", v.Date.String()), nil
+		return fmt.Sprintf("DATE %s", internal.ToStringLiteral(v.Date.String())), nil
 	case spanner.NullJSON:
-		return fmt.Sprintf("JSON %q", v.String()), nil
+		return fmt.Sprintf("JSON %s", internal.ToStringLiteral(v.String())), nil
 	case spanner.NullInterval:
 		// Use CAST for INTERVAL. Literal notation is unintuitive for information preservation.
-		return fmt.Sprintf("CAST(%q AS INTERVAL)", v.String()), nil
+		return fmt.Sprintf("CAST(%s AS INTERVAL)", internal.ToStringLiteral(v.String())), nil
 	case spanner.NullUUID:
-		return fmt.Sprintf("CAST(%q AS UUID)", v.String()), nil
+		return fmt.Sprintf("CAST(%s AS UUID)", internal.ToStringLiteral(v.String())), nil
 	default:
 		// Reject unknown type to guarantee round-trip
 		return "", errors.New("unknown type")

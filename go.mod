@@ -11,7 +11,7 @@ require (
 	github.com/apstndb/spantype v0.3.6
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
-	github.com/ngicks/go-iterator-helper v0.0.18
+	github.com/ngicks/go-iterator-helper v0.0.21
 	github.com/samber/lo v1.47.0
 	google.golang.org/protobuf v1.36.6
 )
