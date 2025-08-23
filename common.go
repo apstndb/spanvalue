@@ -95,13 +95,13 @@ func decodeScalar[T NullableValue](gcv spanner.GenericColumnValue) (T, error) {
 }
 
 func (fc *FormatConfig) formatSimpleColumn(value spanner.GenericColumnValue) (string, error) {
+	if isNull(value) {
+		return fc.NullString, nil
+	}
+
 	nv, err := simpleGCVToNullable(value)
 	if err != nil {
 		return "", err
-	}
-
-	if nv.IsNull() {
-		return fc.NullString, nil
 	}
 
 	return fc.FormatNullable(nv)
@@ -127,7 +127,7 @@ func FormatProtoAsCast(formatter Formatter, value spanner.GenericColumnValue, to
 	}
 
 	if isNull(value) {
-		return "NULL", nil
+		return nullStringUpperCase, nil
 	}
 
 	b, err := base64.StdEncoding.DecodeString(value.Value.GetStringValue())
@@ -143,7 +143,7 @@ func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, top
 	}
 
 	if isNull(value) {
-		return "NULL", nil
+		return nullStringUpperCase, nil
 	}
 
 	return fmt.Sprintf("CAST(%v AS `%v`)", value.Value.GetStringValue(), value.Type.ProtoTypeFqn), nil
