@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -29,34 +28,25 @@ func FormatRowSpannerCLICompatible(row *spanner.Row) ([]string, error) {
 var trailingPointZeroRe = regexp.MustCompile(`\.?0*$`)
 
 func FormatNullableSpannerCLICompatible(value NullableValue) (string, error) {
+	// Actually, it is redundant to check IsNull() here, but it is for consistency.
 	if value.IsNull() {
 		return nullStringUpperCase, nil
 	}
 
 	switch v := value.(type) {
-	case spanner.NullString:
-		return v.StringVal, nil
-	case spanner.NullBool:
-		return strconv.FormatBool(v.Bool), nil
 	case NullBytes:
 		return base64.StdEncoding.EncodeToString(v), nil
 	case spanner.NullFloat32:
 		return fmt.Sprintf("%f", v.Float32), nil
 	case spanner.NullFloat64:
 		return fmt.Sprintf("%f", v.Float64), nil
-	case spanner.NullInt64:
-		return strconv.FormatInt(v.Int64, 10), nil
 	case spanner.NullNumeric:
-		return trailingPointZeroRe.ReplaceAllString(v.Numeric.FloatString(spanner.NumericScaleDigits), ""), nil
+		return trailingPointZeroRe.ReplaceAllString(v.String(), ""), nil
 	case spanner.NullTime:
 		return v.Time.Format(time.RFC3339Nano), nil
-	case spanner.NullDate:
-		return strings.Trim(v.String(), `"`), nil
-	case spanner.NullJSON:
-		return v.String(), nil
-	case spanner.NullInterval:
-		return v.String(), nil
-	case spanner.NullUUID:
+	// They are actually processed by the default case, but explicitly written here for clarity.
+	case spanner.NullString, spanner.NullBool, spanner.NullInt64, spanner.NullDate,
+		spanner.NullJSON, spanner.NullInterval, spanner.NullUUID:
 		return v.String(), nil
 	default:
 		return value.String(), nil
