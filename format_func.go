@@ -31,8 +31,8 @@ func FormatSimpleStructField(fc *FormatConfig, field *sppb.StructType_Field, val
 	return fc.FormatColumn(typeValueToGCV(field.Type, value), false)
 }
 
-func FormatUntypedArray(typ *sppb.Type, toplevel bool, elemStrings []string) string {
-	return fmt.Sprintf("[%v]", strings.Join(elemStrings, ", "))
+func FormatUntypedArray(_ *sppb.Type, _ bool, elemStrings []string) string {
+	return "[" + strings.Join(elemStrings, ", ") + "]"
 }
 
 func FormatOptionallyTypedArray(typ *sppb.Type, toplevel bool, elemStrings []string) string {
