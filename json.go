@@ -1,6 +1,7 @@
 package spanvalue
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 
@@ -88,7 +89,9 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 				usedNames[name] = true
 			}
 		}
-		b.WriteString(strconv.Quote(name))
+		// json.Marshal on a string is guaranteed to succeed for any valid Go string.
+		keyJSON, _ := json.Marshal(name)
+		b.Write(keyJSON)
 		b.WriteByte(':')
 		b.WriteString(val)
 	}
@@ -101,7 +104,6 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 func FormatCompactArray(_ *sppb.Type, _ bool, elemStrings []string) string {
 	return "[" + strings.Join(elemStrings, ",") + "]"
 }
-
 
 // UnnamedFieldNamer generates a name for an unnamed field or column given its 0-based index.
 // Used for both unnamed struct fields and unnamed row columns (e.g., SELECT 1+1).
