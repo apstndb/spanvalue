@@ -51,6 +51,10 @@ func FormatRowJSONObject(fc *FormatConfig, row *spanner.Row, namer UnnamedFieldN
 // into a single JSON object. Empty names are resolved using the namer function,
 // with collision avoidance against explicit and previously generated names.
 func assembleJSONObject(columnNames []string, values []string, namer UnnamedFieldNamer) string {
+	if namer == nil {
+		namer = IndexedUnnamedFieldNamer
+	}
+
 	// Collect all explicit names for collision avoidance.
 	usedNames := make(map[string]bool, len(columnNames))
 	for _, name := range columnNames {
@@ -71,11 +75,12 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 			name = columnNames[i]
 		}
 		if name == "" {
-			name = namer(autoIdx)
-			autoIdx++
-			for name != "" && usedNames[name] {
+			for {
 				name = namer(autoIdx)
 				autoIdx++
+				if name == "" || !usedNames[name] {
+					break
+				}
 			}
 			if name != "" {
 				usedNames[name] = true
