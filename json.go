@@ -2,6 +2,7 @@ package spanvalue
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -44,13 +45,13 @@ func FormatRowJSONObject(fc *FormatConfig, row *spanner.Row, namer UnnamedFieldN
 	if err != nil {
 		return "", err
 	}
-	return assembleJSONObject(row.ColumnNames(), values, namer), nil
+	return assembleJSONObject(row.ColumnNames(), values, namer)
 }
 
 // assembleJSONObject combines column names and pre-formatted JSON value strings
 // into a single JSON object. Empty names are resolved using the namer function,
 // with collision avoidance against explicit and previously generated names.
-func assembleJSONObject(columnNames []string, values []string, namer UnnamedFieldNamer) string {
+func assembleJSONObject(columnNames []string, values []string, namer UnnamedFieldNamer) (string, error) {
 	if namer == nil {
 		namer = IndexedUnnamedFieldNamer
 	}
@@ -89,14 +90,16 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 				usedNames[name] = true
 			}
 		}
-		// json.Marshal on a string is guaranteed to succeed for any valid Go string.
-		keyJSON, _ := json.Marshal(name)
+		keyJSON, err := json.Marshal(name)
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal JSON key %q: %w", name, err)
+		}
 		b.Write(keyJSON)
 		b.WriteByte(':')
 		b.WriteString(val)
 	}
 	b.WriteByte('}')
-	return b.String()
+	return b.String(), nil
 }
 
 // FormatCompactArray formats array elements without spaces between separators.
@@ -141,7 +144,13 @@ func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc
 		for i, f := range fields {
 			names[i] = f.GetName()
 		}
-		return assembleJSONObject(names, fieldStrings, namer)
+		// FormatStructParenFunc cannot return error; json.Marshal on string
+		// should never fail, but panic defensively if it does.
+		s, err := assembleJSONObject(names, fieldStrings, namer)
+		if err != nil {
+			panic(fmt.Sprintf("unreachable: assembleJSONObject: %v", err))
+		}
+		return s
 	}
 }
 
