@@ -79,12 +79,17 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 			// Try to find a unique name, with a bounded number of attempts
 			// to prevent infinite loops from pathological namers.
 			maxAttempts := len(values) + len(columnNames)
+			found := false
 			for attempt := 0; attempt <= maxAttempts; attempt++ {
 				name = namer(autoIdx)
 				autoIdx++
 				if name == "" || !usedNames[name] {
+					found = true
 					break
 				}
+			}
+			if !found {
+				return "", fmt.Errorf("failed to generate a unique field name after %d attempts", maxAttempts+1)
 			}
 			if name != "" {
 				usedNames[name] = true
@@ -144,11 +149,12 @@ func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc
 		for i, f := range fields {
 			names[i] = f.GetName()
 		}
-		// FormatStructParenFunc cannot return error; json.Marshal on string
-		// should never fail, but panic defensively if it does.
+		// FormatStructParenFunc cannot return error.
+		// assembleJSONObject only fails on json.Marshal error (unreachable for strings)
+		// or namer exhaustion (namer bug: must return unique names for distinct indices).
 		s, err := assembleJSONObject(names, fieldStrings, namer)
 		if err != nil {
-			panic(fmt.Sprintf("unreachable: assembleJSONObject: %v", err))
+			panic(fmt.Sprintf("bug in UnnamedFieldNamer: %v", err))
 		}
 		return s
 	}
