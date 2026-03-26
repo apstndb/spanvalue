@@ -100,9 +100,10 @@ func FormatCompactArray(_ *sppb.Type, _ bool, elemStrings []string) string {
 // UnnamedFieldNamer generates a name for an unnamed struct field given its 0-based index.
 type UnnamedFieldNamer func(index int) string
 
-// DefaultUnnamedFieldNamer produces names like "_0", "_1", etc.
-// The underscore prefix is chosen to minimize collision with user-defined column names.
-func DefaultUnnamedFieldNamer(index int) string {
+// IndexedUnnamedFieldNamer produces names like "_0", "_1", etc.
+// The underscore prefix minimizes collision with user-defined names.
+// Suitable for row columns (e.g., SELECT 1+1 produces "_0").
+func IndexedUnnamedFieldNamer(index int) string {
 	return "_" + strconv.Itoa(index)
 }
 
@@ -114,8 +115,9 @@ func EmptyUnnamedFieldNamer(_ int) string {
 	return ""
 }
 
-// FormatJSONObjectStruct formats struct fields as a JSON object using DefaultUnnamedFieldNamer.
-var FormatJSONObjectStruct = NewJSONObjectStructFormatter(DefaultUnnamedFieldNamer)
+// FormatJSONObjectStruct formats struct fields as a JSON object using EmptyUnnamedFieldNamer.
+// Unnamed struct fields produce empty-string keys, matching Spanner's own representation.
+var FormatJSONObjectStruct = NewJSONObjectStructFormatter(EmptyUnnamedFieldNamer)
 
 // NewJSONObjectStructFormatter creates a FormatStructParenFunc that formats struct fields
 // as a JSON object with field names as keys. Unnamed fields are assigned names by the

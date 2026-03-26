@@ -257,30 +257,7 @@ func TestJSONFormatConfig(t *testing.T) {
 					},
 				}),
 			},
-			wantJSON: `{"_0":"value","_1":42}`,
-		},
-		{
-			name: "STRUCT unnamed fields skip colliding named field",
-			gcv: spanner.GenericColumnValue{
-				Type: &sppb.Type{
-					Code: sppb.TypeCode_STRUCT,
-					StructType: &sppb.StructType{
-						Fields: []*sppb.StructType_Field{
-							{Name: "", Type: &sppb.Type{Code: sppb.TypeCode_INT64}},
-							{Name: "", Type: &sppb.Type{Code: sppb.TypeCode_INT64}},
-							{Name: "_1", Type: &sppb.Type{Code: sppb.TypeCode_INT64}},
-						},
-					},
-				},
-				Value: structpb.NewListValue(&structpb.ListValue{
-					Values: []*structpb.Value{
-						structpb.NewStringValue("1"),
-						structpb.NewStringValue("2"),
-						structpb.NewStringValue("3"),
-					},
-				}),
-			},
-			wantJSON: `{"_0":1,"_2":2,"_1":3}`,
+			wantJSON: `{"":"value","":42}`,
 		},
 		{
 			name: "ARRAY of STRUCT",
@@ -334,7 +311,7 @@ func TestFormatRowJSONObject(t *testing.T) {
 		t.Fatalf("NewRow: %v", err)
 	}
 
-	got, err := FormatRowJSONObject(JSONFormatConfig, row, DefaultUnnamedFieldNamer)
+	got, err := FormatRowJSONObject(JSONFormatConfig, row, IndexedUnnamedFieldNamer)
 	if err != nil {
 		t.Fatalf("FormatRowJSONObject: %v", err)
 	}
@@ -354,7 +331,7 @@ func TestFormatRowJSONObject_UnnamedColumns(t *testing.T) {
 		t.Fatalf("NewRow: %v", err)
 	}
 
-	got, err := FormatRowJSONObject(JSONFormatConfig, row, DefaultUnnamedFieldNamer)
+	got, err := FormatRowJSONObject(JSONFormatConfig, row, IndexedUnnamedFieldNamer)
 	if err != nil {
 		t.Fatalf("FormatRowJSONObject: %v", err)
 	}
@@ -467,22 +444,7 @@ func TestFormatJSONObjectStruct(t *testing.T) {
 				},
 			},
 			fields: []string{"1", `"hello"`},
-			want:   `{"_0":1,"_1":"hello"}`,
-		},
-		{
-			name: "unnamed fields skip colliding names",
-			typ: &sppb.Type{
-				Code: sppb.TypeCode_STRUCT,
-				StructType: &sppb.StructType{
-					Fields: []*sppb.StructType_Field{
-						{Name: "", Type: &sppb.Type{Code: sppb.TypeCode_INT64}},
-						{Name: "", Type: &sppb.Type{Code: sppb.TypeCode_INT64}},
-						{Name: "_1", Type: &sppb.Type{Code: sppb.TypeCode_INT64}},
-					},
-				},
-			},
-			fields: []string{"1", "2", "3"},
-			want:   `{"_0":1,"_2":2,"_1":3}`,
+			want:   `{"":1,"":"hello"}`,
 		},
 		{
 			name: "field name with special chars",
