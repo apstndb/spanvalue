@@ -1,7 +1,6 @@
 package spanvalue
 
 import (
-	"encoding/json"
 	"strconv"
 	"strings"
 
@@ -86,8 +85,7 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 				usedNames[name] = true
 			}
 		}
-		keyJSON, _ := json.Marshal(name)
-		b.Write(keyJSON)
+		b.WriteString(strconv.Quote(name))
 		b.WriteByte(':')
 		b.WriteString(val)
 	}
@@ -102,7 +100,8 @@ func FormatCompactArray(_ *sppb.Type, _ bool, elemStrings []string) string {
 }
 
 
-// UnnamedFieldNamer generates a name for an unnamed struct field given its 0-based index.
+// UnnamedFieldNamer generates a name for an unnamed field or column given its 0-based index.
+// Used for both unnamed struct fields and unnamed row columns (e.g., SELECT 1+1).
 type UnnamedFieldNamer func(index int) string
 
 // IndexedUnnamedFieldNamer produces names like "_0", "_1", etc.
@@ -126,8 +125,9 @@ var FormatJSONObjectStruct = NewJSONObjectStructFormatter(EmptyUnnamedFieldNamer
 
 // NewJSONObjectStructFormatter creates a FormatStructParenFunc that formats struct fields
 // as a JSON object with field names as keys. Unnamed fields are assigned names by the
-// provided namer function, skipping names already used by explicit or previously generated
-// fields to avoid duplicate JSON keys.
+// provided namer function. For non-empty generated names, collision avoidance skips names
+// already used by explicit or previously generated fields. Namers that return "" (like
+// EmptyUnnamedFieldNamer) intentionally allow duplicate empty-string keys.
 // Output: {"field1":val1,"field2":val2,...}
 func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc {
 	return func(typ *sppb.Type, _ bool, fieldStrings []string) string {
