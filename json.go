@@ -16,7 +16,8 @@ import (
 //   - BOOL → true / false
 //   - INT64 → 42 (unquoted number)
 //   - FLOAT32/FLOAT64 → 3.14 (NaN/Inf as quoted strings)
-//   - STRING, BYTES, TIMESTAMP, DATE, NUMERIC, ENUM, PROTO, INTERVAL, UUID → "quoted string"
+//   - ENUM → 42 (unquoted number, Spanner stores proto enum values as INT64)
+//   - STRING, BYTES, TIMESTAMP, DATE, NUMERIC, PROTO, INTERVAL, UUID → "quoted string"
 //   - JSON column → raw JSON value (passed through)
 //   - ARRAY → [elem1,elem2,...]
 //   - STRUCT → {"field1":val1,"field2":val2,...}
@@ -45,16 +46,23 @@ func FormatRowJSONObject(fc *FormatConfig, row *spanner.Row) (string, error) {
 }
 
 func assembleJSONObject(columnNames []string, values []string) string {
-	parts := make([]string, len(values))
+	var b strings.Builder
+	b.WriteByte('{')
 	for i, val := range values {
+		if i > 0 {
+			b.WriteByte(',')
+		}
 		var name string
 		if i < len(columnNames) {
 			name = columnNames[i]
 		}
 		keyJSON, _ := json.Marshal(name)
-		parts[i] = string(keyJSON) + ":" + val
+		b.Write(keyJSON)
+		b.WriteByte(':')
+		b.WriteString(val)
 	}
-	return "{" + strings.Join(parts, ",") + "}"
+	b.WriteByte('}')
+	return b.String()
 }
 
 // FormatCompactArray formats array elements without spaces between separators.
@@ -86,7 +94,8 @@ var FormatJSONObjectStruct = NewJSONObjectStructFormatter(DefaultUnnamedFieldNam
 
 // NewJSONObjectStructFormatter creates a FormatStructParenFunc that formats struct fields
 // as a JSON object with field names as keys. Unnamed fields are assigned names by the
-// provided namer function, skipping names already used by other fields to avoid duplicate keys.
+// provided namer function, skipping names already used by explicit or previously generated
+// fields to avoid duplicate JSON keys.
 // Output: {"field1":val1,"field2":val2,...}
 func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc {
 	return func(typ *sppb.Type, _ bool, fieldStrings []string) string {
@@ -100,24 +109,26 @@ func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc
 			}
 		}
 
-		parts := make([]string, len(fieldStrings))
+		names := make([]string, len(fieldStrings))
 		autoIdx := 0
-		for i, valStr := range fieldStrings {
+		for i := range fieldStrings {
 			name := fields[i].GetName()
 			if name == "" {
-				// Find a name that doesn't collide with any explicit field name.
-				for {
+				name = namer(autoIdx)
+				autoIdx++
+				// Skip names that collide, but only for non-empty generated names.
+				// Empty names are used as-is (intentional duplicate keys).
+				for name != "" && usedNames[name] {
 					name = namer(autoIdx)
 					autoIdx++
-					if !usedNames[name] {
-						break
-					}
+				}
+				if name != "" {
+					usedNames[name] = true
 				}
 			}
-			keyJSON, _ := json.Marshal(name)
-			parts[i] = string(keyJSON) + ":" + valStr
+			names[i] = name
 		}
-		return "{" + strings.Join(parts, ",") + "}"
+		return assembleJSONObject(names, fieldStrings)
 	}
 }
 
@@ -126,9 +137,10 @@ func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc
 //
 // For most types, structpb.Value.MarshalJSON() produces the correct JSON representation
 // (BOOL→true/false, FLOAT→number, STRING→"quoted", NULL→null, NaN/Inf→"NaN"/"Infinity").
-// Only INT64 and JSON columns need special handling:
+// Only INT64, ENUM, and JSON columns need special handling:
 //   - INT64: Spanner encodes as StringValue("42"), MarshalJSON() would produce "42" (quoted),
 //     but we want 42 (unquoted number).
+//   - ENUM: Spanner stores proto enum values as INT64; same handling as INT64.
 //   - JSON: Spanner encodes as StringValue('{"key":"value"}'), MarshalJSON() would produce
 //     escaped quoted string, but we want the raw JSON value passed through.
 func FormatJSONSimpleValue(_ Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
