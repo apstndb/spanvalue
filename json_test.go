@@ -334,12 +334,32 @@ func TestFormatRowJSONObject(t *testing.T) {
 		t.Fatalf("NewRow: %v", err)
 	}
 
-	got, err := FormatRowJSONObject(JSONFormatConfig, row)
+	got, err := FormatRowJSONObject(JSONFormatConfig, row, DefaultUnnamedFieldNamer)
 	if err != nil {
 		t.Fatalf("FormatRowJSONObject: %v", err)
 	}
 
 	want := `{"id":42,"name":"Alice","active":true}`
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestFormatRowJSONObject_UnnamedColumns(t *testing.T) {
+	t.Parallel()
+
+	// Simulates SELECT 1+1, "hello" — no column aliases
+	row, err := spanner.NewRow([]string{"", ""}, []interface{}{int64(2), "hello"})
+	if err != nil {
+		t.Fatalf("NewRow: %v", err)
+	}
+
+	got, err := FormatRowJSONObject(JSONFormatConfig, row, DefaultUnnamedFieldNamer)
+	if err != nil {
+		t.Fatalf("FormatRowJSONObject: %v", err)
+	}
+
+	want := `{"_0":2,"_1":"hello"}`
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("mismatch (-want +got):\n%s", diff)
 	}

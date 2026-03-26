@@ -36,18 +36,32 @@ var JSONFormatConfig = &FormatConfig{
 
 // FormatRowJSONObject formats a spanner.Row as a single JSON object string
 // using the given FormatConfig for value formatting and column names as keys.
+// Empty column names (e.g., from expressions without aliases like SELECT 1+1)
+// are assigned names by the provided namer function.
 // Output: {"col1":val1,"col2":val2,...}
-func FormatRowJSONObject(fc *FormatConfig, row *spanner.Row) (string, error) {
+func FormatRowJSONObject(fc *FormatConfig, row *spanner.Row, namer UnnamedFieldNamer) (string, error) {
 	values, err := fc.FormatRow(row)
 	if err != nil {
 		return "", err
 	}
-	return assembleJSONObject(row.ColumnNames(), values), nil
+	return assembleJSONObject(row.ColumnNames(), values, namer), nil
 }
 
-func assembleJSONObject(columnNames []string, values []string) string {
+// assembleJSONObject combines column names and pre-formatted JSON value strings
+// into a single JSON object. Empty names are resolved using the namer function,
+// with collision avoidance against explicit and previously generated names.
+func assembleJSONObject(columnNames []string, values []string, namer UnnamedFieldNamer) string {
+	// Collect all explicit names for collision avoidance.
+	usedNames := make(map[string]bool, len(columnNames))
+	for _, name := range columnNames {
+		if name != "" {
+			usedNames[name] = true
+		}
+	}
+
 	var b strings.Builder
 	b.WriteByte('{')
+	autoIdx := 0
 	for i, val := range values {
 		if i > 0 {
 			b.WriteByte(',')
@@ -55,6 +69,17 @@ func assembleJSONObject(columnNames []string, values []string) string {
 		var name string
 		if i < len(columnNames) {
 			name = columnNames[i]
+		}
+		if name == "" {
+			name = namer(autoIdx)
+			autoIdx++
+			for name != "" && usedNames[name] {
+				name = namer(autoIdx)
+				autoIdx++
+			}
+			if name != "" {
+				usedNames[name] = true
+			}
 		}
 		keyJSON, _ := json.Marshal(name)
 		b.Write(keyJSON)
@@ -100,35 +125,11 @@ var FormatJSONObjectStruct = NewJSONObjectStructFormatter(DefaultUnnamedFieldNam
 func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc {
 	return func(typ *sppb.Type, _ bool, fieldStrings []string) string {
 		fields := typ.GetStructType().GetFields()
-
-		// Collect all explicitly named fields to avoid collisions with auto-generated names.
-		usedNames := make(map[string]bool, len(fields))
-		for _, f := range fields {
-			if f.GetName() != "" {
-				usedNames[f.GetName()] = true
-			}
+		names := make([]string, len(fields))
+		for i, f := range fields {
+			names[i] = f.GetName()
 		}
-
-		names := make([]string, len(fieldStrings))
-		autoIdx := 0
-		for i := range fieldStrings {
-			name := fields[i].GetName()
-			if name == "" {
-				name = namer(autoIdx)
-				autoIdx++
-				// Skip names that collide, but only for non-empty generated names.
-				// Empty names are used as-is (intentional duplicate keys).
-				for name != "" && usedNames[name] {
-					name = namer(autoIdx)
-					autoIdx++
-				}
-				if name != "" {
-					usedNames[name] = true
-				}
-			}
-			names[i] = name
-		}
-		return assembleJSONObject(names, fieldStrings)
+		return assembleJSONObject(names, fieldStrings, namer)
 	}
 }
 
