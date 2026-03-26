@@ -74,7 +74,10 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 			name = columnNames[i]
 		}
 		if name == "" {
-			for {
+			// Try to find a unique name, with a bounded number of attempts
+			// to prevent infinite loops from pathological namers.
+			maxAttempts := len(values) + len(columnNames)
+			for attempt := 0; attempt <= maxAttempts; attempt++ {
 				name = namer(autoIdx)
 				autoIdx++
 				if name == "" || !usedNames[name] {
