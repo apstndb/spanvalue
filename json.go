@@ -76,20 +76,19 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 			name = columnNames[i]
 		}
 		if name == "" {
-			// Try to find a unique name, with a bounded number of attempts
-			// to prevent infinite loops from pathological namers.
-			maxAttempts := len(values) + len(columnNames)
-			found := false
-			for attempt := 0; attempt <= maxAttempts; attempt++ {
+			// Find a unique name. Detect pathological namers that cycle
+			// without producing new candidates by tracking seen names.
+			attempted := make(map[string]bool)
+			for {
 				name = namer(autoIdx)
 				autoIdx++
 				if name == "" || !usedNames[name] {
-					found = true
 					break
 				}
-			}
-			if !found {
-				return "", fmt.Errorf("failed to generate a unique field name after %d attempts", maxAttempts+1)
+				if attempted[name] {
+					return "", fmt.Errorf("failed to generate a unique field name: namer returned repeated colliding name %q", name)
+				}
+				attempted[name] = true
 			}
 			if name != "" {
 				usedNames[name] = true

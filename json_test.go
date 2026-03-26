@@ -35,10 +35,11 @@ func TestJSONFormatConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	arrayOfStruct, err := gcvctor.ArrayValue(func() spanner.GenericColumnValue {
-		v, _ := gcvctor.StructValue([]string{"COUNT", "MEAN"}, []spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.Float64Value(0.057294)})
-		return v
-	}())
+	structElem, err := gcvctor.StructValue([]string{"COUNT", "MEAN"}, []spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.Float64Value(0.057294)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	arrayOfStruct, err := gcvctor.ArrayValue(structElem)
 	if err != nil {
 		t.Fatal(err)
 	}
