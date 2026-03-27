@@ -179,9 +179,9 @@ func FormatJSONSimpleValue(_ Formatter, value spanner.GenericColumnValue, _ bool
 	// Handle NULL uniformly for all types. This is technically redundant for
 	// the default case (MarshalJSON handles NULL), but ensures correctness
 	// regardless of how switch cases evolve.
-	// isNull handles both nil Value and NullValue kind (protobuf getters
+	// IsNull handles both nil Value and NullValue kind (protobuf getters
 	// are nil-receiver safe).
-	if isNull(value) {
+	if IsNull(value) {
 		return "null", nil
 	}
 
