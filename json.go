@@ -175,6 +175,8 @@ func FormatJSONSimpleValue(_ Formatter, value spanner.GenericColumnValue, _ bool
 	// Handle NULL uniformly for all types. This is technically redundant for
 	// the default case (MarshalJSON handles NULL), but ensures correctness
 	// regardless of how switch cases evolve.
+	// Note: protobuf generated getters are nil-receiver safe, so val.GetKind()
+	// does not panic even if val is nil.
 	if _, isNull := val.GetKind().(*structpb.Value_NullValue); isNull {
 		return "null", nil
 	}
