@@ -198,6 +198,16 @@ func TypedNull(typ *sppb.Type) spanner.GenericColumnValue {
 	}
 }
 
+// ArrayTypeTypedNull constructs a NULL ARRAY with the given element type.
+func ArrayTypeTypedNull(elemType *sppb.Type) spanner.GenericColumnValue {
+	return TypedNull(typector.ElemTypeToArrayType(elemType))
+}
+
+// ArrayCodeTypedNull constructs a NULL ARRAY with a simple element type code.
+func ArrayCodeTypedNull(elemCode sppb.TypeCode) spanner.GenericColumnValue {
+	return TypedNull(typector.ElemCodeToArrayType(elemCode))
+}
+
 func ElemTypeToEmptyArray(typ *sppb.Type) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.ElemTypeToArrayType(typ),
