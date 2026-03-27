@@ -116,8 +116,11 @@ var (
 	_ FormatComplexFunc = FormatEnumAsCast
 )
 
+// isNull reports whether gcv represents a NULL value.
+// Safe to call when gcv.Value is nil (treated as NULL).
+// Uses protobuf generated getter (GetKind) which is nil-receiver safe.
 func isNull(gcv spanner.GenericColumnValue) bool {
-	_, ok := gcv.Value.Kind.(*structpb.Value_NullValue)
+	_, ok := gcv.Value.GetKind().(*structpb.Value_NullValue)
 	return ok
 }
 

@@ -8,7 +8,6 @@ import (
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // JSONFormatConfig produces valid JSON value strings for each Spanner value.
@@ -167,9 +166,9 @@ func FormatJSONSimpleValue(_ Formatter, value spanner.GenericColumnValue, _ bool
 	// Handle NULL uniformly for all types. This is technically redundant for
 	// the default case (MarshalJSON handles NULL), but ensures correctness
 	// regardless of how switch cases evolve.
-	// Note: protobuf generated getters are nil-receiver safe, so val.GetKind()
-	// does not panic even if val is nil.
-	if _, isNull := val.GetKind().(*structpb.Value_NullValue); isNull {
+	// isNull handles both nil Value and NullValue kind (protobuf getters
+	// are nil-receiver safe).
+	if isNull(value) {
 		return "null", nil
 	}
 
