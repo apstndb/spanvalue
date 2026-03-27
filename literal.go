@@ -11,6 +11,8 @@ import (
 	"github.com/apstndb/spanvalue/internal"
 )
 
+// literalFormatConfig is a shared singleton used by convenience functions
+// (FormatRowLiteral, FormatColumnLiteral) to avoid per-call allocation.
 var literalFormatConfig = LiteralFormatConfig()
 
 func FormatRowLiteral(value *spanner.Row) ([]string, error) {

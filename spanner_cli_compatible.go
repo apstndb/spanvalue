@@ -11,6 +11,8 @@ import (
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 )
 
+// spannerCLICompatibleFormatConfig is a shared singleton used by convenience functions
+// (FormatRowSpannerCLICompatible, FormatColumnSpannerCLICompatible) to avoid per-call allocation.
 var spannerCLICompatibleFormatConfig = SpannerCLICompatibleFormatConfig()
 
 // SpannerCLICompatibleFormatConfig returns a new FormatConfig that matches
