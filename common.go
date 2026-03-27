@@ -182,8 +182,8 @@ type FormatNullableFunc = func(value NullableValue) (string, error)
 func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel bool) (string, error) {
 	// Plugins are tried first so they can handle any type including ARRAY and
 	// STRUCT. NULL values are intentionally passed to plugins (not pre-filtered)
-	// so that plugins can produce type-specific NULL representations
-	// (e.g., FormatProtoAsCast emits "NULL", FormatJSONSimpleValue emits "null").
+	// so that plugins can produce type-specific NULL representations via
+	// formatter.GetNullString() or their own logic.
 	// Plugins that don't need type-specific NULL handling should check IsNull
 	// early and return.
 	for _, f := range fc.FormatComplexPlugins {
