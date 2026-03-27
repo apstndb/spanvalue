@@ -1,7 +1,6 @@
 package spanvalue
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -94,11 +93,7 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 				usedNames[name] = true
 			}
 		}
-		keyJSON, err := json.Marshal(name)
-		if err != nil {
-			return "", fmt.Errorf("failed to marshal JSON key %q: %w", name, err)
-		}
-		b.Write(keyJSON)
+		b.WriteString(strconv.Quote(name))
 		b.WriteByte(':')
 		b.WriteString(val)
 	}
@@ -149,8 +144,7 @@ func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc
 			names[i] = f.GetName()
 		}
 		// FormatStructParenFunc cannot return error.
-		// assembleJSONObject only fails on json.Marshal error (unreachable for strings)
-		// or namer exhaustion (namer bug: must return unique names for distinct indices).
+		// assembleJSONObject only fails on namer exhaustion (namer bug: must return unique names for distinct indices).
 		s, err := assembleJSONObject(names, fieldStrings, namer)
 		if err != nil {
 			panic(fmt.Sprintf("bug in UnnamedFieldNamer: %v", err))
