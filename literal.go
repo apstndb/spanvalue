@@ -13,6 +13,7 @@ import (
 
 // literalFormatConfig is a shared singleton used by convenience functions
 // (FormatRowLiteral, FormatColumnLiteral) to avoid per-call allocation.
+// Do not mutate: it is shared across all callers.
 var literalFormatConfig = LiteralFormatConfig()
 
 func FormatRowLiteral(value *spanner.Row) ([]string, error) {

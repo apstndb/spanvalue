@@ -13,6 +13,7 @@ import (
 
 // spannerCLICompatibleFormatConfig is a shared singleton used by convenience functions
 // (FormatRowSpannerCLICompatible, FormatColumnSpannerCLICompatible) to avoid per-call allocation.
+// Do not mutate: it is shared across all callers.
 var spannerCLICompatibleFormatConfig = SpannerCLICompatibleFormatConfig()
 
 // SpannerCLICompatibleFormatConfig returns a new FormatConfig that matches
