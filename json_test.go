@@ -104,10 +104,10 @@ func TestFormatRowJSONObject_UnnamedColumns(t *testing.T) {
 	}
 }
 
-func TestNewJSONObjectStructFormatter_EmptyNamer(t *testing.T) {
+func TestNewJSONObjectStructFormatter_NilNamer(t *testing.T) {
 	t.Parallel()
 
-	formatter := NewJSONObjectStructFormatter(EmptyUnnamedFieldNamer)
+	formatter := NewJSONObjectStructFormatter(nil)
 	typ := typector.MustNameCodeSlicesToStructType([]string{"", ""}, []sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_INT64})
 	got := formatter(typ, false, []string{"1", "2"})
 	want := `{"":1,"":2}`

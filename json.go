@@ -38,24 +38,22 @@ var JSONFormatConfig = &FormatConfig{
 // FormatRowJSONObject formats a spanner.Row as a single JSON object string
 // using the given FormatConfig for value formatting and column names as keys.
 // Empty column names (e.g., from expressions without aliases like SELECT 1+1)
-// are assigned names by the provided namer function.
+// are assigned names by the provided namer function. If namer is nil, empty
+// names are kept as empty-string JSON keys.
 // Output: {"col1":val1,"col2":val2,...}
 func FormatRowJSONObject(fc *FormatConfig, row *spanner.Row, namer UnnamedFieldNamer) (string, error) {
 	values, err := fc.FormatRow(row)
 	if err != nil {
 		return "", err
 	}
-	return assembleJSONObject(row.ColumnNames(), values, namer)
+	return assembleJSONObject(row.ColumnNames(), values, namer), nil
 }
 
 // assembleJSONObject combines column names and pre-formatted JSON value strings
-// into a single JSON object. Empty names are resolved using the namer function,
-// with collision avoidance against explicit and previously generated names.
-func assembleJSONObject(columnNames []string, values []string, namer UnnamedFieldNamer) (string, error) {
-	if namer == nil {
-		namer = IndexedUnnamedFieldNamer
-	}
-
+// into a single JSON object. Empty names are resolved using the namer function
+// (if non-nil), with collision avoidance against explicit and previously
+// generated names. If namer is nil, empty names are kept as-is.
+func assembleJSONObject(columnNames []string, values []string, namer UnnamedFieldNamer) string {
 	// Collect all explicit names for collision avoidance.
 	usedNames := make(map[string]bool, len(columnNames))
 	for _, name := range columnNames {
@@ -75,24 +73,23 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 		if i < len(columnNames) {
 			name = columnNames[i]
 		}
-		if name == "" {
+		if name == "" && namer != nil {
 			// Find a unique name. Detect pathological namers that cycle
 			// without producing new candidates by tracking seen names.
+			// This panic indicates a bug in the namer (contract violation).
 			attempted := make(map[string]bool)
 			for {
 				name = namer(autoIdx)
 				autoIdx++
-				if name == "" || !usedNames[name] {
+				if !usedNames[name] {
 					break
 				}
 				if attempted[name] {
-					return "", fmt.Errorf("failed to generate a unique field name: namer returned repeated colliding name %q", name)
+					panic(fmt.Sprintf("bug in UnnamedFieldNamer: returned repeated colliding name %q", name))
 				}
 				attempted[name] = true
 			}
-			if name != "" {
-				usedNames[name] = true
-			}
+			usedNames[name] = true
 		}
 		// json.Marshal on a Go string never returns an error.
 		// Note: strconv.Quote is not suitable here because it produces Go string
@@ -103,7 +100,7 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 		b.WriteString(val)
 	}
 	b.WriteByte('}')
-	return b.String(), nil
+	return b.String()
 }
 
 // FormatCompactArray formats array elements without spaces between separators.
@@ -112,8 +109,11 @@ func FormatCompactArray(_ *sppb.Type, _ bool, elemStrings []string) string {
 	return "[" + strings.Join(elemStrings, ",") + "]"
 }
 
-// UnnamedFieldNamer generates a name for an unnamed field or column given its 0-based index.
-// Used for both unnamed struct fields and unnamed row columns (e.g., SELECT 1+1).
+// UnnamedFieldNamer generates a name for an unnamed field or column given its
+// 0-based index. It must return distinct non-empty names for distinct indices.
+// Functions that accept UnnamedFieldNamer (such as NewJSONObjectStructFormatter
+// and FormatRowJSONObject) panic if the namer violates this contract.
+// Pass nil instead of a namer to keep unnamed fields as empty-string keys.
 type UnnamedFieldNamer func(index int) string
 
 // IndexedUnnamedFieldNamer produces names like "_0", "_1", etc.
@@ -123,23 +123,16 @@ func IndexedUnnamedFieldNamer(index int) string {
 	return "_" + strconv.Itoa(index)
 }
 
-// EmptyUnnamedFieldNamer always returns "" for unnamed fields.
-// This produces duplicate empty-string keys when multiple unnamed fields exist,
-// which is technically valid JSON (RFC 8259 does not forbid duplicate keys)
-// but may cause issues with parsers that deduplicate keys.
-func EmptyUnnamedFieldNamer(_ int) string {
-	return ""
-}
-
-// FormatJSONObjectStruct formats struct fields as a JSON object using EmptyUnnamedFieldNamer.
+// FormatJSONObjectStruct formats struct fields as a JSON object with nil namer.
 // Unnamed struct fields produce empty-string keys, matching Spanner's own representation.
-var FormatJSONObjectStruct = NewJSONObjectStructFormatter(EmptyUnnamedFieldNamer)
+var FormatJSONObjectStruct = NewJSONObjectStructFormatter(nil)
 
 // NewJSONObjectStructFormatter creates a FormatStructParenFunc that formats struct fields
 // as a JSON object with field names as keys. Unnamed fields are assigned names by the
-// provided namer function. For non-empty generated names, collision avoidance skips names
-// already used by explicit or previously generated fields. Namers that return "" (like
-// EmptyUnnamedFieldNamer) intentionally allow duplicate empty-string keys.
+// provided namer function. If namer is nil, unnamed fields keep empty-string keys
+// (which produces duplicate keys — valid per RFC 8259 but may cause issues with
+// parsers that deduplicate keys).
+// Panics if a non-nil namer returns the same name for different indices (contract violation).
 // Output: {"field1":val1,"field2":val2,...}
 func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc {
 	return func(typ *sppb.Type, _ bool, fieldStrings []string) string {
@@ -148,13 +141,7 @@ func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc
 		for i, f := range fields {
 			names[i] = f.GetName()
 		}
-		// FormatStructParenFunc cannot return error.
-		// assembleJSONObject only fails on namer exhaustion (namer bug: must return unique names for distinct indices).
-		s, err := assembleJSONObject(names, fieldStrings, namer)
-		if err != nil {
-			panic(fmt.Sprintf("bug in UnnamedFieldNamer: %v", err))
-		}
-		return s
+		return assembleJSONObject(names, fieldStrings, namer)
 	}
 }
 
