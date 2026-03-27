@@ -2,6 +2,7 @@ package gcvctor_test
 
 import (
 	"encoding/base64"
+	"math"
 	"testing"
 	"time"
 
@@ -69,6 +70,30 @@ func TestParseExpr(t *testing.T) {
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT64),
 				Value: structpb.NewNumberValue(3.14),
+			},
+		},
+		{
+			`NaN`,
+			gcvctor.Float64Value(math.NaN()),
+			spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT64),
+				Value: structpb.NewStringValue("NaN"),
+			},
+		},
+		{
+			`+Inf`,
+			gcvctor.Float64Value(math.Inf(1)),
+			spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT64),
+				Value: structpb.NewStringValue("Infinity"),
+			},
+		},
+		{
+			`-Inf`,
+			gcvctor.Float64Value(math.Inf(-1)),
+			spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT64),
+				Value: structpb.NewStringValue("-Infinity"),
 			},
 		},
 		{
