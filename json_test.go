@@ -13,6 +13,7 @@ import (
 	"github.com/apstndb/spanvalue/gcvctor"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 )
 
 func TestJSONFormatConfig(t *testing.T) {
@@ -20,34 +21,13 @@ func TestJSONFormatConfig(t *testing.T) {
 
 	fc := JSONFormatConfig
 
-	arrayOfInt64, err := gcvctor.ArrayValue(gcvctor.Int64Value(1), gcvctor.Int64Value(2), gcvctor.Int64Value(3))
-	if err != nil {
-		t.Fatal(err)
-	}
-	arrayWithNull, err := gcvctor.ArrayValue(gcvctor.Int64Value(1), gcvctor.SimpleTypedNull(sppb.TypeCode_INT64), gcvctor.Int64Value(3))
-	if err != nil {
-		t.Fatal(err)
-	}
-	structVal, err := gcvctor.StructValue([]string{"name", "age"}, []spanner.GenericColumnValue{gcvctor.StringValue("Alice"), gcvctor.Int64Value(30)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	unnamedStruct, err := gcvctor.StructValue([]string{"", ""}, []spanner.GenericColumnValue{gcvctor.StringValue("value"), gcvctor.Int64Value(42)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	structElem, err := gcvctor.StructValue([]string{"COUNT", "MEAN"}, []spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.Float64Value(0.057294)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	arrayOfStruct, err := gcvctor.ArrayValue(structElem)
-	if err != nil {
-		t.Fatal(err)
-	}
-	jsonVal, err := gcvctor.JSONValue(map[string]string{"key": "value"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	arrayOfInt64 := lo.Must(gcvctor.ArrayValue(gcvctor.Int64Value(1), gcvctor.Int64Value(2), gcvctor.Int64Value(3)))
+	arrayWithNull := lo.Must(gcvctor.ArrayValue(gcvctor.Int64Value(1), gcvctor.SimpleTypedNull(sppb.TypeCode_INT64), gcvctor.Int64Value(3)))
+	structVal := lo.Must(gcvctor.StructValue([]string{"name", "age"}, []spanner.GenericColumnValue{gcvctor.StringValue("Alice"), gcvctor.Int64Value(30)}))
+	unnamedStruct := lo.Must(gcvctor.StructValue([]string{"", ""}, []spanner.GenericColumnValue{gcvctor.StringValue("value"), gcvctor.Int64Value(42)}))
+	structElem := lo.Must(gcvctor.StructValue([]string{"COUNT", "MEAN"}, []spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.Float64Value(0.057294)}))
+	arrayOfStruct := lo.Must(gcvctor.ArrayValue(structElem))
+	jsonVal := lo.Must(gcvctor.JSONValue(map[string]string{"key": "value"}))
 
 	tests := []struct {
 		name     string
