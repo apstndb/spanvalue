@@ -41,7 +41,7 @@ func JSONFormatConfig() *FormatConfig {
 // FormatRowJSONObject formats a spanner.Row as a single JSON object string
 // using the given FormatConfig for value formatting and column names as keys.
 // The FormatConfig must produce standalone JSON values per column (e.g.,
-// JSONFormatConfig). Using a non-JSON config produces syntactically invalid output.
+// JSONFormatConfig()). Using a non-JSON config produces syntactically invalid output.
 // Empty column names (e.g., from expressions without aliases like SELECT 1+1)
 // are assigned names by the provided namer function. If namer is nil, empty
 // names are kept as empty-string JSON keys.
