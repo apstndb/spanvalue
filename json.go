@@ -66,7 +66,7 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 	var b strings.Builder
 	b.WriteByte('{')
 	autoIdx := 0
-	attempted := make(map[string]bool) // reused across unnamed fields via clear()
+	var attempted map[string]bool // lazily allocated, reused via clear()
 	for i, val := range values {
 		if i > 0 {
 			b.WriteByte(',')
@@ -78,11 +78,19 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 		if name == "" && namer != nil {
 			// Find a unique name. Detect pathological namers that cycle
 			// without producing new candidates by tracking seen names.
-			// This panic indicates a bug in the namer (contract violation).
-			clear(attempted)
+			// This panic indicates a bug in the namer (contract violation:
+			// must return distinct non-empty names for distinct indices).
+			if attempted == nil {
+				attempted = make(map[string]bool)
+			} else {
+				clear(attempted)
+			}
 			for {
 				name = namer(autoIdx)
 				autoIdx++
+				if name == "" {
+					panic("bug in UnnamedFieldNamer: returned empty string (use nil namer for empty keys)")
+				}
 				if !usedNames[name] {
 					break
 				}
