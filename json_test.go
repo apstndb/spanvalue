@@ -80,15 +80,8 @@ func TestJSONFormatConfig(t *testing.T) {
 func TestFormatRowJSONObject(t *testing.T) {
 	t.Parallel()
 
-	row, err := spanner.NewRow([]string{"id", "name", "active"}, []interface{}{int64(42), "Alice", true})
-	if err != nil {
-		t.Fatalf("NewRow: %v", err)
-	}
-
-	got, err := FormatRowJSONObject(JSONFormatConfig, row, IndexedUnnamedFieldNamer)
-	if err != nil {
-		t.Fatalf("FormatRowJSONObject: %v", err)
-	}
+	row := lo.Must(spanner.NewRow([]string{"id", "name", "active"}, []interface{}{int64(42), "Alice", true}))
+	got := lo.Must(FormatRowJSONObject(JSONFormatConfig, row, IndexedUnnamedFieldNamer))
 
 	want := `{"id":42,"name":"Alice","active":true}`
 	if diff := cmp.Diff(want, got); diff != "" {
@@ -99,15 +92,8 @@ func TestFormatRowJSONObject(t *testing.T) {
 func TestFormatRowJSONObject_UnnamedColumns(t *testing.T) {
 	t.Parallel()
 
-	row, err := spanner.NewRow([]string{"", ""}, []interface{}{int64(2), "hello"})
-	if err != nil {
-		t.Fatalf("NewRow: %v", err)
-	}
-
-	got, err := FormatRowJSONObject(JSONFormatConfig, row, IndexedUnnamedFieldNamer)
-	if err != nil {
-		t.Fatalf("FormatRowJSONObject: %v", err)
-	}
+	row := lo.Must(spanner.NewRow([]string{"", ""}, []interface{}{int64(2), "hello"}))
+	got := lo.Must(FormatRowJSONObject(JSONFormatConfig, row, IndexedUnnamedFieldNamer))
 
 	want := `{"_0":2,"_1":"hello"}`
 	if diff := cmp.Diff(want, got); diff != "" {
