@@ -10,7 +10,10 @@ import (
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 )
 
-// JSONFormatConfig produces valid JSON value strings for each Spanner value.
+// JSONFormatConfig returns a new FormatConfig that produces valid JSON value
+// strings for each Spanner value. Each call returns a fresh instance that the
+// caller may customize.
+//
 // Each formatted string is a standalone JSON value:
 //   - NULL → null
 //   - BOOL → true / false
@@ -21,8 +24,6 @@ import (
 //   - JSON column → raw JSON value (passed through)
 //   - ARRAY → [elem1,elem2,...]
 //   - STRUCT → {"field1":val1,"field2":val2,...}
-// JSONFormatConfig returns a new FormatConfig that produces valid JSON values.
-// Each call returns a fresh instance that the caller may customize.
 func JSONFormatConfig() *FormatConfig {
 	return &FormatConfig{
 		NullString:  "null",
