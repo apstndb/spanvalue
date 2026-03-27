@@ -11,12 +11,14 @@ import (
 	"github.com/apstndb/spanvalue/internal"
 )
 
+var literalFormatConfig = LiteralFormatConfig()
+
 func FormatRowLiteral(value *spanner.Row) ([]string, error) {
-	return LiteralFormatConfig().FormatRow(value)
+	return literalFormatConfig.FormatRow(value)
 }
 
 func FormatColumnLiteral(value spanner.GenericColumnValue) (string, error) {
-	return LiteralFormatConfig().FormatToplevelColumn(value)
+	return literalFormatConfig.FormatToplevelColumn(value)
 }
 
 // LiteralFormatConfig returns a new FormatConfig that produces parseable SQL
