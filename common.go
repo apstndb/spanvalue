@@ -95,7 +95,7 @@ func decodeScalar[T NullableValue](gcv spanner.GenericColumnValue) (T, error) {
 }
 
 func (fc *FormatConfig) formatSimpleColumn(value spanner.GenericColumnValue) (string, error) {
-	if isNull(value) {
+	if IsNull(value) {
 		return fc.NullString, nil
 	}
 
@@ -116,9 +116,9 @@ var (
 	_ FormatComplexFunc = FormatEnumAsCast
 )
 
-// isNull reports whether gcv represents a NULL value.
+// IsNull reports whether gcv represents a NULL value.
 // A nil gcv.Value is treated as NULL.
-func isNull(gcv spanner.GenericColumnValue) bool {
+func IsNull(gcv spanner.GenericColumnValue) bool {
 	if gcv.Value == nil {
 		return true
 	}
@@ -131,7 +131,7 @@ func FormatProtoAsCast(formatter Formatter, value spanner.GenericColumnValue, to
 		return "", ErrFallthrough
 	}
 
-	if isNull(value) {
+	if IsNull(value) {
 		return nullStringUpperCase, nil
 	}
 
@@ -147,7 +147,7 @@ func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, top
 		return "", ErrFallthrough
 	}
 
-	if isNull(value) {
+	if IsNull(value) {
 		return nullStringUpperCase, nil
 	}
 
@@ -181,7 +181,7 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 	switch valType.GetCode() {
 	case sppb.TypeCode_ARRAY:
 		// Note: This format is not intended to be parseable.
-		if isNull(value) {
+		if IsNull(value) {
 			return fc.NullString, nil
 		}
 

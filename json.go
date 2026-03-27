@@ -181,7 +181,7 @@ func FormatJSONSimpleValue(_ Formatter, value spanner.GenericColumnValue, _ bool
 	// regardless of how switch cases evolve.
 	// isNull handles both nil Value and NullValue kind (protobuf getters
 	// are nil-receiver safe).
-	if isNull(value) {
+	if IsNull(value) {
 		return "null", nil
 	}
 
