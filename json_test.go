@@ -9,6 +9,7 @@ import (
 	"cloud.google.com/go/civil"
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"github.com/apstndb/spantype/typector"
 	"github.com/apstndb/spanvalue/gcvctor"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
@@ -75,7 +76,7 @@ func TestJSONFormatConfig(t *testing.T) {
 		{name: "UUID", gcv: gcvctor.UUIDValue(uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")), wantJSON: `"550e8400-e29b-41d4-a716-446655440000"`},
 		{name: "ARRAY of INT64", gcv: arrayOfInt64, wantJSON: `[1,2,3]`},
 		{name: "ARRAY with NULL element", gcv: arrayWithNull, wantJSON: `[1,null,3]`},
-		{name: "NULL ARRAY", gcv: gcvctor.TypedNull(&sppb.Type{Code: sppb.TypeCode_ARRAY, ArrayElementType: &sppb.Type{Code: sppb.TypeCode_INT64}}), wantJSON: "null"},
+		{name: "NULL ARRAY", gcv: gcvctor.TypedNull(typector.ElemCodeToArrayType(sppb.TypeCode_INT64)), wantJSON: "null"},
 		{name: "STRUCT", gcv: structVal, wantJSON: `{"name":"Alice","age":30}`},
 		{name: "STRUCT with unnamed fields", gcv: unnamedStruct, wantJSON: `{"":"value","":42}`},
 		{name: "ARRAY of STRUCT", gcv: arrayOfStruct, wantJSON: `[{"COUNT":1,"MEAN":0.057294}]`},
@@ -137,15 +138,7 @@ func TestNewJSONObjectStructFormatter_EmptyNamer(t *testing.T) {
 	t.Parallel()
 
 	formatter := NewJSONObjectStructFormatter(EmptyUnnamedFieldNamer)
-	typ := &sppb.Type{
-		Code: sppb.TypeCode_STRUCT,
-		StructType: &sppb.StructType{
-			Fields: []*sppb.StructType_Field{
-				{Name: "", Type: &sppb.Type{Code: sppb.TypeCode_INT64}},
-				{Name: "", Type: &sppb.Type{Code: sppb.TypeCode_INT64}},
-			},
-		},
-	}
+	typ := typector.MustNameCodeSlicesToStructType([]string{"", ""}, []sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_INT64})
 	got := formatter(typ, false, []string{"1", "2"})
 	want := `{"":1,"":2}`
 	if diff := cmp.Diff(want, got); diff != "" {
@@ -159,15 +152,10 @@ func TestNewJSONObjectStructFormatter_CustomNamer(t *testing.T) {
 	formatter := NewJSONObjectStructFormatter(func(i int) string {
 		return "col" + strconv.Itoa(i+1)
 	})
-	typ := &sppb.Type{
-		Code: sppb.TypeCode_STRUCT,
-		StructType: &sppb.StructType{
-			Fields: []*sppb.StructType_Field{
-				{Name: "", Type: &sppb.Type{Code: sppb.TypeCode_INT64}},
-				{Name: "name", Type: &sppb.Type{Code: sppb.TypeCode_STRING}},
-			},
-		},
-	}
+	typ := typector.MustNameTypeSlicesToStructType(
+		[]string{"", "name"},
+		[]*sppb.Type{typector.CodeToSimpleType(sppb.TypeCode_INT64), typector.CodeToSimpleType(sppb.TypeCode_STRING)},
+	)
 	got := formatter(typ, false, []string{"42", `"Alice"`})
 	want := `{"col1":42,"name":"Alice"}`
 	if diff := cmp.Diff(want, got); diff != "" {
@@ -179,16 +167,14 @@ func TestNewJSONObjectStructFormatter_CollisionAvoidance(t *testing.T) {
 	t.Parallel()
 
 	formatter := NewJSONObjectStructFormatter(IndexedUnnamedFieldNamer)
-	typ := &sppb.Type{
-		Code: sppb.TypeCode_STRUCT,
-		StructType: &sppb.StructType{
-			Fields: []*sppb.StructType_Field{
-				{Name: "", Type: &sppb.Type{Code: sppb.TypeCode_INT64}},
-				{Name: "", Type: &sppb.Type{Code: sppb.TypeCode_INT64}},
-				{Name: "_1", Type: &sppb.Type{Code: sppb.TypeCode_INT64}},
-			},
+	typ := typector.MustNameTypeSlicesToStructType(
+		[]string{"", "", "_1"},
+		[]*sppb.Type{
+			typector.CodeToSimpleType(sppb.TypeCode_INT64),
+			typector.CodeToSimpleType(sppb.TypeCode_INT64),
+			typector.CodeToSimpleType(sppb.TypeCode_INT64),
 		},
-	}
+	)
 	got := formatter(typ, false, []string{"1", "2", "3"})
 	// _0 for first unnamed, _1 is taken by named field, so second unnamed gets _2
 	want := `{"_0":1,"_2":2,"_1":3}`
@@ -232,43 +218,20 @@ func TestFormatJSONObjectStruct(t *testing.T) {
 		want   string
 	}{
 		{
-			name: "named fields",
-			typ: &sppb.Type{
-				Code: sppb.TypeCode_STRUCT,
-				StructType: &sppb.StructType{
-					Fields: []*sppb.StructType_Field{
-						{Name: "id", Type: &sppb.Type{Code: sppb.TypeCode_INT64}},
-						{Name: "name", Type: &sppb.Type{Code: sppb.TypeCode_STRING}},
-					},
-				},
-			},
+			name:   "named fields",
+			typ:    typector.MustNameCodeSlicesToStructType([]string{"id", "name"}, []sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_STRING}),
 			fields: []string{"42", `"Alice"`},
 			want:   `{"id":42,"name":"Alice"}`,
 		},
 		{
-			name: "unnamed fields produce empty keys",
-			typ: &sppb.Type{
-				Code: sppb.TypeCode_STRUCT,
-				StructType: &sppb.StructType{
-					Fields: []*sppb.StructType_Field{
-						{Name: "", Type: &sppb.Type{Code: sppb.TypeCode_INT64}},
-						{Name: "", Type: &sppb.Type{Code: sppb.TypeCode_STRING}},
-					},
-				},
-			},
+			name:   "unnamed fields produce empty keys",
+			typ:    typector.MustNameCodeSlicesToStructType([]string{"", ""}, []sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_STRING}),
 			fields: []string{"1", `"hello"`},
 			want:   `{"":1,"":"hello"}`,
 		},
 		{
-			name: "field name with special chars",
-			typ: &sppb.Type{
-				Code: sppb.TypeCode_STRUCT,
-				StructType: &sppb.StructType{
-					Fields: []*sppb.StructType_Field{
-						{Name: "col \"quoted\"", Type: &sppb.Type{Code: sppb.TypeCode_STRING}},
-					},
-				},
-			},
+			name:   "field name with special chars",
+			typ:    typector.NameCodeToStructType("col \"quoted\"", sppb.TypeCode_STRING),
 			fields: []string{`"val"`},
 			want:   `{"col \"quoted\"":"val"}`,
 		},
