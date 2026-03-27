@@ -172,14 +172,15 @@ func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc
 func FormatJSONSimpleValue(_ Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
 	val := value.Value
 
+	// Handle NULL uniformly for all types. This is technically redundant for
+	// the default case (MarshalJSON handles NULL), but ensures correctness
+	// regardless of how switch cases evolve.
+	if _, isNull := val.GetKind().(*structpb.Value_NullValue); isNull {
+		return "null", nil
+	}
+
 	switch value.Type.GetCode() {
 	case sppb.TypeCode_INT64, sppb.TypeCode_ENUM, sppb.TypeCode_JSON:
-		// NULL check needed here: GetStringValue() returns "" for NULL,
-		// which is not valid JSON. MarshalJSON() in the default case
-		// already handles NULL correctly.
-		if _, isNull := val.GetKind().(*structpb.Value_NullValue); isNull {
-			return "null", nil
-		}
 		// INT64: StringValue is already a valid JSON number
 		// ENUM: Spanner stores proto enum values as INT64; StringValue is a valid JSON number
 		// JSON column: StringValue is already valid JSON
