@@ -97,6 +97,38 @@ func TestParseExpr(t *testing.T) {
 			},
 		},
 		{
+			`float32(2.5)`,
+			gcvctor.Float32Value(2.5),
+			spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT32),
+				Value: structpb.NewNumberValue(2.5),
+			},
+		},
+		{
+			`float32 NaN`,
+			gcvctor.Float32Value(float32(math.NaN())),
+			spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT32),
+				Value: structpb.NewStringValue("NaN"),
+			},
+		},
+		{
+			`float32 +Inf`,
+			gcvctor.Float32Value(float32(math.Inf(1))),
+			spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT32),
+				Value: structpb.NewStringValue("Infinity"),
+			},
+		},
+		{
+			`float32 -Inf`,
+			gcvctor.Float32Value(float32(math.Inf(-1))),
+			spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT32),
+				Value: structpb.NewStringValue("-Infinity"),
+			},
+		},
+		{
 			`"foo"`,
 			gcvctor.StringValue("foo"),
 			spanner.GenericColumnValue{
