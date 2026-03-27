@@ -94,7 +94,10 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 				usedNames[name] = true
 			}
 		}
-		key, _ := json.Marshal(name) // encoding a string to JSON never fails
+		// json.Marshal on a Go string never returns an error.
+		// Note: strconv.Quote is not suitable here because it produces Go string
+		// literal escapes (e.g., \a, \v) that are not valid JSON escape sequences.
+		key, _ := json.Marshal(name) //nolint:errcheck // string marshal is infallible
 		b.Write(key)
 		b.WriteByte(':')
 		b.WriteString(val)

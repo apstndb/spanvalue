@@ -20,5 +20,10 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.11.4
+          # Use latest to avoid manually tracking golangci-lint releases.
+          # Pinning requires updates whenever Go version changes (new Go
+          # often needs new golangci-lint). The risk of breakage from
+          # golangci-lint updates is low — new lint findings are fixable
+          # and preferable to running a stale linter.
+          version: latest
           args: --timeout=5m
