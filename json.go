@@ -37,6 +37,8 @@ var JSONFormatConfig = &FormatConfig{
 
 // FormatRowJSONObject formats a spanner.Row as a single JSON object string
 // using the given FormatConfig for value formatting and column names as keys.
+// The FormatConfig must produce standalone JSON values per column (e.g.,
+// JSONFormatConfig). Using a non-JSON config produces syntactically invalid output.
 // Empty column names (e.g., from expressions without aliases like SELECT 1+1)
 // are assigned names by the provided namer function. If namer is nil, empty
 // names are kept as empty-string JSON keys.
@@ -109,8 +111,10 @@ func FormatCompactArray(_ *sppb.Type, _ bool, elemStrings []string) string {
 	return "[" + strings.Join(elemStrings, ",") + "]"
 }
 
-// UnnamedFieldNamer generates a name for an unnamed field or column given its
-// 0-based index. It must return distinct non-empty names for distinct indices.
+// UnnamedFieldNamer generates a name for an unnamed field or column.
+// The index argument is a monotonically increasing counter (not necessarily the
+// field's positional index) that may skip values due to collision avoidance.
+// It must return distinct non-empty names for distinct indices.
 // Functions that accept UnnamedFieldNamer (such as NewJSONObjectStructFormatter
 // and FormatRowJSONObject) panic if the namer violates this contract.
 // Pass nil instead of a namer to keep unnamed fields as empty-string keys.
