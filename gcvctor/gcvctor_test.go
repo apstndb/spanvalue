@@ -337,3 +337,22 @@ func TestNullRawValueFromType_ARRAY(t *testing.T) {
 		t.Errorf("diff (-want, +got) = %v", diff)
 	}
 }
+
+func TestArrayCodeTypedNull(t *testing.T) {
+	got := gcvctor.ArrayCodeTypedNull(sppb.TypeCode_INT64)
+	want := gcvctor.TypedNull(typector.ElemCodeToArrayType(sppb.TypeCode_INT64))
+
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Errorf("diff (-want, +got) = %v", diff)
+	}
+}
+
+func TestArrayTypeTypedNull(t *testing.T) {
+	structType := typector.NameCodeToStructType("n", sppb.TypeCode_INT64)
+	got := gcvctor.ArrayTypeTypedNull(structType)
+	want := gcvctor.TypedNull(typector.ElemTypeToArrayType(structType))
+
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Errorf("diff (-want, +got) = %v", diff)
+	}
+}
