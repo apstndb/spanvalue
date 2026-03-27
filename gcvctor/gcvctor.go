@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"slices"
 	"strconv"
@@ -38,14 +39,30 @@ func Int64Value(v int64) spanner.GenericColumnValue {
 func Float64Value(v float64) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT64),
-		Value: structpb.NewNumberValue(v),
+		Value: float64ToStructpbValue(v),
 	}
 }
 
 func Float32Value(v float32) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT32),
-		Value: structpb.NewNumberValue(float64(v)),
+		Value: float64ToStructpbValue(float64(v)),
+	}
+}
+
+// float64ToStructpbValue converts a float64 to the appropriate structpb.Value.
+// Spanner encodes NaN and ±Infinity as StringValue, finite values as NumberValue.
+// The string representations match Spanner's wire format: "NaN", "Infinity", "-Infinity".
+func float64ToStructpbValue(v float64) *structpb.Value {
+	switch {
+	case math.IsNaN(v):
+		return structpb.NewStringValue("NaN")
+	case math.IsInf(v, 1):
+		return structpb.NewStringValue("Infinity")
+	case math.IsInf(v, -1):
+		return structpb.NewStringValue("-Infinity")
+	default:
+		return structpb.NewNumberValue(v)
 	}
 }
 

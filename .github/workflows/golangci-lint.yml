@@ -3,13 +3,10 @@ on:
   push:
     branches:
       - main
-      - master
   pull_request:
 
 permissions:
   contents: read
-  # Optional: allow read access to pull request. Use with `only-new-issues` option.
-  # pull-requests: read
 
 jobs:
   golangci:
@@ -19,9 +16,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: stable
+          go-version-file: go.mod
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          # Pin to a specific version to avoid unrelated PRs failing due to
+          # newly added lint rules, and to mitigate supply chain risks.
+          # Update this version when upgrading Go or intentionally adopting
+          # new lint rules.
+          version: v2.11.4
           args: --timeout=5m

@@ -2,6 +2,7 @@ package gcvctor_test
 
 import (
 	"encoding/base64"
+	"math"
 	"testing"
 	"time"
 
@@ -69,6 +70,62 @@ func TestParseExpr(t *testing.T) {
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT64),
 				Value: structpb.NewNumberValue(3.14),
+			},
+		},
+		{
+			`NaN`,
+			gcvctor.Float64Value(math.NaN()),
+			spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT64),
+				Value: structpb.NewStringValue("NaN"),
+			},
+		},
+		{
+			`+Inf`,
+			gcvctor.Float64Value(math.Inf(1)),
+			spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT64),
+				Value: structpb.NewStringValue("Infinity"),
+			},
+		},
+		{
+			`-Inf`,
+			gcvctor.Float64Value(math.Inf(-1)),
+			spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT64),
+				Value: structpb.NewStringValue("-Infinity"),
+			},
+		},
+		{
+			`float32(2.5)`,
+			gcvctor.Float32Value(2.5),
+			spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT32),
+				Value: structpb.NewNumberValue(2.5),
+			},
+		},
+		{
+			`float32 NaN`,
+			gcvctor.Float32Value(float32(math.NaN())),
+			spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT32),
+				Value: structpb.NewStringValue("NaN"),
+			},
+		},
+		{
+			`float32 +Inf`,
+			gcvctor.Float32Value(float32(math.Inf(1))),
+			spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT32),
+				Value: structpb.NewStringValue("Infinity"),
+			},
+		},
+		{
+			`float32 -Inf`,
+			gcvctor.Float32Value(float32(math.Inf(-1))),
+			spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT32),
+				Value: structpb.NewStringValue("-Infinity"),
 			},
 		},
 		{

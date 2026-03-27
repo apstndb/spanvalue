@@ -116,8 +116,13 @@ var (
 	_ FormatComplexFunc = FormatEnumAsCast
 )
 
+// isNull reports whether gcv represents a NULL value.
+// A nil gcv.Value is treated as NULL.
 func isNull(gcv spanner.GenericColumnValue) bool {
-	_, ok := gcv.Value.Kind.(*structpb.Value_NullValue)
+	if gcv.Value == nil {
+		return true
+	}
+	_, ok := gcv.Value.GetKind().(*structpb.Value_NullValue)
 	return ok
 }
 
