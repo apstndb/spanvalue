@@ -11,18 +11,22 @@ import (
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 )
 
-var SpannerCLICompatibleFormatConfig = FormatConfig{
-	NullString:  nullStringUpperCase,
-	FormatArray: FormatUntypedArray,
-	FormatStruct: FormatStruct{
-		FormatStructField: FormatSimpleStructField,
-		FormatStructParen: FormatBracketStruct,
-	},
-	FormatNullable: FormatNullableSpannerCLICompatible,
+// SpannerCLICompatibleFormatConfig returns a new FormatConfig that matches
+// the output format of spanner-cli.
+func SpannerCLICompatibleFormatConfig() *FormatConfig {
+	return &FormatConfig{
+		NullString:  nullStringUpperCase,
+		FormatArray: FormatUntypedArray,
+		FormatStruct: FormatStruct{
+			FormatStructField: FormatSimpleStructField,
+			FormatStructParen: FormatBracketStruct,
+		},
+		FormatNullable: FormatNullableSpannerCLICompatible,
+	}
 }
 
 func FormatRowSpannerCLICompatible(row *spanner.Row) ([]string, error) {
-	return SpannerCLICompatibleFormatConfig.FormatRow(row)
+	return SpannerCLICompatibleFormatConfig().FormatRow(row)
 }
 
 var trailingPointZeroRe = regexp.MustCompile(`\.?0*$`)
@@ -54,7 +58,7 @@ func FormatNullableSpannerCLICompatible(value NullableValue) (string, error) {
 }
 
 func FormatColumnSpannerCLICompatible(value spanner.GenericColumnValue) (string, error) {
-	return SpannerCLICompatibleFormatConfig.FormatToplevelColumn(value)
+	return SpannerCLICompatibleFormatConfig().FormatToplevelColumn(value)
 }
 
 var (
