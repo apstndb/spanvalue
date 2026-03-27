@@ -1,6 +1,7 @@
 package spanvalue
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -93,7 +94,8 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 				usedNames[name] = true
 			}
 		}
-		b.WriteString(strconv.Quote(name))
+		key, _ := json.Marshal(name) // encoding a string to JSON never fails
+		b.Write(key)
 		b.WriteByte(':')
 		b.WriteString(val)
 	}
