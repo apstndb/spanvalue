@@ -117,9 +117,11 @@ var (
 )
 
 // isNull reports whether gcv represents a NULL value.
-// Safe to call when gcv.Value is nil (treated as NULL).
-// Uses protobuf generated getter (GetKind) which is nil-receiver safe.
+// A nil gcv.Value is treated as NULL.
 func isNull(gcv spanner.GenericColumnValue) bool {
+	if gcv.Value == nil {
+		return true
+	}
 	_, ok := gcv.Value.GetKind().(*structpb.Value_NullValue)
 	return ok
 }
