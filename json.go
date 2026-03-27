@@ -21,17 +21,21 @@ import (
 //   - JSON column → raw JSON value (passed through)
 //   - ARRAY → [elem1,elem2,...]
 //   - STRUCT → {"field1":val1,"field2":val2,...}
-var JSONFormatConfig = &FormatConfig{
-	NullString:  "null",
-	FormatArray: FormatCompactArray,
-	FormatStruct: FormatStruct{
-		FormatStructField: FormatSimpleStructField,
-		FormatStructParen: FormatJSONObjectStruct,
-	},
-	FormatComplexPlugins: []FormatComplexFunc{
-		FormatJSONSimpleValue,
-	},
-	FormatNullable: FormatNullableSpannerCLICompatible,
+// JSONFormatConfig returns a new FormatConfig that produces valid JSON values.
+// Each call returns a fresh instance that the caller may customize.
+func JSONFormatConfig() *FormatConfig {
+	return &FormatConfig{
+		NullString:  "null",
+		FormatArray: FormatCompactArray,
+		FormatStruct: FormatStruct{
+			FormatStructField: FormatSimpleStructField,
+			FormatStructParen: FormatJSONObjectStruct,
+		},
+		FormatComplexPlugins: []FormatComplexFunc{
+			FormatJSONSimpleValue,
+		},
+		FormatNullable: FormatNullableSpannerCLICompatible,
+	}
 }
 
 // FormatRowJSONObject formats a spanner.Row as a single JSON object string

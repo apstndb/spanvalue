@@ -19,7 +19,7 @@ import (
 func TestJSONFormatConfig(t *testing.T) {
 	t.Parallel()
 
-	fc := JSONFormatConfig
+	fc := JSONFormatConfig()
 
 	arrayOfInt64 := lo.Must(gcvctor.ArrayValue(gcvctor.Int64Value(1), gcvctor.Int64Value(2), gcvctor.Int64Value(3)))
 	arrayWithNull := lo.Must(gcvctor.ArrayValue(gcvctor.Int64Value(1), gcvctor.SimpleTypedNull(sppb.TypeCode_INT64), gcvctor.Int64Value(3)))
@@ -84,7 +84,7 @@ func TestFormatRowJSONObject(t *testing.T) {
 	t.Parallel()
 
 	row := lo.Must(spanner.NewRow([]string{"id", "name", "active"}, []interface{}{int64(42), "Alice", true}))
-	got := lo.Must(FormatRowJSONObject(JSONFormatConfig, row, IndexedUnnamedFieldNamer))
+	got := lo.Must(FormatRowJSONObject(JSONFormatConfig(), row, IndexedUnnamedFieldNamer))
 
 	want := `{"id":42,"name":"Alice","active":true}`
 	if diff := cmp.Diff(want, got); diff != "" {
@@ -96,7 +96,7 @@ func TestFormatRowJSONObject_UnnamedColumns(t *testing.T) {
 	t.Parallel()
 
 	row := lo.Must(spanner.NewRow([]string{"", ""}, []interface{}{int64(2), "hello"}))
-	got := lo.Must(FormatRowJSONObject(JSONFormatConfig, row, IndexedUnnamedFieldNamer))
+	got := lo.Must(FormatRowJSONObject(JSONFormatConfig(), row, IndexedUnnamedFieldNamer))
 
 	want := `{"_0":2,"_1":"hello"}`
 	if diff := cmp.Diff(want, got); diff != "" {
