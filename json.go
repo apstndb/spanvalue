@@ -10,7 +10,10 @@ import (
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 )
 
-// JSONFormatConfig produces valid JSON value strings for each Spanner value.
+// JSONFormatConfig returns a new FormatConfig that produces valid JSON value
+// strings for each Spanner value. Each call returns a fresh instance that the
+// caller may customize.
+//
 // Each formatted string is a standalone JSON value:
 //   - NULL → null
 //   - BOOL → true / false
@@ -21,23 +24,25 @@ import (
 //   - JSON column → raw JSON value (passed through)
 //   - ARRAY → [elem1,elem2,...]
 //   - STRUCT → {"field1":val1,"field2":val2,...}
-var JSONFormatConfig = &FormatConfig{
-	NullString:  "null",
-	FormatArray: FormatCompactArray,
-	FormatStruct: FormatStruct{
-		FormatStructField: FormatSimpleStructField,
-		FormatStructParen: FormatJSONObjectStruct,
-	},
-	FormatComplexPlugins: []FormatComplexFunc{
-		FormatJSONSimpleValue,
-	},
-	FormatNullable: FormatNullableSpannerCLICompatible,
+func JSONFormatConfig() *FormatConfig {
+	return &FormatConfig{
+		NullString:  "null",
+		FormatArray: FormatCompactArray,
+		FormatStruct: FormatStruct{
+			FormatStructField: FormatSimpleStructField,
+			FormatStructParen: FormatJSONObjectStruct,
+		},
+		FormatComplexPlugins: []FormatComplexFunc{
+			FormatJSONSimpleValue,
+		},
+		FormatNullable: FormatNullableSpannerCLICompatible,
+	}
 }
 
 // FormatRowJSONObject formats a spanner.Row as a single JSON object string
 // using the given FormatConfig for value formatting and column names as keys.
 // The FormatConfig must produce standalone JSON values per column (e.g.,
-// JSONFormatConfig). Using a non-JSON config produces syntactically invalid output.
+// JSONFormatConfig()). Using a non-JSON config produces syntactically invalid output.
 // Empty column names (e.g., from expressions without aliases like SELECT 1+1)
 // are assigned names by the provided namer function. If namer is nil, empty
 // names are kept as empty-string JSON keys.
