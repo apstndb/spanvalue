@@ -162,8 +162,9 @@ func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc
 	}
 }
 
-// FormatJSONSimpleValue is a FormatComplexFunc that formats all non-ARRAY, non-STRUCT
-// types as valid JSON values. It never returns ErrFallthrough.
+// FormatJSONSimpleValue is a FormatComplexFunc that formats non-ARRAY, non-STRUCT
+// types as valid JSON values. It returns ErrFallthrough for ARRAY and STRUCT so
+// that the built-in handlers format them.
 //
 // For most types, structpb.Value.MarshalJSON() produces the correct JSON representation
 // (BOOL→true/false, FLOAT→number, STRING→"quoted", NULL→null, NaN/Inf→"NaN"/"Infinity").
@@ -173,16 +174,16 @@ func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc
 //   - ENUM: Spanner stores proto enum values as INT64; same handling as INT64.
 //   - JSON: Spanner encodes as StringValue('{"key":"value"}'), MarshalJSON() would produce
 //     escaped quoted string, but we want the raw JSON value passed through.
-func FormatJSONSimpleValue(_ Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
+func FormatJSONSimpleValue(formatter Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
+	switch value.Type.GetCode() {
+	case sppb.TypeCode_ARRAY, sppb.TypeCode_STRUCT:
+		return "", ErrFallthrough
+	}
+
 	val := value.Value
 
-	// Handle NULL uniformly for all types. This is technically redundant for
-	// the default case (MarshalJSON handles NULL), but ensures correctness
-	// regardless of how switch cases evolve.
-	// IsNull handles both nil Value and NullValue kind (protobuf getters
-	// are nil-receiver safe).
 	if IsNull(value) {
-		return "null", nil
+		return formatter.GetNullString(), nil
 	}
 
 	switch value.Type.GetCode() {
