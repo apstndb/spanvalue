@@ -20,6 +20,9 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version-file: go.mod
+        # Avoid stale module/build caches that can surface impossible typecheck
+        # failures even when the current tree passes locally.
+        cache: false
 
     - name: Test
       run: go test -v ./...
