@@ -24,5 +24,8 @@ jobs:
         # failures even when the current tree passes locally.
         cache: false
 
+    - name: Clear Go caches
+      run: go clean -cache -testcache
+
     - name: Test
       run: go test -v ./...

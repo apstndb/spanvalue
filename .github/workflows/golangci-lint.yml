@@ -20,6 +20,8 @@ jobs:
           # Avoid stale module/build caches that can surface old typecheck
           # results in golangci-lint.
           cache: false
+      - name: Clear Go caches
+        run: go clean -cache -testcache
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
