@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"iter"
 	"math"
-	"slices"
 	"strconv"
+	"strings"
 	"unicode"
 
-	"github.com/ngicks/go-iterator-helper/hiter"
-	"github.com/ngicks/go-iterator-helper/hiter/stringsiter"
+	"github.com/samber/lo/it"
 )
 
 // ByteToEscapeSequenceReadable formats a byte as a string without quote processing
@@ -68,7 +67,7 @@ func Float32ToLiteral(v float32) string {
 }
 
 func ToAny[T any](seq iter.Seq[T]) iter.Seq[any] {
-	return hiter.Map(func(v T) any { return v }, seq)
+	return it.ToAnySeq(seq)
 }
 
 func Pointers[T any, E ~[]T](e E) iter.Seq[*T] {
@@ -102,19 +101,21 @@ func suitableQuote(b []byte) rune {
 func ToReadableBytesLiteral(v []byte) string {
 	quote := suitableQuote(v)
 
-	encoded := stringsiter.Collect(hiter.Map(func(b byte) string {
-		return EscapeRune(rune(b), false, quote)
-	}, slices.Values(v)))
+	var encoded strings.Builder
+	for _, b := range v {
+		encoded.WriteString(EscapeRune(rune(b), false, quote))
+	}
 
-	return fmt.Sprintf(`b%s%s%s`, string(quote), encoded, string(quote))
+	return fmt.Sprintf(`b%s%s%s`, string(quote), encoded.String(), string(quote))
 }
 
 func ToStringLiteral(s string) string {
 	quote := suitableQuote([]byte(s))
 
-	encoded := stringsiter.Collect(hiter.Map(func(r rune) string {
-		return EscapeRune(r, true, quote)
-	}, slices.Values([]rune(s))))
+	var encoded strings.Builder
+	for _, r := range s {
+		encoded.WriteString(EscapeRune(r, true, quote))
+	}
 
-	return fmt.Sprintf(`%s%s%s`, string(quote), encoded, string(quote))
+	return fmt.Sprintf(`%s%s%s`, string(quote), encoded.String(), string(quote))
 }

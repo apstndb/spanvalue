@@ -9,8 +9,6 @@ import (
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	"github.com/apstndb/lox"
-	"github.com/ngicks/go-iterator-helper/hiter"
 	"github.com/samber/lo"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -38,7 +36,9 @@ func (n NullBytes) String() string {
 	if n == nil {
 		return nullStringClientLib
 	}
-	return strings.Join(lox.MapWithoutIndex(n, internal.ByteToEscapeSequenceReadable), "")
+	return strings.Join(lo.Map(n, func(b byte, _ int) string {
+		return internal.ByteToEscapeSequenceReadable(b)
+	}), "")
 }
 
 var _, _ NullableValue = (NullBytes)(nil), (*NullBytes)(nil)
@@ -199,12 +199,9 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 			return fc.GetNullString(), nil
 		}
 
-		elemStrings, err := hiter.TryCollect(
-			hiter.Divide(
-				func(v *structpb.Value) (string, error) {
-					return fc.FormatColumn(typeValueToGCV(valType.GetArrayElementType(), v), false)
-				},
-				slices.Values(value.Value.GetListValue().GetValues())))
+		elemStrings, err := lo.MapErr(value.Value.GetListValue().GetValues(), func(v *structpb.Value, _ int) (string, error) {
+			return fc.FormatColumn(typeValueToGCV(valType.GetArrayElementType(), v), false)
+		})
 		if err != nil {
 			return "", err
 		}
@@ -214,13 +211,10 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 		if IsNull(value) {
 			return fc.GetNullString(), nil
 		}
-		fieldStrings, err := hiter.TryCollect(hiter.Map2(
-			func(field *sppb.StructType_Field, value *structpb.Value) (string, error) {
-				return fc.FormatStruct.FormatStructField(fc, field, value)
-			},
-			hiter.Pairs(
-				slices.Values(valType.GetStructType().GetFields()),
-				slices.Values(value.Value.GetListValue().GetValues()))))
+		fieldValues := value.Value.GetListValue().GetValues()
+		fieldStrings, err := lo.MapErr(valType.GetStructType().GetFields(), func(field *sppb.StructType_Field, i int) (string, error) {
+			return fc.FormatStruct.FormatStructField(fc, field, fieldValues[i])
+		})
 		if err != nil {
 			return "", err
 		}
@@ -232,13 +226,15 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 }
 
 func (fc *FormatConfig) FormatRow(row *spanner.Row) ([]string, error) {
-	gcvs := slices.Collect(hiter.RepeatFunc(lo.Empty[spanner.GenericColumnValue], row.Size()))
+	gcvs := lo.RepeatBy(row.Size(), func(_ int) spanner.GenericColumnValue {
+		return lo.Empty[spanner.GenericColumnValue]()
+	})
 	if err := row.Columns(slices.Collect(internal.ToAny(internal.Pointers(gcvs)))...); err != nil {
 		return nil, err
 	}
-	return hiter.TryCollect(hiter.Divide(func(gcv spanner.GenericColumnValue) (string, error) {
+	return lo.MapErr(gcvs, func(gcv spanner.GenericColumnValue, _ int) (string, error) {
 		return fc.FormatColumn(gcv, true)
-	}, slices.Values(gcvs)))
+	})
 }
 
 func (fc *FormatConfig) FormatToplevelColumn(value spanner.GenericColumnValue) (string, error) {
