@@ -1,4 +1,4 @@
-# Copilot instructions for `spanvalue`
+# Agent instructions for `spanvalue`
 
 ## Commands
 
