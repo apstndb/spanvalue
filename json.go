@@ -2,7 +2,6 @@ package spanvalue
 
 import (
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -60,18 +59,10 @@ func FormatRowJSONObject(fc *FormatConfig, row *spanner.Row, namer UnnamedFieldN
 // (if non-nil), with collision avoidance against explicit and previously
 // generated names. If namer is nil, empty names are kept as-is.
 func assembleJSONObject(columnNames []string, values []string, namer UnnamedFieldNamer) string {
-	// Collect all explicit names for collision avoidance.
-	usedNames := make(map[string]bool, len(columnNames))
-	for _, name := range columnNames {
-		if name != "" {
-			usedNames[name] = true
-		}
-	}
+	columnNames = resolveColumnNames(columnNames, namer)
 
 	var b strings.Builder
 	b.WriteByte('{')
-	autoIdx := 0
-	var attempted map[string]bool // lazily allocated, reused via clear()
 	for i, val := range values {
 		if i > 0 {
 			b.WriteByte(',')
@@ -79,32 +70,6 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 		var name string
 		if i < len(columnNames) {
 			name = columnNames[i]
-		}
-		if name == "" && namer != nil {
-			// Find a unique name. Detect pathological namers that cycle
-			// without producing new candidates by tracking seen names.
-			// This panic indicates a bug in the namer (contract violation:
-			// must return distinct non-empty names for distinct indices).
-			if attempted == nil {
-				attempted = make(map[string]bool)
-			} else {
-				clear(attempted)
-			}
-			for {
-				name = namer(autoIdx)
-				autoIdx++
-				if name == "" {
-					panic("bug in UnnamedFieldNamer: returned empty string (use nil namer for empty keys)")
-				}
-				if !usedNames[name] {
-					break
-				}
-				if attempted[name] {
-					panic(fmt.Sprintf("bug in UnnamedFieldNamer: returned repeated colliding name %q", name))
-				}
-				attempted[name] = true
-			}
-			usedNames[name] = true
 		}
 		// json.Marshal on a Go string never returns an error.
 		// Note: strconv.Quote is not suitable here because it produces Go string
