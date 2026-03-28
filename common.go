@@ -234,9 +234,7 @@ func (fc *FormatConfig) FormatRow(row *spanner.Row) ([]string, error) {
 	if err := row.Columns(slices.Collect(internal.ToAny(internal.Pointers(gcvs)))...); err != nil {
 		return nil, err
 	}
-	return lo.MapErr(gcvs, func(gcv spanner.GenericColumnValue, _ int) (string, error) {
-		return fc.FormatColumn(gcv, true)
-	})
+	return fc.formatColumns(gcvs)
 }
 
 func (fc *FormatConfig) FormatToplevelColumn(value spanner.GenericColumnValue) (string, error) {

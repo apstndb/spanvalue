@@ -102,6 +102,8 @@ func ToReadableBytesLiteral(v []byte) string {
 	quote := suitableQuote(v)
 
 	var encoded strings.Builder
+	// Grow uses a cheap lower bound only. Escape expansion is content-dependent,
+	// so larger multipliers are speculative unless profiling shows a benefit.
 	encoded.Grow(len(v) + 3)
 	encoded.WriteByte('b')
 	encoded.WriteRune(quote)
@@ -117,6 +119,8 @@ func ToStringLiteral(s string) string {
 	quote := suitableQuote([]byte(s))
 
 	var encoded strings.Builder
+	// Grow uses a cheap lower bound only. Escape expansion is content-dependent,
+	// so larger multipliers are speculative unless profiling shows a benefit.
 	encoded.Grow(len(s) + 2)
 	encoded.WriteRune(quote)
 	for _, r := range s {
