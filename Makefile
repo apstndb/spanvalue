@@ -9,7 +9,7 @@ fmt:
 	go fmt ./...
 
 fmt-check:
-	@files="$$(gofmt -l $$(git ls-files '*.go'))"; \
+	@files="$$(git ls-files -z -- '*.go' | xargs -0 sh -c 'if [ "$$#" -eq 0 ]; then exit 0; fi; gofmt -l "$$@"' sh)"; \
 	if [ -n "$$files" ]; then \
 		echo "$$files"; \
 		exit 1; \
