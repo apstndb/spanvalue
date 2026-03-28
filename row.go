@@ -36,7 +36,7 @@ func FormatRowJSONObjectFromColumns(fc *FormatConfig, columnNames []string, valu
 	if err != nil {
 		return "", err
 	}
-	return assembleJSONObject(columnNames, formattedValues, namer), nil
+	return assembleResolvedJSONObject(resolveColumnNames(columnNames, namer), formattedValues), nil
 }
 
 func (fc *FormatConfig) formatColumns(values []spanner.GenericColumnValue) ([]string, error) {

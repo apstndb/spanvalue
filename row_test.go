@@ -53,7 +53,7 @@ func TestFormatRowColumns(t *testing.T) {
 		gcvctor.StringValue("Alice"),
 	}
 
-	got, err := FormatRowColumns(&SimpleFormatConfig, columnNames, values)
+	got, err := FormatRowColumns(SimpleFormatConfig(), columnNames, values)
 	if err != nil {
 		t.Fatalf("FormatRowColumns() error = %v", err)
 	}
@@ -67,7 +67,7 @@ func TestFormatRowColumns(t *testing.T) {
 func TestFormatRowColumns_LengthMismatch(t *testing.T) {
 	t.Parallel()
 
-	_, err := FormatRowColumns(&SimpleFormatConfig, []string{"id"}, []spanner.GenericColumnValue{})
+	_, err := FormatRowColumns(SimpleFormatConfig(), []string{"id"}, []spanner.GenericColumnValue{})
 	if err == nil {
 		t.Fatal("FormatRowColumns() error = nil, want non-nil")
 	}

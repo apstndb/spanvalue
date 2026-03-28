@@ -59,8 +59,12 @@ func FormatRowJSONObject(fc *FormatConfig, row *spanner.Row, namer UnnamedFieldN
 // (if non-nil), with collision avoidance against explicit and previously
 // generated names. If namer is nil, empty names are kept as-is.
 func assembleJSONObject(columnNames []string, values []string, namer UnnamedFieldNamer) string {
-	columnNames = resolveColumnNames(columnNames, namer)
+	return assembleResolvedJSONObject(resolveColumnNames(columnNames, namer), values)
+}
 
+// assembleResolvedJSONObject combines already-resolved column names and
+// pre-formatted JSON value strings into a single JSON object.
+func assembleResolvedJSONObject(columnNames []string, values []string) string {
 	var b strings.Builder
 	b.WriteByte('{')
 	for i, val := range values {
@@ -123,7 +127,7 @@ func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc
 		for i, f := range fields {
 			names[i] = f.GetName()
 		}
-		return assembleJSONObject(names, fieldStrings, namer)
+		return assembleResolvedJSONObject(resolveColumnNames(names, namer), fieldStrings)
 	}
 }
 
