@@ -21,7 +21,7 @@ func TestFormatColumnComplexPlugins(t *testing.T) {
 		[]spanner.GenericColumnValue{gcvctor.StringValue("Alice")},
 	))
 
-	fc := SimpleFormatConfig
+	fc := SimpleFormatConfig()
 	calls := make([]sppb.TypeCode, 0, 3)
 	fc.FormatComplexPlugins = []FormatComplexFunc{
 		func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
@@ -81,11 +81,11 @@ func TestFormatColumnConstructedNullStruct(t *testing.T) {
 		Value: structpb.NewNullValue(),
 	}
 
-	got, err := SimpleFormatConfig.FormatToplevelColumn(constructedNullStruct)
+	got, err := SimpleFormatConfig().FormatToplevelColumn(constructedNullStruct)
 	if err != nil {
 		t.Fatalf("FormatToplevelColumn() error = %v", err)
 	}
-	if got != SimpleFormatConfig.NullString {
-		t.Fatalf("FormatToplevelColumn() = %q, want %q", got, SimpleFormatConfig.NullString)
+	if got != SimpleFormatConfig().NullString {
+		t.Fatalf("FormatToplevelColumn() = %q, want %q", got, SimpleFormatConfig().NullString)
 	}
 }
