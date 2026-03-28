@@ -96,7 +96,7 @@ func decodeScalar[T NullableValue](gcv spanner.GenericColumnValue) (T, error) {
 
 func (fc *FormatConfig) formatSimpleColumn(value spanner.GenericColumnValue) (string, error) {
 	if IsNull(value) {
-		return fc.NullString, nil
+		return fc.GetNullString(), nil
 	}
 
 	nv, err := simpleGCVToNullable(value)
@@ -132,7 +132,7 @@ func FormatProtoAsCast(formatter Formatter, value spanner.GenericColumnValue, to
 	}
 
 	if IsNull(value) {
-		return nullStringUpperCase, nil
+		return formatter.GetNullString(), nil
 	}
 
 	b, err := base64.StdEncoding.DecodeString(value.Value.GetStringValue())
@@ -148,7 +148,7 @@ func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, top
 	}
 
 	if IsNull(value) {
-		return nullStringUpperCase, nil
+		return formatter.GetNullString(), nil
 	}
 
 	return fmt.Sprintf("CAST(%v AS `%v`)", value.Value.GetStringValue(), value.Type.ProtoTypeFqn), nil
@@ -156,6 +156,7 @@ func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, top
 
 type Formatter interface {
 	FormatColumn(value spanner.GenericColumnValue, toplevel bool) (string, error)
+	GetNullString() string
 }
 
 type FormatConfig struct {
@@ -171,18 +172,31 @@ type FormatStruct struct {
 	FormatStructParen FormatStructParenFunc
 }
 
+func (fc *FormatConfig) GetNullString() string { return fc.NullString }
+
 type FormatArrayFunc func(typ *sppb.Type, toplevel bool, elemStrings []string) string
 type FormatStructParenFunc func(typ *sppb.Type, toplevel bool, fieldStrings []string) string
 type FormatStructFieldFunc func(fc *FormatConfig, field *sppb.StructType_Field, value *structpb.Value) (string, error)
 type FormatNullableFunc = func(value NullableValue) (string, error)
 
 func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel bool) (string, error) {
+	// Plugins are tried first so they can handle any type including ARRAY and
+	// STRUCT. NULL values are intentionally passed to plugins (not pre-filtered)
+	// so that plugins can produce type-specific NULL representations via
+	// formatter.GetNullString() or their own logic.
+	// Plugins that don't need type-specific NULL handling should check IsNull
+	// early and return.
+	for _, f := range fc.FormatComplexPlugins {
+		if s, err := f(fc, value, toplevel); !errors.Is(err, ErrFallthrough) {
+			return s, err
+		}
+	}
+
 	valType := value.Type
 	switch valType.GetCode() {
 	case sppb.TypeCode_ARRAY:
-		// Note: This format is not intended to be parseable.
 		if IsNull(value) {
-			return fc.NullString, nil
+			return fc.GetNullString(), nil
 		}
 
 		elemStrings, err := hiter.TryCollect(
@@ -197,8 +211,9 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 
 		return fc.FormatArray(value.Type, toplevel, elemStrings), nil
 	case sppb.TypeCode_STRUCT:
-		// Note: This format is not intended to be parseable.
-		// There is no NULL struct.
+		if IsNull(value) {
+			return fc.GetNullString(), nil
+		}
 		fieldStrings, err := hiter.TryCollect(hiter.Map2(
 			func(field *sppb.StructType_Field, value *structpb.Value) (string, error) {
 				return fc.FormatStruct.FormatStructField(fc, field, value)
@@ -212,11 +227,6 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 
 		return fc.FormatStruct.FormatStructParen(value.Type, toplevel, fieldStrings), nil
 	default:
-		for _, f := range fc.FormatComplexPlugins {
-			if s, err := f(fc, value, toplevel); !errors.Is(err, ErrFallthrough) {
-				return s, err
-			}
-		}
 		return fc.formatSimpleColumn(value)
 	}
 }
