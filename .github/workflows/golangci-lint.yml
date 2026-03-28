@@ -17,6 +17,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          # Avoid stale module/build caches that can surface old typecheck
+          # results in golangci-lint.
+          cache: false
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
