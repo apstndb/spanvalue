@@ -37,6 +37,8 @@ func (n NullBytes) String() string {
 		return nullStringClientLib
 	}
 	var sb strings.Builder
+	// Grow uses a cheap lower bound only. Escape expansion is content-dependent,
+	// so larger multipliers are speculative unless profiling shows a benefit.
 	sb.Grow(len(n))
 	for _, b := range n {
 		sb.WriteString(internal.ByteToEscapeSequenceReadable(b))
