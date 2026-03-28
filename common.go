@@ -36,9 +36,12 @@ func (n NullBytes) String() string {
 	if n == nil {
 		return nullStringClientLib
 	}
-	return strings.Join(lo.Map(n, func(b byte, _ int) string {
-		return internal.ByteToEscapeSequenceReadable(b)
-	}), "")
+	var sb strings.Builder
+	sb.Grow(len(n))
+	for _, b := range n {
+		sb.WriteString(internal.ByteToEscapeSequenceReadable(b))
+	}
+	return sb.String()
 }
 
 var _, _ NullableValue = (NullBytes)(nil), (*NullBytes)(nil)
