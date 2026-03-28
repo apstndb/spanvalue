@@ -211,8 +211,12 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 		if IsNull(value) {
 			return fc.GetNullString(), nil
 		}
+		fields := valType.GetStructType().GetFields()
 		fieldValues := value.Value.GetListValue().GetValues()
-		fieldStrings, err := lo.MapErr(valType.GetStructType().GetFields(), func(field *sppb.StructType_Field, i int) (string, error) {
+		if len(fieldValues) != len(fields) {
+			return "", fmt.Errorf("mismatched struct value/field count: got %d values, want %d", len(fieldValues), len(fields))
+		}
+		fieldStrings, err := lo.MapErr(fields, func(field *sppb.StructType_Field, i int) (string, error) {
 			return fc.FormatStruct.FormatStructField(fc, field, fieldValues[i])
 		})
 		if err != nil {
@@ -226,9 +230,7 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 }
 
 func (fc *FormatConfig) FormatRow(row *spanner.Row) ([]string, error) {
-	gcvs := lo.RepeatBy(row.Size(), func(_ int) spanner.GenericColumnValue {
-		return lo.Empty[spanner.GenericColumnValue]()
-	})
+	gcvs := make([]spanner.GenericColumnValue, row.Size())
 	if err := row.Columns(slices.Collect(internal.ToAny(internal.Pointers(gcvs)))...); err != nil {
 		return nil, err
 	}
