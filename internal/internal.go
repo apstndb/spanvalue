@@ -102,22 +102,27 @@ func ToReadableBytesLiteral(v []byte) string {
 	quote := suitableQuote(v)
 
 	var encoded strings.Builder
-	encoded.Grow(len(v))
+	encoded.Grow(len(v) + 3)
+	encoded.WriteByte('b')
+	encoded.WriteRune(quote)
 	for _, b := range v {
 		encoded.WriteString(EscapeRune(rune(b), false, quote))
 	}
+	encoded.WriteRune(quote)
 
-	return fmt.Sprintf(`b%s%s%s`, string(quote), encoded.String(), string(quote))
+	return encoded.String()
 }
 
 func ToStringLiteral(s string) string {
 	quote := suitableQuote([]byte(s))
 
 	var encoded strings.Builder
-	encoded.Grow(len(s))
+	encoded.Grow(len(s) + 2)
+	encoded.WriteRune(quote)
 	for _, r := range s {
 		encoded.WriteString(EscapeRune(r, true, quote))
 	}
+	encoded.WriteRune(quote)
 
-	return fmt.Sprintf(`%s%s%s`, string(quote), encoded.String(), string(quote))
+	return encoded.String()
 }
