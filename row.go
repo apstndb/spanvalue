@@ -16,7 +16,7 @@ func ColumnNames(fields []*sppb.StructType_Field, namer UnnamedFieldNamer) []str
 	for i, field := range fields {
 		names[i] = field.GetName()
 	}
-	return resolveColumnNames(names, namer)
+	return resolveColumnNamesInPlace(names, namer)
 }
 
 // FormatRowColumns formats a row represented as column names plus GCV values.
@@ -30,7 +30,10 @@ func FormatRowColumns(fc *FormatConfig, columnNames []string, values []spanner.G
 }
 
 // FormatRowJSONObjectFromColumns formats a row represented as column names plus
-// GCV values into a JSON object string.
+// GCV values into a JSON object string. The provided FormatConfig must emit
+// standalone JSON values per column (for example, as configured by
+// JSONFormatConfig()), otherwise the assembled object may be syntactically
+// invalid JSON.
 func FormatRowJSONObjectFromColumns(fc *FormatConfig, columnNames []string, values []spanner.GenericColumnValue, namer UnnamedFieldNamer) (string, error) {
 	formattedValues, err := FormatRowColumns(fc, columnNames, values)
 	if err != nil {
@@ -46,7 +49,13 @@ func (fc *FormatConfig) formatColumns(values []spanner.GenericColumnValue) ([]st
 }
 
 func resolveColumnNames(columnNames []string, namer UnnamedFieldNamer) []string {
-	names := slices.Clone(columnNames)
+	if namer == nil {
+		return columnNames
+	}
+	return resolveColumnNamesInPlace(slices.Clone(columnNames), namer)
+}
+
+func resolveColumnNamesInPlace(names []string, namer UnnamedFieldNamer) []string {
 	if namer == nil {
 		return names
 	}

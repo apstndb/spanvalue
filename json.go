@@ -127,7 +127,7 @@ func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc
 		for i, f := range fields {
 			names[i] = f.GetName()
 		}
-		return assembleResolvedJSONObject(resolveColumnNames(names, namer), fieldStrings)
+		return assembleResolvedJSONObject(resolveColumnNamesInPlace(names, namer), fieldStrings)
 	}
 }
 
