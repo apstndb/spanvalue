@@ -20,6 +20,9 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
+          # The action cache has produced stale typecheck results for this repo.
+          # Run lint on the current tree instead of reusing cached analysis.
+          skip-cache: true
           # Pin to a specific version to avoid unrelated PRs failing due to
           # newly added lint rules, and to mitigate supply chain risks.
           # Update this version when upgrading Go or intentionally adopting
