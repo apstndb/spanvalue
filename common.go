@@ -211,7 +211,9 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 
 		return fc.FormatArray(value.Type, toplevel, elemStrings), nil
 	case sppb.TypeCode_STRUCT:
-		// There is no NULL struct.
+		if IsNull(value) {
+			return fc.NullString, nil
+		}
 		fieldStrings, err := hiter.TryCollect(hiter.Map2(
 			func(field *sppb.StructType_Field, value *structpb.Value) (string, error) {
 				return fc.FormatStruct.FormatStructField(fc, field, value)
