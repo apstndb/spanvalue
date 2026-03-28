@@ -7,12 +7,10 @@ toolchain go1.23.2
 require (
 	cloud.google.com/go v0.121.4
 	cloud.google.com/go/spanner v1.84.1
-	github.com/apstndb/lox v0.0.0-20241102092239-40172f618f5c
 	github.com/apstndb/spantype v0.3.6
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
-	github.com/ngicks/go-iterator-helper v0.0.21
-	github.com/samber/lo v1.47.0
+	github.com/samber/lo v1.53.0
 	google.golang.org/protobuf v1.36.6
 )
 
@@ -50,7 +48,6 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.36.0 // indirect
 	go.opentelemetry.io/otel/trace v1.36.0 // indirect
 	golang.org/x/crypto v0.40.0 // indirect
-	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 // indirect
 	golang.org/x/net v0.42.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect

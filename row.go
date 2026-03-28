@@ -6,7 +6,7 @@ import (
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	"github.com/ngicks/go-iterator-helper/hiter"
+	"github.com/samber/lo"
 )
 
 // ColumnNames extracts column names from Spanner struct field metadata.
@@ -43,9 +43,9 @@ func FormatRowJSONObjectFromColumns(fc *FormatConfig, columnNames []string, valu
 }
 
 func (fc *FormatConfig) formatColumns(values []spanner.GenericColumnValue) ([]string, error) {
-	return hiter.TryCollect(hiter.Divide(func(gcv spanner.GenericColumnValue) (string, error) {
+	return lo.MapErr(values, func(gcv spanner.GenericColumnValue, _ int) (string, error) {
 		return fc.FormatColumn(gcv, true)
-	}, slices.Values(values)))
+	})
 }
 
 func resolveColumnNames(columnNames []string, namer UnnamedFieldNamer) []string {

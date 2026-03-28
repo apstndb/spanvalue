@@ -9,8 +9,6 @@ import (
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	"github.com/apstndb/lox"
-	"github.com/ngicks/go-iterator-helper/hiter"
 	"github.com/samber/lo"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -38,7 +36,14 @@ func (n NullBytes) String() string {
 	if n == nil {
 		return nullStringClientLib
 	}
-	return strings.Join(lox.MapWithoutIndex(n, internal.ByteToEscapeSequenceReadable), "")
+	var sb strings.Builder
+	// Grow uses a cheap lower bound only. Escape expansion is content-dependent,
+	// so larger multipliers are speculative unless profiling shows a benefit.
+	sb.Grow(len(n))
+	for _, b := range n {
+		sb.WriteString(internal.ByteToEscapeSequenceReadable(b))
+	}
+	return sb.String()
 }
 
 var _, _ NullableValue = (NullBytes)(nil), (*NullBytes)(nil)
@@ -199,12 +204,9 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 			return fc.GetNullString(), nil
 		}
 
-		elemStrings, err := hiter.TryCollect(
-			hiter.Divide(
-				func(v *structpb.Value) (string, error) {
-					return fc.FormatColumn(typeValueToGCV(valType.GetArrayElementType(), v), false)
-				},
-				slices.Values(value.Value.GetListValue().GetValues())))
+		elemStrings, err := lo.MapErr(value.Value.GetListValue().GetValues(), func(v *structpb.Value, _ int) (string, error) {
+			return fc.FormatColumn(typeValueToGCV(valType.GetArrayElementType(), v), false)
+		})
 		if err != nil {
 			return "", err
 		}
@@ -214,13 +216,14 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 		if IsNull(value) {
 			return fc.GetNullString(), nil
 		}
-		fieldStrings, err := hiter.TryCollect(hiter.Map2(
-			func(field *sppb.StructType_Field, value *structpb.Value) (string, error) {
-				return fc.FormatStruct.FormatStructField(fc, field, value)
-			},
-			hiter.Pairs(
-				slices.Values(valType.GetStructType().GetFields()),
-				slices.Values(value.Value.GetListValue().GetValues()))))
+		fields := valType.GetStructType().GetFields()
+		fieldValues := value.Value.GetListValue().GetValues()
+		if len(fieldValues) != len(fields) {
+			return "", fmt.Errorf("mismatched struct value/field count: got %d values, want %d", len(fieldValues), len(fields))
+		}
+		fieldStrings, err := lo.MapErr(fields, func(field *sppb.StructType_Field, i int) (string, error) {
+			return fc.FormatStruct.FormatStructField(fc, field, fieldValues[i])
+		})
 		if err != nil {
 			return "", err
 		}
@@ -232,7 +235,7 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 }
 
 func (fc *FormatConfig) FormatRow(row *spanner.Row) ([]string, error) {
-	gcvs := slices.Collect(hiter.RepeatFunc(lo.Empty[spanner.GenericColumnValue], row.Size()))
+	gcvs := make([]spanner.GenericColumnValue, row.Size())
 	if err := row.Columns(slices.Collect(internal.ToAny(internal.Pointers(gcvs)))...); err != nil {
 		return nil, err
 	}
