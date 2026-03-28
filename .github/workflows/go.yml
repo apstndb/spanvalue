@@ -19,7 +19,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version-file: go.mod
+        go-version: '1.23.2'
         # Avoid stale module/build caches that can surface impossible typecheck
         # failures even when the current tree passes locally.
         cache: false
