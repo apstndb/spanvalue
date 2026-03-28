@@ -11,23 +11,32 @@ import (
 	"github.com/apstndb/spanvalue/internal"
 )
 
+// literalFormatConfig is a shared singleton used by convenience functions
+// (FormatRowLiteral, FormatColumnLiteral) to avoid per-call allocation.
+// Do not mutate: it is shared across all callers.
+var literalFormatConfig = LiteralFormatConfig()
+
 func FormatRowLiteral(value *spanner.Row) ([]string, error) {
-	return LiteralFormatConfig.FormatRow(value)
+	return literalFormatConfig.FormatRow(value)
 }
 
 func FormatColumnLiteral(value spanner.GenericColumnValue) (string, error) {
-	return LiteralFormatConfig.FormatToplevelColumn(value)
+	return literalFormatConfig.FormatToplevelColumn(value)
 }
 
-var LiteralFormatConfig = &FormatConfig{
-	NullString:     nullStringUpperCase,
-	FormatArray:    FormatOptionallyTypedArray,
-	FormatStruct:   FormatTypedStruct,
-	FormatNullable: formatNullableValueLiteral,
-	FormatComplexPlugins: []FormatComplexFunc{
-		FormatProtoAsCast,
-		FormatEnumAsCast,
-	},
+// LiteralFormatConfig returns a new FormatConfig that produces parseable SQL
+// literal expressions with type annotations.
+func LiteralFormatConfig() *FormatConfig {
+	return &FormatConfig{
+		NullString:     nullStringUpperCase,
+		FormatArray:    FormatOptionallyTypedArray,
+		FormatStruct:   FormatTypedStruct,
+		FormatNullable: formatNullableValueLiteral,
+		FormatComplexPlugins: []FormatComplexFunc{
+			FormatProtoAsCast,
+			FormatEnumAsCast,
+		},
+	}
 }
 
 var (
