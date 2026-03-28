@@ -96,7 +96,7 @@ func decodeScalar[T NullableValue](gcv spanner.GenericColumnValue) (T, error) {
 
 func (fc *FormatConfig) formatSimpleColumn(value spanner.GenericColumnValue) (string, error) {
 	if IsNull(value) {
-		return fc.NullString, nil
+		return fc.GetNullString(), nil
 	}
 
 	nv, err := simpleGCVToNullable(value)
@@ -196,7 +196,7 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 	switch valType.GetCode() {
 	case sppb.TypeCode_ARRAY:
 		if IsNull(value) {
-			return fc.NullString, nil
+			return fc.GetNullString(), nil
 		}
 
 		elemStrings, err := hiter.TryCollect(
@@ -212,7 +212,7 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 		return fc.FormatArray(value.Type, toplevel, elemStrings), nil
 	case sppb.TypeCode_STRUCT:
 		if IsNull(value) {
-			return fc.NullString, nil
+			return fc.GetNullString(), nil
 		}
 		fieldStrings, err := hiter.TryCollect(hiter.Map2(
 			func(field *sppb.StructType_Field, value *structpb.Value) (string, error) {
