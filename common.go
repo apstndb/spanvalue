@@ -15,6 +15,11 @@ import (
 	"github.com/apstndb/spanvalue/internal"
 )
 
+var (
+	ErrUnknownType      = errors.New("unknown type")
+	ErrMismatchedFields = errors.New("mismatched struct value/field count")
+)
+
 // TODO: PGNumeric, PBJsonB,
 const (
 	nullStringUpperCase = "NULL"

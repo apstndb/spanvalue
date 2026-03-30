@@ -3,7 +3,6 @@ package gcvctor
 import (
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -23,8 +22,8 @@ import (
 )
 
 var (
-	ErrTypeMismatch     = errors.New("type mismatch")
-	ErrMismatchedCounts = errors.New("mismatched counts")
+	ErrTypeMismatch     = fmt.Errorf("type mismatch")
+	ErrMismatchedCounts = fmt.Errorf("mismatched name/value count")
 )
 
 func BoolValue(v bool) spanner.GenericColumnValue {
