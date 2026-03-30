@@ -126,12 +126,7 @@ var FormatJSONObjectStruct = NewJSONObjectStructFormatter(nil)
 // Output: {"field1":val1,"field2":val2,...}
 func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc {
 	return func(typ *sppb.Type, _ bool, fieldStrings []string) (string, error) {
-		fields := typ.GetStructType().GetFields()
-		names := make([]string, len(fields))
-		for i, f := range fields {
-			names[i] = f.GetName()
-		}
-		resolvedNames, err := resolveColumnNamesInPlace(names, namer)
+		resolvedNames, err := ColumnNames(typ.GetStructType().GetFields(), namer)
 		if err != nil {
 			return "", err
 		}
