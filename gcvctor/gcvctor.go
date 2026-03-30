@@ -21,6 +21,11 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+var (
+	ErrTypeMismatch     = fmt.Errorf("type mismatch")
+	ErrMismatchedCounts = fmt.Errorf("mismatched name/value count")
+)
+
 func BoolValue(v bool) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(sppb.TypeCode_BOOL),
@@ -140,7 +145,7 @@ func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, e
 	var values []*structpb.Value
 	for i, v := range vs {
 		if !gocmp.Equal(typ, v.Type, protocmp.Transform()) {
-			return spanner.GenericColumnValue{}, fmt.Errorf("%v is not %v", spantype.FormatTypeMoreVerbose(vs[i].Type), spantype.FormatTypeMoreVerbose(typ))
+			return spanner.GenericColumnValue{}, fmt.Errorf("%w: %v is not %v", ErrTypeMismatch, spantype.FormatTypeMoreVerbose(vs[i].Type), spantype.FormatTypeMoreVerbose(typ))
 		}
 		values = append(values, v.Value)
 	}
@@ -155,7 +160,7 @@ func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, e
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
 func StructValue(names []string, gcvs []spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if len(names) != len(gcvs) {
-		return spanner.GenericColumnValue{}, fmt.Errorf("len(names)=%v != len(gcvs)=%v", len(names), len(gcvs))
+		return spanner.GenericColumnValue{}, fmt.Errorf("%w: len(names)=%v != len(gcvs)=%v", ErrMismatchedCounts, len(names), len(gcvs))
 	}
 
 	var types []*sppb.Type

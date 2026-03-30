@@ -1,7 +1,6 @@
 package spanvalue
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -87,6 +86,6 @@ func formatNullableValueLiteral(value NullableValue) (string, error) {
 		return stringLiteralCast("UUID", v.String()), nil
 	default:
 		// Reject unknown type to guarantee round-trip
-		return "", errors.New("unknown type")
+		return "", fmt.Errorf("%w: %T", ErrUnknownType, v)
 	}
 }
