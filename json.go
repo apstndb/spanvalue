@@ -102,7 +102,7 @@ func FormatCompactArray(_ *sppb.Type, _ bool, elemStrings []string) (string, err
 // field's positional index) that may skip values due to collision avoidance.
 // It must return distinct non-empty names for distinct indices.
 // Functions that accept UnnamedFieldNamer (such as NewJSONObjectStructFormatter
-// and FormatRowJSONObject) panic if the namer violates this contract.
+// and FormatRowJSONObject) return an error if the namer violates this contract.
 // Pass nil instead of a namer to keep unnamed fields as empty-string keys.
 type UnnamedFieldNamer func(index int) string
 

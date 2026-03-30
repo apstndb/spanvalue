@@ -217,3 +217,31 @@ func TestFormatJSONObjectStruct(t *testing.T) {
 		})
 	}
 }
+
+func TestNewJSONObjectStructFormatter_Error(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty name", func(t *testing.T) {
+		t.Parallel()
+		formatter := NewJSONObjectStructFormatter(func(i int) string {
+			return ""
+		})
+		typ := typector.MustNameCodeSlicesToStructType([]string{""}, []sppb.TypeCode{sppb.TypeCode_INT64})
+		_, err := formatter(typ, false, []string{"1"})
+		if err == nil {
+			t.Error("expected error for empty name, got nil")
+		}
+	})
+
+	t.Run("duplicate name", func(t *testing.T) {
+		t.Parallel()
+		formatter := NewJSONObjectStructFormatter(func(i int) string {
+			return "dup"
+		})
+		typ := typector.MustNameCodeSlicesToStructType([]string{"", ""}, []sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_INT64})
+		_, err := formatter(typ, false, []string{"1", "2"})
+		if err == nil {
+			t.Error("expected error for duplicate name, got nil")
+		}
+	})
+}

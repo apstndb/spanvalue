@@ -216,8 +216,7 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 			return "", err
 		}
 
-		s, err := fc.FormatArray(value.Type, toplevel, elemStrings)
-		return s, err
+		return fc.FormatArray(value.Type, toplevel, elemStrings)
 	case sppb.TypeCode_STRUCT:
 		if IsNull(value) {
 			return fc.GetNullString(), nil
@@ -234,8 +233,7 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 			return "", err
 		}
 
-		s, err := fc.FormatStruct.FormatStructParen(value.Type, toplevel, fieldStrings)
-		return s, err
+		return fc.FormatStruct.FormatStructParen(value.Type, toplevel, fieldStrings)
 	default:
 		return fc.formatSimpleColumn(value)
 	}
