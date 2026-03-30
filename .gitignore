@@ -1,0 +1,11 @@
+# IDEs
+.idea/
+.vscode/
+
+# Project-specific / Agent tracking
+.junie/
+.claude/
+.output.txt
+
+# OS-specific
+.DS_Store
