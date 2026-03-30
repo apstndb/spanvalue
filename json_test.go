@@ -231,7 +231,7 @@ func TestNewJSONObjectStructFormatter_Error(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for empty name, got nil")
 		}
-		want := "unnamed field namer returned empty string"
+		want := "unnamed field namer returned empty string (field index 0, generated index 0)"
 		if got := err.Error(); got != want {
 			t.Errorf("error = %q, want %q", got, want)
 		}
@@ -247,7 +247,7 @@ func TestNewJSONObjectStructFormatter_Error(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for duplicate name, got nil")
 		}
-		want := `unnamed field namer returned repeated colliding name "dup"`
+		want := `unnamed field namer returned repeated colliding name "dup" (field index 1, generated index 2)`
 		if got := err.Error(); got != want {
 			t.Errorf("error = %q, want %q", got, want)
 		}

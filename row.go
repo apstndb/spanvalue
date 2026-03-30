@@ -9,8 +9,11 @@ import (
 	"github.com/samber/lo"
 )
 
-// ColumnNames extracts column names from Spanner struct field metadata.
-// Unnamed fields are kept as empty strings unless a non-nil namer is provided.
+// Unnamed fields are kept as empty strings unless a non-nil namer is provided, in
+// which case the namer is used to generate names for unnamed fields. If a non-nil
+// UnnamedFieldNamer returns an empty string or repeatedly returns colliding names
+// such that a unique column name cannot be chosen, ColumnNames returns a non-nil
+// error describing the contract violation.
 func ColumnNames(fields []*sppb.StructType_Field, namer UnnamedFieldNamer) ([]string, error) {
 	names := make([]string, len(fields))
 	for i, field := range fields {
@@ -82,13 +85,13 @@ func resolveColumnNamesInPlace(names []string, namer UnnamedFieldNamer) ([]strin
 			name = namer(autoIdx)
 			autoIdx++
 			if name == "" {
-				return nil, fmt.Errorf("unnamed field namer returned empty string")
+				return nil, fmt.Errorf("unnamed field namer returned empty string (field index %d, generated index %d)", i, autoIdx-1)
 			}
 			if !usedNames[name] {
 				break
 			}
 			if attempted[name] {
-				return nil, fmt.Errorf("unnamed field namer returned repeated colliding name %q", name)
+				return nil, fmt.Errorf("unnamed field namer returned repeated colliding name %q (field index %d, generated index %d)", name, i, autoIdx-1)
 			}
 			attempted[name] = true
 		}

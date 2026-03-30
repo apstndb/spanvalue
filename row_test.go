@@ -57,7 +57,7 @@ func TestColumnNames_Errors(t *testing.T) {
 		if err == nil {
 			t.Fatal("ColumnNames() error = nil, want non-nil for empty name")
 		}
-		want := "unnamed field namer returned empty string"
+		want := "unnamed field namer returned empty string (field index 0, generated index 0)"
 		if got := err.Error(); got != want {
 			t.Errorf("ColumnNames() error = %q, want %q", got, want)
 		}
@@ -69,7 +69,7 @@ func TestColumnNames_Errors(t *testing.T) {
 		if err == nil {
 			t.Fatal("ColumnNames() error = nil, want non-nil for repeated name")
 		}
-		want := `unnamed field namer returned repeated colliding name "A"`
+		want := `unnamed field namer returned repeated colliding name "A" (field index 0, generated index 1)`
 		if got := err.Error(); got != want {
 			t.Errorf("ColumnNames() error = %q, want %q", got, want)
 		}
