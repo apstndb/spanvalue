@@ -59,11 +59,7 @@ var _, _ NullableValue = spanner.NullDate{}, (*spanner.NullDate)(nil)
 // If it returns ErrFallthrough, value will pass through to next step.
 type FormatComplexFunc = func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error)
 
-var (
-	ErrFallthrough      = errors.New("fallthrough")
-	ErrUnknownType      = errors.New("unknown type")
-	ErrMismatchedFields = errors.New("mismatched fields")
-)
+var ErrFallthrough = errors.New("fallthrough")
 
 func typeValueToGCV(typ *sppb.Type, value *structpb.Value) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{Type: typ, Value: value}
