@@ -66,11 +66,7 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 	if err != nil {
 		return "", err
 	}
-	res, err := assembleResolvedJSONObject(resolvedNames, values)
-	if err != nil {
-		return "", err
-	}
-	return res, nil
+	return assembleResolvedJSONObject(resolvedNames, values)
 }
 
 // assembleResolvedJSONObject combines already-resolved column names and
