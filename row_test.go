@@ -55,7 +55,11 @@ func TestColumnNames_Errors(t *testing.T) {
 	t.Run("empty name error", func(t *testing.T) {
 		_, err := ColumnNames(fields, func(int) string { return "" })
 		if err == nil {
-			t.Error("ColumnNames() error = nil, want non-nil for empty name")
+			t.Fatal("ColumnNames() error = nil, want non-nil for empty name")
+		}
+		want := "unnamed field namer returned empty string"
+		if got := err.Error(); got != want {
+			t.Errorf("ColumnNames() error = %q, want %q", got, want)
 		}
 	})
 
@@ -63,7 +67,11 @@ func TestColumnNames_Errors(t *testing.T) {
 		fields2 := typector.MustNameCodeSlicesToStructType([]string{"", "A"}, []sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_INT64}).GetStructType().GetFields()
 		_, err := ColumnNames(fields2, func(int) string { return "A" })
 		if err == nil {
-			t.Error("ColumnNames() error = nil, want non-nil for repeated name")
+			t.Fatal("ColumnNames() error = nil, want non-nil for repeated name")
+		}
+		want := `unnamed field namer returned repeated colliding name "A"`
+		if got := err.Error(); got != want {
+			t.Errorf("ColumnNames() error = %q, want %q", got, want)
 		}
 	})
 }

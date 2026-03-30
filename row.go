@@ -82,13 +82,13 @@ func resolveColumnNamesInPlace(names []string, namer UnnamedFieldNamer) ([]strin
 			name = namer(autoIdx)
 			autoIdx++
 			if name == "" {
-				return nil, fmt.Errorf("bug in UnnamedFieldNamer: returned empty string (use nil namer for empty keys)")
+				return nil, fmt.Errorf("unnamed field namer returned empty string")
 			}
 			if !usedNames[name] {
 				break
 			}
 			if attempted[name] {
-				return nil, fmt.Errorf("bug in UnnamedFieldNamer: returned repeated colliding name %q", name)
+				return nil, fmt.Errorf("unnamed field namer returned repeated colliding name %q", name)
 			}
 			attempted[name] = true
 		}

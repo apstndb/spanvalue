@@ -229,7 +229,11 @@ func TestNewJSONObjectStructFormatter_Error(t *testing.T) {
 		typ := typector.MustNameCodeSlicesToStructType([]string{""}, []sppb.TypeCode{sppb.TypeCode_INT64})
 		_, err := formatter(typ, false, []string{"1"})
 		if err == nil {
-			t.Error("expected error for empty name, got nil")
+			t.Fatal("expected error for empty name, got nil")
+		}
+		want := "unnamed field namer returned empty string"
+		if got := err.Error(); got != want {
+			t.Errorf("error = %q, want %q", got, want)
 		}
 	})
 
@@ -241,7 +245,11 @@ func TestNewJSONObjectStructFormatter_Error(t *testing.T) {
 		typ := typector.MustNameCodeSlicesToStructType([]string{"", ""}, []sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_INT64})
 		_, err := formatter(typ, false, []string{"1", "2"})
 		if err == nil {
-			t.Error("expected error for duplicate name, got nil")
+			t.Fatal("expected error for duplicate name, got nil")
+		}
+		want := `unnamed field namer returned repeated colliding name "dup"`
+		if got := err.Error(); got != want {
+			t.Errorf("error = %q, want %q", got, want)
 		}
 	})
 }
