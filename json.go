@@ -66,12 +66,16 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 	if err != nil {
 		return "", err
 	}
-	return assembleResolvedJSONObject(resolvedNames, values), nil
+	res, err := assembleResolvedJSONObject(resolvedNames, values)
+	if err != nil {
+		return "", err
+	}
+	return res, nil
 }
 
 // assembleResolvedJSONObject combines already-resolved column names and
 // pre-formatted JSON value strings into a single JSON object.
-func assembleResolvedJSONObject(columnNames []string, values []string) string {
+func assembleResolvedJSONObject(columnNames []string, values []string) (string, error) {
 	var b strings.Builder
 	b.WriteByte('{')
 	for i, val := range values {
@@ -85,13 +89,16 @@ func assembleResolvedJSONObject(columnNames []string, values []string) string {
 		// json.Marshal on a Go string never returns an error.
 		// Note: strconv.Quote is not suitable here because it produces Go string
 		// literal escapes (e.g., \a, \v) that are not valid JSON escape sequences.
-		key, _ := json.Marshal(name) //nolint:errcheck // string marshal is infallible
+		key, err := json.Marshal(name)
+		if err != nil {
+			return "", err
+		}
 		b.Write(key)
 		b.WriteByte(':')
 		b.WriteString(val)
 	}
 	b.WriteByte('}')
-	return b.String()
+	return b.String(), nil
 }
 
 // FormatCompactArray formats array elements without spaces between separators.
@@ -133,7 +140,7 @@ func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc
 		if err != nil {
 			return "", err
 		}
-		return assembleResolvedJSONObject(resolvedNames, fieldStrings), nil
+		return assembleResolvedJSONObject(resolvedNames, fieldStrings)
 	}
 }
 
