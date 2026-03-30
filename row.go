@@ -11,7 +11,7 @@ import (
 
 // ColumnNames extracts column names from Spanner struct field metadata.
 // Unnamed fields are kept as empty strings unless a non-nil namer is provided.
-func ColumnNames(fields []*sppb.StructType_Field, namer UnnamedFieldNamer) []string {
+func ColumnNames(fields []*sppb.StructType_Field, namer UnnamedFieldNamer) ([]string, error) {
 	names := make([]string, len(fields))
 	for i, field := range fields {
 		names[i] = field.GetName()
@@ -39,7 +39,11 @@ func FormatRowJSONObjectFromColumns(fc *FormatConfig, columnNames []string, valu
 	if err != nil {
 		return "", err
 	}
-	return assembleResolvedJSONObject(resolveColumnNames(columnNames, namer), formattedValues), nil
+	resolvedNames, err := resolveColumnNames(columnNames, namer)
+	if err != nil {
+		return "", err
+	}
+	return assembleResolvedJSONObject(resolvedNames, formattedValues), nil
 }
 
 func (fc *FormatConfig) formatColumns(values []spanner.GenericColumnValue) ([]string, error) {
@@ -48,16 +52,16 @@ func (fc *FormatConfig) formatColumns(values []spanner.GenericColumnValue) ([]st
 	})
 }
 
-func resolveColumnNames(columnNames []string, namer UnnamedFieldNamer) []string {
+func resolveColumnNames(columnNames []string, namer UnnamedFieldNamer) ([]string, error) {
 	if namer == nil {
-		return columnNames
+		return columnNames, nil
 	}
 	return resolveColumnNamesInPlace(slices.Clone(columnNames), namer)
 }
 
-func resolveColumnNamesInPlace(names []string, namer UnnamedFieldNamer) []string {
+func resolveColumnNamesInPlace(names []string, namer UnnamedFieldNamer) ([]string, error) {
 	if namer == nil {
-		return names
+		return names, nil
 	}
 
 	usedNames := make(map[string]bool, len(names))
@@ -82,13 +86,13 @@ func resolveColumnNamesInPlace(names []string, namer UnnamedFieldNamer) []string
 			name = namer(autoIdx)
 			autoIdx++
 			if name == "" {
-				panic("bug in UnnamedFieldNamer: returned empty string (use nil namer for empty keys)")
+				return nil, fmt.Errorf("bug in UnnamedFieldNamer: returned empty string (use nil namer for empty keys)")
 			}
 			if !usedNames[name] {
 				break
 			}
 			if attempted[name] {
-				panic(fmt.Sprintf("bug in UnnamedFieldNamer: returned repeated colliding name %q", name))
+				return nil, fmt.Errorf("bug in UnnamedFieldNamer: returned repeated colliding name %q", name)
 			}
 			attempted[name] = true
 		}
@@ -96,5 +100,5 @@ func resolveColumnNamesInPlace(names []string, namer UnnamedFieldNamer) []string
 		usedNames[name] = true
 	}
 
-	return names
+	return names, nil
 }

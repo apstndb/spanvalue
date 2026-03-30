@@ -72,6 +72,6 @@ var (
 	_ FormatStructFieldFunc = FormatSimpleStructField
 )
 
-func FormatBracketStruct(typ *sppb.Type, toplevel bool, fieldStrings []string) string {
-	return fmt.Sprintf("[%v]", strings.Join(fieldStrings, ", "))
+func FormatBracketStruct(typ *sppb.Type, toplevel bool, fieldStrings []string) (string, error) {
+	return fmt.Sprintf("[%v]", strings.Join(fieldStrings, ", ")), nil
 }

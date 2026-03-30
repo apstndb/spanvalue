@@ -109,7 +109,7 @@ func TestNewJSONObjectStructFormatter_NilNamer(t *testing.T) {
 
 	formatter := NewJSONObjectStructFormatter(nil)
 	typ := typector.MustNameCodeSlicesToStructType([]string{"", ""}, []sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_INT64})
-	got := formatter(typ, false, []string{"1", "2"})
+	got := lo.Must(formatter(typ, false, []string{"1", "2"}))
 	want := `{"":1,"":2}`
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("mismatch (-want +got):\n%s", diff)
@@ -126,7 +126,7 @@ func TestNewJSONObjectStructFormatter_CustomNamer(t *testing.T) {
 		[]string{"", "name"},
 		[]*sppb.Type{typector.CodeToSimpleType(sppb.TypeCode_INT64), typector.CodeToSimpleType(sppb.TypeCode_STRING)},
 	)
-	got := formatter(typ, false, []string{"42", `"Alice"`})
+	got := lo.Must(formatter(typ, false, []string{"42", `"Alice"`}))
 	want := `{"col1":42,"name":"Alice"}`
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("mismatch (-want +got):\n%s", diff)
@@ -145,7 +145,7 @@ func TestNewJSONObjectStructFormatter_CollisionAvoidance(t *testing.T) {
 			typector.CodeToSimpleType(sppb.TypeCode_INT64),
 		},
 	)
-	got := formatter(typ, false, []string{"1", "2", "3"})
+	got := lo.Must(formatter(typ, false, []string{"1", "2", "3"}))
 	// _0 for first unnamed, _1 is taken by named field, so second unnamed gets _2
 	want := `{"_0":1,"_2":2,"_1":3}`
 	if diff := cmp.Diff(want, got); diff != "" {
@@ -170,7 +170,7 @@ func TestFormatCompactArray(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := FormatCompactArray(nil, false, tt.elems)
+			got := lo.Must(FormatCompactArray(nil, false, tt.elems))
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("FormatCompactArray mismatch (-want +got):\n%s", diff)
 			}
@@ -210,7 +210,7 @@ func TestFormatJSONObjectStruct(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := FormatJSONObjectStruct(tt.typ, false, tt.fields)
+			got := lo.Must(FormatJSONObjectStruct(tt.typ, false, tt.fields))
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("FormatJSONObjectStruct mismatch (-want +got):\n%s", diff)
 			}

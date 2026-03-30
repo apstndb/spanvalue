@@ -36,12 +36,36 @@ func TestColumnNames(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := ColumnNames(tt.fields, tt.namer)
+			got, err := ColumnNames(tt.fields, tt.namer)
+			if err != nil {
+				t.Fatalf("ColumnNames() error = %v", err)
+			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("ColumnNames() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
+}
+
+func TestColumnNames_Errors(t *testing.T) {
+	t.Parallel()
+
+	fields := typector.MustNameCodeSlicesToStructType([]string{""}, []sppb.TypeCode{sppb.TypeCode_INT64}).GetStructType().GetFields()
+
+	t.Run("empty name error", func(t *testing.T) {
+		_, err := ColumnNames(fields, func(int) string { return "" })
+		if err == nil {
+			t.Error("ColumnNames() error = nil, want non-nil for empty name")
+		}
+	})
+
+	t.Run("repeated name error", func(t *testing.T) {
+		fields2 := typector.MustNameCodeSlicesToStructType([]string{"", "A"}, []sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_INT64}).GetStructType().GetFields()
+		_, err := ColumnNames(fields2, func(int) string { return "A" })
+		if err == nil {
+			t.Error("ColumnNames() error = nil, want non-nil for repeated name")
+		}
+	})
 }
 
 func TestFormatRowColumns(t *testing.T) {

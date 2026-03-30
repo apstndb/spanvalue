@@ -10,12 +10,12 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-func formatTypedStructParen(typ *sppb.Type, toplevel bool, fieldStrings []string) string {
-	return fmt.Sprintf("%v(%v)", lo.Ternary(toplevel, spantype.FormatTypeVerbose(typ), ""), strings.Join(fieldStrings, ", "))
+func formatTypedStructParen(typ *sppb.Type, toplevel bool, fieldStrings []string) (string, error) {
+	return fmt.Sprintf("%v(%v)", lo.Ternary(toplevel, spantype.FormatTypeVerbose(typ), ""), strings.Join(fieldStrings, ", ")), nil
 }
 
-func FormatTupleStruct(typ *sppb.Type, toplevel bool, fieldStrings []string) string {
-	return fmt.Sprintf("(%v)", strings.Join(fieldStrings, ", "))
+func FormatTupleStruct(typ *sppb.Type, toplevel bool, fieldStrings []string) (string, error) {
+	return fmt.Sprintf("(%v)", strings.Join(fieldStrings, ", ")), nil
 }
 
 func formatSimpleStructField(fc *FormatConfig, field *sppb.StructType_Field, value *structpb.Value) (string, error) {
@@ -31,12 +31,12 @@ func FormatSimpleStructField(fc *FormatConfig, field *sppb.StructType_Field, val
 	return fc.FormatColumn(typeValueToGCV(field.Type, value), false)
 }
 
-func FormatUntypedArray(_ *sppb.Type, _ bool, elemStrings []string) string {
-	return "[" + strings.Join(elemStrings, ", ") + "]"
+func FormatUntypedArray(_ *sppb.Type, _ bool, elemStrings []string) (string, error) {
+	return "[" + strings.Join(elemStrings, ", ") + "]", nil
 }
 
-func FormatOptionallyTypedArray(typ *sppb.Type, toplevel bool, elemStrings []string) string {
+func FormatOptionallyTypedArray(typ *sppb.Type, toplevel bool, elemStrings []string) (string, error) {
 	return fmt.Sprintf("%v[%v]",
 		lo.Ternary(toplevel && isComplexType(typ.ArrayElementType.GetCode()), spantype.FormatTypeVerbose(typ), ""),
-		strings.Join(elemStrings, ", "))
+		strings.Join(elemStrings, ", ")), nil
 }

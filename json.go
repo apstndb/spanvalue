@@ -51,15 +51,19 @@ func FormatRowJSONObject(fc *FormatConfig, row *spanner.Row, namer UnnamedFieldN
 	if err != nil {
 		return "", err
 	}
-	return assembleJSONObject(row.ColumnNames(), values, namer), nil
+	return assembleJSONObject(row.ColumnNames(), values, namer)
 }
 
 // assembleJSONObject combines column names and pre-formatted JSON value strings
 // into a single JSON object. Empty names are resolved using the namer function
 // (if non-nil), with collision avoidance against explicit and previously
 // generated names. If namer is nil, empty names are kept as-is.
-func assembleJSONObject(columnNames []string, values []string, namer UnnamedFieldNamer) string {
-	return assembleResolvedJSONObject(resolveColumnNames(columnNames, namer), values)
+func assembleJSONObject(columnNames []string, values []string, namer UnnamedFieldNamer) (string, error) {
+	resolvedNames, err := resolveColumnNames(columnNames, namer)
+	if err != nil {
+		return "", err
+	}
+	return assembleResolvedJSONObject(resolvedNames, values), nil
 }
 
 // assembleResolvedJSONObject combines already-resolved column names and
@@ -89,8 +93,8 @@ func assembleResolvedJSONObject(columnNames []string, values []string) string {
 
 // FormatCompactArray formats array elements without spaces between separators.
 // Output: [elem1,elem2,elem3]
-func FormatCompactArray(_ *sppb.Type, _ bool, elemStrings []string) string {
-	return "[" + strings.Join(elemStrings, ",") + "]"
+func FormatCompactArray(_ *sppb.Type, _ bool, elemStrings []string) (string, error) {
+	return "[" + strings.Join(elemStrings, ",") + "]", nil
 }
 
 // UnnamedFieldNamer generates a name for an unnamed field or column.
@@ -118,16 +122,20 @@ var FormatJSONObjectStruct = NewJSONObjectStructFormatter(nil)
 // provided namer function. If namer is nil, unnamed fields keep empty-string keys
 // (which produces duplicate keys — valid per RFC 8259 but may cause issues with
 // parsers that deduplicate keys).
-// Panics if a non-nil namer returns the same name for different indices (contract violation).
+// Returns an error if a non-nil namer returns the same name for different indices (contract violation).
 // Output: {"field1":val1,"field2":val2,...}
 func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc {
-	return func(typ *sppb.Type, _ bool, fieldStrings []string) string {
+	return func(typ *sppb.Type, _ bool, fieldStrings []string) (string, error) {
 		fields := typ.GetStructType().GetFields()
 		names := make([]string, len(fields))
 		for i, f := range fields {
 			names[i] = f.GetName()
 		}
-		return assembleResolvedJSONObject(resolveColumnNamesInPlace(names, namer), fieldStrings)
+		resolvedNames, err := resolveColumnNamesInPlace(names, namer)
+		if err != nil {
+			return "", err
+		}
+		return assembleResolvedJSONObject(resolvedNames, fieldStrings), nil
 	}
 }
 
