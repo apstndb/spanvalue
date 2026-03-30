@@ -89,3 +89,31 @@ func TestFormatColumnConstructedNullStruct(t *testing.T) {
 		t.Fatalf("FormatToplevelColumn() = %q, want %q", got, SimpleFormatConfig().NullString)
 	}
 }
+
+func TestIsNull(t *testing.T) {
+	t.Parallel()
+
+	structType := typector.MustNameCodeSlicesToStructType(
+		[]string{"a", "b"},
+		[]sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_STRING},
+	)
+
+	scalarNullGcv := spanner.GenericColumnValue{
+		Type:  structType,
+		Value: structpb.NewNullValue(),
+	}
+
+	listNullGcv := spanner.GenericColumnValue{
+		Type: structType,
+		Value: structpb.NewListValue(&structpb.ListValue{
+			Values: []*structpb.Value{structpb.NewNullValue(), structpb.NewNullValue()},
+		}),
+	}
+
+	if !IsNull(scalarNullGcv) {
+		t.Errorf("Expected scalarNullGcv to be IsNull == true")
+	}
+	if IsNull(listNullGcv) {
+		t.Errorf("Expected listNullGcv to be IsNull == false")
+	}
+}

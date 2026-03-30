@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"slices"
 	"strconv"
 	"time"
 
@@ -185,16 +184,9 @@ func SimpleTypedNull(code sppb.TypeCode) spanner.GenericColumnValue {
 }
 
 func TypedNull(typ *sppb.Type) spanner.GenericColumnValue {
-	var value *structpb.Value
-	if typ.GetCode() == sppb.TypeCode_STRUCT {
-		value = structpb.NewListValue(&structpb.ListValue{Values: slices.Repeat([]*structpb.Value{structpb.NewNullValue()}, len(typ.GetStructType().GetFields()))})
-	} else {
-		value = structpb.NewNullValue()
-	}
-
 	return spanner.GenericColumnValue{
 		Type:  typ,
-		Value: value,
+		Value: structpb.NewNullValue(),
 	}
 }
 
