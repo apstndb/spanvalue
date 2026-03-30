@@ -116,4 +116,12 @@ func TestIsNull(t *testing.T) {
 	if IsNull(listNullGcv) {
 		t.Errorf("Expected listNullGcv to be IsNull == false")
 	}
+
+	nilValueGcv := spanner.GenericColumnValue{
+		Type:  structType,
+		Value: nil,
+	}
+	if !IsNull(nilValueGcv) {
+		t.Errorf("Expected nilValueGcv to be IsNull == true")
+	}
 }

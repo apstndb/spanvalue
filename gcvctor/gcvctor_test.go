@@ -347,6 +347,23 @@ func TestArrayCodeTypedNull(t *testing.T) {
 	}
 }
 
+func TestNullRawValueFromType_STRUCT(t *testing.T) {
+	structType := must(typector.NameCodeSlicesToStructType(
+		[]string{"a", "b"},
+		[]sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_STRING},
+	))
+	want := spanner.GenericColumnValue{Type: structType, Value: structpb.NewNullValue()}
+	got := gcvctor.TypedNull(structType)
+
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Errorf("diff (-want, +got) = %v", diff)
+	}
+
+	if _, ok := got.Value.GetKind().(*structpb.Value_NullValue); !ok {
+		t.Errorf("Expected NullValue for STRUCT TypedNull, got %T", got.Value.GetKind())
+	}
+}
+
 func TestArrayTypeTypedNull(t *testing.T) {
 	structType := typector.NameCodeToStructType("n", sppb.TypeCode_INT64)
 	got := gcvctor.ArrayTypeTypedNull(structType)

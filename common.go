@@ -54,7 +54,11 @@ var _, _ NullableValue = spanner.NullDate{}, (*spanner.NullDate)(nil)
 // If it returns ErrFallthrough, value will pass through to next step.
 type FormatComplexFunc = func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error)
 
-var ErrFallthrough = errors.New("fallthrough")
+var (
+	ErrFallthrough      = errors.New("fallthrough")
+	ErrUnknownType      = errors.New("unknown type")
+	ErrMismatchedFields = errors.New("mismatched fields")
+)
 
 func typeValueToGCV(typ *sppb.Type, value *structpb.Value) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{Type: typ, Value: value}
@@ -89,7 +93,7 @@ func simpleGCVToNullable(value spanner.GenericColumnValue) (NullableValue, error
 	case sppb.TypeCode_TYPE_CODE_UNSPECIFIED:
 		fallthrough
 	default:
-		return nil, fmt.Errorf("unknown type: %v", value.Type.String())
+		return nil, fmt.Errorf("%w: %v", ErrUnknownType, value.Type.String())
 	}
 }
 
@@ -219,7 +223,7 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 		fields := valType.GetStructType().GetFields()
 		fieldValues := value.Value.GetListValue().GetValues()
 		if len(fieldValues) != len(fields) {
-			return "", fmt.Errorf("mismatched struct value/field count: got %d values, want %d", len(fieldValues), len(fields))
+			return "", fmt.Errorf("%w: got %d values, want %d", ErrMismatchedFields, len(fieldValues), len(fields))
 		}
 		fieldStrings, err := lo.MapErr(fields, func(field *sppb.StructType_Field, i int) (string, error) {
 			return fc.FormatStruct.FormatStructField(fc, field, fieldValues[i])
