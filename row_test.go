@@ -76,6 +76,42 @@ func TestColumnNames_Errors(t *testing.T) {
 	})
 }
 
+func TestFormatRowJSONObjectFromColumns_Error(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty name", func(t *testing.T) {
+		t.Parallel()
+		columnNames := []string{""}
+		values := []spanner.GenericColumnValue{gcvctor.Int64Value(1)}
+		_, err := FormatRowJSONObjectFromColumns(JSONFormatConfig(), columnNames, values, func(i int) string {
+			return ""
+		})
+		if err == nil {
+			t.Fatal("expected error for empty name resolution, got nil")
+		}
+		want := "unnamed field namer returned empty string (field index 0, generated index 0)"
+		if got := err.Error(); got != want {
+			t.Errorf("error = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("duplicate name", func(t *testing.T) {
+		t.Parallel()
+		columnNames := []string{"dup", ""}
+		values := []spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.Int64Value(2)}
+		_, err := FormatRowJSONObjectFromColumns(JSONFormatConfig(), columnNames, values, func(i int) string {
+			return "dup"
+		})
+		if err == nil {
+			t.Fatal("expected error for duplicate name resolution, got nil")
+		}
+		want := `unnamed field namer returned repeated colliding name "dup" (field index 1, generated index 1)`
+		if got := err.Error(); got != want {
+			t.Errorf("error = %q, want %q", got, want)
+		}
+	})
+}
+
 func TestFormatRowColumns(t *testing.T) {
 	t.Parallel()
 

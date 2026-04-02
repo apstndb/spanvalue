@@ -9,11 +9,12 @@ import (
 	"github.com/samber/lo"
 )
 
-// Unnamed fields are kept as empty strings unless a non-nil namer is provided, in
-// which case the namer is used to generate names for unnamed fields. If a non-nil
-// UnnamedFieldNamer returns an empty string or repeatedly returns colliding names
-// such that a unique column name cannot be chosen, ColumnNames returns a non-nil
-// error describing the contract violation.
+// ColumnNames returns the names of the provided fields. Unnamed fields are kept
+// as empty strings unless a non-nil namer is provided, in which case the namer
+// is used to generate names for unnamed fields. If a non-nil UnnamedFieldNamer
+// returns an empty string or repeatedly returns colliding names such that a
+// unique column name cannot be chosen, ColumnNames returns a non-nil error
+// describing the contract violation.
 func ColumnNames(fields []*sppb.StructType_Field, namer UnnamedFieldNamer) ([]string, error) {
 	names := make([]string, len(fields))
 	for i, field := range fields {
