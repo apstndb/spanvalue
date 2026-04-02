@@ -45,8 +45,8 @@ func JSONFormatConfig() *FormatConfig {
 // Empty column names (e.g., from expressions without aliases like SELECT 1+1)
 // are assigned names by the provided namer function. If namer is nil, empty
 // names are kept as empty-string JSON keys.
-// Returns a non-nil error if the namer is non-nil but violates its contract
-// (returns empty or duplicate names).
+// Returns an error if the namer returns an empty name, or if repeated name collisions
+// prevent choosing a unique name for a field.
 // Output: {"col1":val1,"col2":val2,...}
 func FormatRowJSONObject(fc *FormatConfig, row *spanner.Row, namer UnnamedFieldNamer) (string, error) {
 	values, err := fc.FormatRow(row)
@@ -128,7 +128,8 @@ var FormatJSONObjectStruct = NewJSONObjectStructFormatter(nil)
 // provided namer function. If namer is nil, unnamed fields keep empty-string keys
 // (which produces duplicate keys — valid per RFC 8259 but may cause issues with
 // parsers that deduplicate keys).
-// Returns an error if a non-nil namer returns the same name for different indices (contract violation).
+// Returns an error if the namer returns an empty name, or if repeated name collisions
+// prevent choosing a unique name for a field.
 // Output: {"field1":val1,"field2":val2,...}
 func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc {
 	return func(typ *sppb.Type, _ bool, fieldStrings []string) (string, error) {
