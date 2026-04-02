@@ -82,7 +82,7 @@ func assembleResolvedJSONObject(columnNames []string, values []string) (string, 
 		if i < len(columnNames) {
 			name = columnNames[i]
 		}
-		// json.Marshal on a Go string never returns an error.
+		// While json.Marshal on a Go string is technically infallible, we check the error for robustness.
 		// Note: strconv.Quote is not suitable here because it produces Go string
 		// literal escapes (e.g., \a, \v) that are not valid JSON escape sequences.
 		key, err := json.Marshal(name)
