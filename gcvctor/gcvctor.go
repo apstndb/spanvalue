@@ -134,10 +134,12 @@ func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 }
 
 // ArrayValue constructs ARRAY GenericColumnValue.
+// With no arguments it returns an empty ARRAY<INT64> (not a scalar NULL). For other
+// element types or explicit typing policy, use ArrayValueWithType or ElemTypeToEmptyArray.
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
 func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if len(vs) == 0 {
-		return SimpleTypedNull(sppb.TypeCode_INT64), nil
+		return ElemTypeCodeToEmptyArray(sppb.TypeCode_INT64), nil
 	}
 	return ArrayValueWithType(vs[0].Type, vs...)
 }
