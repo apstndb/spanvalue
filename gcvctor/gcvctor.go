@@ -156,6 +156,29 @@ func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, e
 	}, nil
 }
 
+// ArrayValueWithType constructs ARRAY GenericColumnValue using elemType as the element type
+// instead of inferring it from the first element. When elems is empty, it returns an empty
+// ARRAY<elemType>. Each element's Type must match elemType (no coercion).
+func ArrayValueWithType(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
+	if elemType == nil {
+		return spanner.GenericColumnValue{}, fmt.Errorf("nil element type")
+	}
+	if len(elems) == 0 {
+		return ElemTypeToEmptyArray(elemType), nil
+	}
+	var values []*structpb.Value
+	for i, v := range elems {
+		if !gocmp.Equal(elemType, v.Type, protocmp.Transform()) {
+			return spanner.GenericColumnValue{}, fmt.Errorf("%w: element %d: %v is not %v", ErrTypeMismatch, i, spantype.FormatTypeMoreVerbose(v.Type), spantype.FormatTypeMoreVerbose(elemType))
+		}
+		values = append(values, v.Value)
+	}
+	return spanner.GenericColumnValue{
+		Type:  typector.ElemTypeToArrayType(elemType),
+		Value: structpb.NewListValue(&structpb.ListValue{Values: values}),
+	}, nil
+}
+
 // StructValue constructs STRUCT GenericColumnValue.
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
 func StructValue(names []string, gcvs []spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
