@@ -4,3 +4,4 @@ This package includes [spanner.GenericValueColumn](https://pkg.go.dev/cloud.goog
 
 - [Formatter](https://pkg.go.dev/github.com/apstndb/spanvalue)
 - [Constructor](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor)
+- [Writer helpers](https://pkg.go.dev/github.com/apstndb/spanvalue/writer)
