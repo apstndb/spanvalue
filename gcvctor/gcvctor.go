@@ -10,9 +10,8 @@ import (
 	"time"
 
 	"github.com/apstndb/spantype"
-	gocmp "github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
-	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/proto"
 
 	"cloud.google.com/go/civil"
 	"cloud.google.com/go/spanner"
@@ -144,8 +143,8 @@ func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, e
 	typ := vs[0].Type
 	values := make([]*structpb.Value, len(vs))
 	for i, v := range vs {
-		if !gocmp.Equal(typ, v.Type, protocmp.Transform()) {
-			return spanner.GenericColumnValue{}, fmt.Errorf("%w: %v is not %v", ErrTypeMismatch, spantype.FormatTypeMoreVerbose(vs[i].Type), spantype.FormatTypeMoreVerbose(typ))
+		if !proto.Equal(typ, v.Type) {
+			return spanner.GenericColumnValue{}, fmt.Errorf("%w: element %d: %v is not %v", ErrTypeMismatch, i, spantype.FormatTypeMoreVerbose(v.Type), spantype.FormatTypeMoreVerbose(typ))
 		}
 		values[i] = v.Value
 	}
@@ -168,7 +167,7 @@ func ArrayValueWithType(elemType *sppb.Type, elems ...spanner.GenericColumnValue
 	}
 	values := make([]*structpb.Value, len(elems))
 	for i, v := range elems {
-		if !gocmp.Equal(elemType, v.Type, protocmp.Transform()) {
+		if !proto.Equal(elemType, v.Type) {
 			return spanner.GenericColumnValue{}, fmt.Errorf("%w: element %d: %v is not %v", ErrTypeMismatch, i, spantype.FormatTypeMoreVerbose(v.Type), spantype.FormatTypeMoreVerbose(elemType))
 		}
 		values[i] = v.Value
