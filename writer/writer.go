@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"cloud.google.com/go/spanner"
+	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 
 	"github.com/apstndb/spanvalue"
 )
@@ -23,6 +25,10 @@ var (
 	ErrNilOutputWriter = errors.New("nil output writer")
 	// ErrNilRow reports that WriteRow was called with a nil row.
 	ErrNilRow = errors.New("nil row")
+	// ErrMissingColumnNames reports that writing values requires initialized column names.
+	ErrMissingColumnNames = errors.New("missing column names")
+	// ErrColumnNamesMismatch reports that provided column names differ from initialized schema.
+	ErrColumnNamesMismatch = errors.New("column names mismatch")
 )
 
 // Writer writes rows or column/value pairs to an output stream.
@@ -37,18 +43,21 @@ type CSVWriter struct {
 	Header            bool
 	UnnamedFieldNamer spanvalue.UnnamedFieldNamer
 
+	columnNames []string
 	out         io.Writer
 	writer      *csv.Writer
 	wroteHeader bool
 }
 
-func NewCSVWriter(out io.Writer) *CSVWriter {
-	return &CSVWriter{
+func NewCSVWriter(out io.Writer, metadata ...*sppb.ResultSetMetadata) *CSVWriter {
+	w := &CSVWriter{
 		Formatter:         spanvalue.SimpleFormatConfig(),
 		Header:            true,
 		UnnamedFieldNamer: spanvalue.IndexedUnnamedFieldNamer,
 		out:               out,
 	}
+	w.setMetadata(firstMetadata(metadata))
+	return w
 }
 
 func (w *CSVWriter) WriteRow(row *spanner.Row) error {
@@ -60,7 +69,18 @@ func (w *CSVWriter) WriteRow(row *spanner.Row) error {
 }
 
 func (w *CSVWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
-	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), columnNames, values)
+	if err := w.initOrValidateColumnNames(columnNames); err != nil {
+		return err
+	}
+	return w.WriteGCVs(values)
+}
+
+func (w *CSVWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
+	if len(w.columnNames) == 0 {
+		return ErrMissingColumnNames
+	}
+
+	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.columnNames, values)
 	if err != nil {
 		return err
 	}
@@ -71,7 +91,7 @@ func (w *CSVWriter) WriteValues(columnNames []string, values []spanner.GenericCo
 	}
 
 	if w.Header && !w.wroteHeader {
-		resolvedNames, err := spanvalue.ResolveColumnNames(columnNames, w.UnnamedFieldNamer)
+		resolvedNames, err := spanvalue.ResolveColumnNames(w.columnNames, w.UnnamedFieldNamer)
 		if err != nil {
 			return err
 		}
@@ -86,6 +106,14 @@ func (w *CSVWriter) WriteValues(columnNames []string, values []spanner.GenericCo
 	}
 	csvWriter.Flush()
 	return csvWriter.Error()
+}
+
+func (w *CSVWriter) setMetadata(metadata *sppb.ResultSetMetadata) {
+	w.columnNames = metadataColumnNames(metadata)
+}
+
+func (w *CSVWriter) initOrValidateColumnNames(columnNames []string) error {
+	return initOrValidateColumnNames(&w.columnNames, columnNames)
 }
 
 func (w *CSVWriter) formatter() *spanvalue.FormatConfig {
@@ -111,22 +139,43 @@ type JSONLWriter struct {
 	Formatter         *spanvalue.FormatConfig
 	UnnamedFieldNamer spanvalue.UnnamedFieldNamer
 
+	columnNames []string
 	out io.Writer
 }
 
-func NewJSONLWriter(out io.Writer) *JSONLWriter {
-	return &JSONLWriter{
+func NewJSONLWriter(out io.Writer, metadata ...*sppb.ResultSetMetadata) *JSONLWriter {
+	w := &JSONLWriter{
 		Formatter:         spanvalue.JSONFormatConfig(),
 		UnnamedFieldNamer: spanvalue.IndexedUnnamedFieldNamer,
 		out:               out,
 	}
+	w.setMetadata(firstMetadata(metadata))
+	return w
 }
 
 func (w *JSONLWriter) WriteRow(row *spanner.Row) error {
+	columnNames, values, err := rowData(row)
+	if err != nil {
+		return err
+	}
+	return w.WriteValues(columnNames, values)
+}
+
+func (w *JSONLWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
+	if err := w.initOrValidateColumnNames(columnNames); err != nil {
+		return err
+	}
+	return w.WriteGCVs(values)
+}
+
+func (w *JSONLWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	if w.out == nil {
 		return ErrNilOutputWriter
 	}
-	s, err := spanvalue.FormatRowJSONObject(w.formatter(), row, w.UnnamedFieldNamer)
+	if len(w.columnNames) == 0 {
+		return ErrMissingColumnNames
+	}
+	s, err := spanvalue.FormatRowJSONObjectFromColumns(w.formatter(), w.columnNames, values, w.UnnamedFieldNamer)
 	if err != nil {
 		return err
 	}
@@ -134,16 +183,12 @@ func (w *JSONLWriter) WriteRow(row *spanner.Row) error {
 	return err
 }
 
-func (w *JSONLWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
-	if w.out == nil {
-		return ErrNilOutputWriter
-	}
-	s, err := spanvalue.FormatRowJSONObjectFromColumns(w.formatter(), columnNames, values, w.UnnamedFieldNamer)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintln(w.out, s)
-	return err
+func (w *JSONLWriter) setMetadata(metadata *sppb.ResultSetMetadata) {
+	w.columnNames = metadataColumnNames(metadata)
+}
+
+func (w *JSONLWriter) initOrValidateColumnNames(columnNames []string) error {
+	return initOrValidateColumnNames(&w.columnNames, columnNames)
 }
 
 func (w *JSONLWriter) formatter() *spanvalue.FormatConfig {
@@ -158,15 +203,18 @@ type SQLInsertWriter struct {
 	Table     string
 	Formatter *spanvalue.FormatConfig
 
+	columnNames []string
 	out io.Writer
 }
 
-func NewSQLInsertWriter(out io.Writer, table string) *SQLInsertWriter {
-	return &SQLInsertWriter{
+func NewSQLInsertWriter(out io.Writer, table string, metadata ...*sppb.ResultSetMetadata) *SQLInsertWriter {
+	w := &SQLInsertWriter{
 		Table:     table,
 		Formatter: spanvalue.LiteralFormatConfig(),
 		out:       out,
 	}
+	w.setMetadata(firstMetadata(metadata))
+	return w
 }
 
 func (w *SQLInsertWriter) WriteRow(row *spanner.Row) error {
@@ -178,19 +226,29 @@ func (w *SQLInsertWriter) WriteRow(row *spanner.Row) error {
 }
 
 func (w *SQLInsertWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
+	if err := w.initOrValidateColumnNames(columnNames); err != nil {
+		return err
+	}
+	return w.WriteGCVs(values)
+}
+
+func (w *SQLInsertWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	if w.out == nil {
 		return ErrNilOutputWriter
 	}
 	if w.Table == "" {
 		return ErrEmptyTableName
 	}
+	if len(w.columnNames) == 0 {
+		return ErrMissingColumnNames
+	}
 
-	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), columnNames, values)
+	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.columnNames, values)
 	if err != nil {
 		return err
 	}
 
-	quotedColumns, err := quoteIdentifiers(columnNames)
+	quotedColumns, err := quoteIdentifiers(w.columnNames)
 	if err != nil {
 		return err
 	}
@@ -203,6 +261,14 @@ func (w *SQLInsertWriter) WriteValues(columnNames []string, values []spanner.Gen
 		strings.Join(formattedValues, ", "),
 	)
 	return err
+}
+
+func (w *SQLInsertWriter) setMetadata(metadata *sppb.ResultSetMetadata) {
+	w.columnNames = metadataColumnNames(metadata)
+}
+
+func (w *SQLInsertWriter) initOrValidateColumnNames(columnNames []string) error {
+	return initOrValidateColumnNames(&w.columnNames, columnNames)
 }
 
 func (w *SQLInsertWriter) formatter() *spanvalue.FormatConfig {
@@ -226,6 +292,41 @@ func rowData(row *spanner.Row) ([]string, []spanner.GenericColumnValue, error) {
 		return nil, nil, err
 	}
 	return row.ColumnNames(), values, nil
+}
+
+func firstMetadata(metadata []*sppb.ResultSetMetadata) *sppb.ResultSetMetadata {
+	if len(metadata) == 0 {
+		return nil
+	}
+	return metadata[0]
+}
+
+func metadataColumnNames(metadata *sppb.ResultSetMetadata) []string {
+	if metadata == nil || metadata.GetRowType() == nil {
+		return nil
+	}
+	names, err := spanvalue.ColumnNames(metadata.GetRowType().GetFields(), nil)
+	if err != nil {
+		return nil
+	}
+	return names
+}
+
+func initOrValidateColumnNames(dst *[]string, columnNames []string) error {
+	if len(*dst) == 0 {
+		if len(columnNames) == 0 {
+			return ErrMissingColumnNames
+		}
+		*dst = slices.Clone(columnNames)
+		return nil
+	}
+	if len(columnNames) == 0 {
+		return nil
+	}
+	if !slices.Equal(*dst, columnNames) {
+		return fmt.Errorf("%w: got %q want %q", ErrColumnNamesMismatch, columnNames, *dst)
+	}
+	return nil
 }
 
 // quoteIdentifiers quotes GoogleSQL identifiers and rejects empty names.

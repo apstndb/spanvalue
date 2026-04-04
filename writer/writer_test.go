@@ -11,6 +11,19 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+func metadataWithColumnNames(names ...string) *sppb.ResultSetMetadata {
+	fields := make([]*sppb.StructType_Field, len(names))
+	for i, name := range names {
+		fields[i] = &sppb.StructType_Field{
+			Name: name,
+			Type: &sppb.Type{Code: sppb.TypeCode_STRING},
+		}
+	}
+	return &sppb.ResultSetMetadata{
+		RowType: &sppb.StructType{Fields: fields},
+	}
+}
+
 func TestCSVWriterWriteValues(t *testing.T) {
 	t.Parallel()
 
@@ -45,6 +58,38 @@ func TestCSVWriterWriteValues(t *testing.T) {
 	}
 }
 
+func TestCSVWriterWriteGCVsWithMetadata(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewCSVWriter(&out, metadataWithColumnNames("name", "age"))
+
+	err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.StringValue("Alice"),
+		gcvctor.Int64Value(42),
+	})
+	if err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+
+	want := "name,age\nAlice,42\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("CSV output mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCSVWriterWriteGCVsWithoutMetadata(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewCSVWriter(&out)
+
+	err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")})
+	if !errors.Is(err, ErrMissingColumnNames) {
+		t.Fatalf("WriteGCVs() error = %v, want ErrMissingColumnNames", err)
+	}
+}
+
 func TestJSONLWriterWriteRow(t *testing.T) {
 	t.Parallel()
 
@@ -60,6 +105,34 @@ func TestJSONLWriterWriteRow(t *testing.T) {
 	}
 
 	want := "{\"id\":42,\"_0\":\"hello\"}\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("JSONL output mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestJSONLWriterWriteGCVsAfterWriteRow(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewJSONLWriter(&out)
+
+	row, err := spanner.NewRow([]string{"id", "name"}, []interface{}{int64(42), "hello"})
+	if err != nil {
+		t.Fatalf("spanner.NewRow() error = %v", err)
+	}
+
+	if err := w.WriteRow(row); err != nil {
+		t.Fatalf("WriteRow() error = %v", err)
+	}
+
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.Int64Value(43),
+		gcvctor.StringValue("world"),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+
+	want := "{\"id\":42,\"name\":\"hello\"}\n{\"id\":43,\"name\":\"world\"}\n"
 	if diff := cmp.Diff(want, out.String()); diff != "" {
 		t.Fatalf("JSONL output mismatch (-want +got):\n%s", diff)
 	}
@@ -127,5 +200,17 @@ func TestSQLInsertWriterWriteValuesEmptyColumnName(t *testing.T) {
 	)
 	if !errors.Is(err, ErrEmptyColumnName) {
 		t.Fatalf("WriteValues() error = %v, want ErrEmptyColumnName", err)
+	}
+}
+
+func TestSQLInsertWriterWriteGCVsWithoutMetadata(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewSQLInsertWriter(&out, "users")
+
+	err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(42)})
+	if !errors.Is(err, ErrMissingColumnNames) {
+		t.Fatalf("WriteGCVs() error = %v, want ErrMissingColumnNames", err)
 	}
 }
