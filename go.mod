@@ -7,7 +7,7 @@ toolchain go1.23.2
 require (
 	cloud.google.com/go v0.121.4
 	cloud.google.com/go/spanner v1.84.1
-	github.com/apstndb/spantype v0.3.6
+	github.com/apstndb/spantype v0.3.9
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/samber/lo v1.53.0
