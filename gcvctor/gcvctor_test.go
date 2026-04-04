@@ -1,3 +1,9 @@
+// Package gcvctor_test exercises github.com/apstndb/spanvalue/gcvctor.
+//
+// When an expected value exercises a specific API (e.g. ArrayValueWithType),
+// build want from typector + structpb (and spanner.GenericColumnValue literals)
+// instead of other gcvctor helpers that delegate to the same implementation,
+// so the test compares against an independent oracle rather than the code under test.
 package gcvctor_test
 
 import (
