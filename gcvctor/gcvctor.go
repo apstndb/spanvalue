@@ -22,9 +22,11 @@ import (
 )
 
 var (
-	ErrTypeMismatch     = fmt.Errorf("type mismatch")
-	ErrMismatchedCounts = fmt.Errorf("mismatched name/value count")
+	ErrTypeMismatch     = errors.New("gcvctor: type mismatch")
+	ErrMismatchedCounts = errors.New("gcvctor: mismatched name/value count")
 	// ErrNilElementType is returned by [ArrayValueOf] when elemType is nil.
+	// Prefer [errors.Is] to test for this error; direct comparison with == is reliable when this
+	// package returns the error without wrapping.
 	ErrNilElementType = errors.New("gcvctor: nil array element type")
 )
 
@@ -177,10 +179,11 @@ func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, e
 // returns an empty ARRAY<elemType> (SQL length zero, not SQL NULL). For a typed NULL ARRAY<elemType>,
 // use [NullOf] with [github.com/apstndb/spantype/typector.ElemTypeToArrayType] or [github.com/apstndb/spantype/typector.ElemCodeToArrayType].
 //
-// Each element's Type must match elemType (no coercion). A nil elemType returns [ErrNilElementType].
+// Each element's Type must match elemType (no coercion). A nil elemType returns [ErrNilElementType]
+// (use [errors.Is]; see [ErrNilElementType]).
 func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if elemType == nil {
-		return spanner.GenericColumnValue{}, fmt.Errorf("%w", ErrNilElementType)
+		return spanner.GenericColumnValue{}, ErrNilElementType
 	}
 	if len(elems) == 0 {
 		return EmptyArrayOf(elemType), nil
@@ -298,9 +301,9 @@ func ArrayCodeTypedNull(elemCode sppb.TypeCode) spanner.GenericColumnValue {
 }
 
 // EmptyArrayOf returns a non-null empty ARRAY<elemType> (length zero).
-func EmptyArrayOf(typ *sppb.Type) spanner.GenericColumnValue {
+func EmptyArrayOf(elemType *sppb.Type) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
-		Type:  typector.ElemTypeToArrayType(typ),
+		Type:  typector.ElemTypeToArrayType(elemType),
 		Value: structpb.NewListValue(&structpb.ListValue{}),
 	}
 }

@@ -401,6 +401,25 @@ func TestDeprecated_ArrayTypeTypedNull_matchesTypedNull(t *testing.T) {
 	}
 }
 
+func TestNullArrayFromCode_matchesNullOf(t *testing.T) {
+	t.Parallel()
+	got := gcvctor.NullArrayFromCode(sppb.TypeCode_INT64)
+	want := gcvctor.NullOf(typector.ElemCodeToArrayType(sppb.TypeCode_INT64))
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Errorf("diff (-want, +got) = %v", diff)
+	}
+}
+
+func TestNullArrayOf_matchesNullOf(t *testing.T) {
+	t.Parallel()
+	elem := typector.NameCodeToStructType("n", sppb.TypeCode_INT64)
+	got := gcvctor.NullArrayOf(elem)
+	want := gcvctor.NullOf(typector.ElemTypeToArrayType(elem))
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Errorf("diff (-want, +got) = %v", diff)
+	}
+}
+
 func TestArrayValue_zeroLengthIsEmptyInt64Array(t *testing.T) {
 	t.Parallel()
 	want := spanner.GenericColumnValue{
