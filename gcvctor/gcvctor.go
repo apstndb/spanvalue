@@ -22,14 +22,15 @@ import (
 )
 
 var (
-	ErrTypeMismatch     = errors.New("gcvctor: type mismatch")
+	// ErrTypeMismatch is returned by [ArrayValueOf] when an element's type does not match elemType.
+	ErrTypeMismatch = errors.New("gcvctor: type mismatch")
+	// ErrMismatchedCounts is returned by [StructValueOf] when len(names) != len(gcvs).
 	ErrMismatchedCounts = errors.New("gcvctor: mismatched name/value count")
 	// ErrNilElementType is returned by [ArrayValueOf] when elemType is nil.
-	// Prefer [errors.Is] to test for this error; direct comparison with == is reliable when this
-	// package returns the error without wrapping.
 	ErrNilElementType = errors.New("gcvctor: nil array element type")
 )
 
+// BoolValue returns a non-null BOOL GenericColumnValue.
 func BoolValue(v bool) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(sppb.TypeCode_BOOL),
@@ -37,6 +38,7 @@ func BoolValue(v bool) spanner.GenericColumnValue {
 	}
 }
 
+// Int64Value returns a non-null INT64 GenericColumnValue (decimal string wire format).
 func Int64Value(v int64) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(sppb.TypeCode_INT64),
@@ -44,6 +46,8 @@ func Int64Value(v int64) spanner.GenericColumnValue {
 	}
 }
 
+// Float64Value returns a non-null FLOAT64 GenericColumnValue. NaN and ±Inf use string wire values
+// matching Spanner's encoding.
 func Float64Value(v float64) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT64),
@@ -51,6 +55,8 @@ func Float64Value(v float64) spanner.GenericColumnValue {
 	}
 }
 
+// Float32Value returns a non-null FLOAT32 GenericColumnValue. NaN and ±Inf use string wire values
+// matching Spanner's encoding.
 func Float32Value(v float32) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT32),
@@ -74,6 +80,7 @@ func float64ToStructpbValue(v float64) *structpb.Value {
 	}
 }
 
+// StringValue returns a non-null STRING GenericColumnValue.
 func StringValue(v string) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(sppb.TypeCode_STRING),
@@ -81,6 +88,7 @@ func StringValue(v string) spanner.GenericColumnValue {
 	}
 }
 
+// BytesValue returns a non-null BYTES GenericColumnValue (base64 wire encoding).
 func BytesValue(v []byte) spanner.GenericColumnValue {
 	return BytesBasedValueOf(typector.CodeToSimpleType(sppb.TypeCode_BYTES), v)
 }
@@ -117,26 +125,32 @@ func StringBasedValue(code sppb.TypeCode, v string) spanner.GenericColumnValue {
 	return StringBasedValueFromCode(code, v)
 }
 
+// DateValue returns a non-null DATE GenericColumnValue.
 func DateValue(v civil.Date) spanner.GenericColumnValue {
 	return StringBasedValueFromCode(sppb.TypeCode_DATE, v.String())
 }
 
+// TimestampValue returns a non-null TIMESTAMP GenericColumnValue (RFC3339Nano string wire format).
 func TimestampValue(v time.Time) spanner.GenericColumnValue {
 	return StringBasedValueFromCode(sppb.TypeCode_TIMESTAMP, v.Format(time.RFC3339Nano))
 }
 
+// NumericValue returns a non-null NUMERIC GenericColumnValue.
 func NumericValue(v *big.Rat) spanner.GenericColumnValue {
 	return StringBasedValueFromCode(sppb.TypeCode_NUMERIC, spanner.NumericString(v))
 }
 
+// IntervalValue returns a non-null INTERVAL GenericColumnValue.
 func IntervalValue(v spanner.Interval) spanner.GenericColumnValue {
 	return StringBasedValueFromCode(sppb.TypeCode_INTERVAL, v.String())
 }
 
+// UUIDValue returns a non-null UUID GenericColumnValue.
 func UUIDValue(v uuid.UUID) spanner.GenericColumnValue {
 	return StringBasedValueFromCode(sppb.TypeCode_UUID, v.String())
 }
 
+// JSONValue marshals v to JSON and returns a non-null JSON GenericColumnValue.
 func JSONValue(v any) (spanner.GenericColumnValue, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -145,10 +159,12 @@ func JSONValue(v any) (spanner.GenericColumnValue, error) {
 	return StringBasedValueFromCode(sppb.TypeCode_JSON, string(b)), nil
 }
 
+// ProtoValue returns a non-null PROTO GenericColumnValue for the fully qualified message name fqn.
 func ProtoValue(fqn string, b []byte) spanner.GenericColumnValue {
 	return BytesBasedValueOf(typector.FQNToProtoType(fqn), b)
 }
 
+// EnumValue returns a non-null ENUM GenericColumnValue for the fully qualified enum name fqn.
 func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.FQNToEnumType(fqn),
@@ -179,8 +195,7 @@ func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, e
 // returns an empty ARRAY<elemType> (SQL length zero, not SQL NULL). For a typed NULL ARRAY<elemType>,
 // use [NullOf] with [github.com/apstndb/spantype/typector.ElemTypeToArrayType] or [github.com/apstndb/spantype/typector.ElemCodeToArrayType].
 //
-// Each element's Type must match elemType (no coercion). A nil elemType returns [ErrNilElementType]
-// (use [errors.Is]; see [ErrNilElementType]).
+// Each element's Type must match elemType (no coercion). A nil elemType returns [ErrNilElementType].
 func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if elemType == nil {
 		return spanner.GenericColumnValue{}, ErrNilElementType
