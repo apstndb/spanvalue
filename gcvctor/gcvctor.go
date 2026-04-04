@@ -134,7 +134,8 @@ func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 }
 
 // ArrayValue constructs ARRAY GenericColumnValue.
-// With no arguments it returns an empty ARRAY<INT64> (not a scalar NULL). For other
+// With no arguments it returns an empty ARRAY<INT64> (not a scalar NULL), using a concrete element type
+// so the stored [cloud.google.com/go/spanner/apiv1/spannerpb.Type] is always well-formed. For other
 // element types or explicit typing policy, use ArrayValueWithType or ElemTypeToEmptyArray.
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
 func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
