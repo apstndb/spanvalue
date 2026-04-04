@@ -294,6 +294,8 @@ func rowData(row *spanner.Row) ([]string, []spanner.GenericColumnValue, error) {
 	return row.ColumnNames(), values, nil
 }
 
+// firstMetadata keeps the constructors backward-compatible while allowing an
+// optional single metadata argument for eager schema initialization.
 func firstMetadata(metadata []*sppb.ResultSetMetadata) *sppb.ResultSetMetadata {
 	if len(metadata) == 0 {
 		return nil
@@ -313,6 +315,9 @@ func metadataColumnNames(metadata *sppb.ResultSetMetadata) []string {
 	return names
 }
 
+// initOrValidateColumnNames initializes dst from the first non-empty
+// columnNames slice it sees. Once initialized, subsequent non-empty inputs must
+// match exactly; empty inputs are accepted only after initialization.
 func initOrValidateColumnNames(dst *[]string, columnNames []string) error {
 	if len(*dst) == 0 {
 		if len(columnNames) == 0 {
