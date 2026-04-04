@@ -4,7 +4,7 @@
 // [ArrayValue] infers the element type from the first element (or uses a default empty ARRAY<INT64>
 // when len==0, whether the variadic slice is nil or empty). [ArrayValueWithType] takes the element type
 // explicitly; len==0 yields an empty ARRAY<elemType>. For a SQL NULL ARRAY, use [TypedNull] with
-// [github.com/apstndb/spantype/typector.ElemTypeToArrayType] or ElemCodeToArrayType instead of relying
+// [github.com/apstndb/spantype/typector.ElemTypeToArrayType] or [github.com/apstndb/spantype/typector.ElemCodeToArrayType] instead of relying
 // on variadic nil. [StructValue] pairs field
 // names with values; counts must match.
 //

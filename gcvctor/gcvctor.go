@@ -137,7 +137,7 @@ func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 //
 // With no elements (including a nil or empty variadic slice), it returns an empty ARRAY<INT64>
 // (SQL length zero, not SQL NULL). For a typed NULL ARRAY<INT64>, use [TypedNull] with
-// [github.com/apstndb/spantype/typector.ElemCodeToArrayType] (or ElemTypeToArrayType).
+// [github.com/apstndb/spantype/typector.ElemCodeToArrayType] (or [github.com/apstndb/spantype/typector.ElemTypeToArrayType]).
 //
 // For other element types or explicit typing policy, use [ArrayValueWithType] or [ElemTypeToEmptyArray].
 //
@@ -152,7 +152,7 @@ func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, e
 // ArrayValueWithType constructs ARRAY GenericColumnValue using elemType as the element type
 // instead of inferring it from the first element. When elems is empty (nil or length zero), it
 // returns an empty ARRAY<elemType> (SQL length zero, not SQL NULL). For a typed NULL ARRAY<elemType>,
-// use [TypedNull] with [github.com/apstndb/spantype/typector.ElemTypeToArrayType] or ElemCodeToArrayType.
+// use [TypedNull] with [github.com/apstndb/spantype/typector.ElemTypeToArrayType] or [github.com/apstndb/spantype/typector.ElemCodeToArrayType].
 //
 // Each element's Type must match elemType (no coercion).
 func ArrayValueWithType(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
