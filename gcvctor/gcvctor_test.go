@@ -355,9 +355,14 @@ func TestTypedNull_STRUCT(t *testing.T) {
 	}
 }
 
-func TestArrayCodeTypedNull(t *testing.T) {
+func TestDeprecated_ArrayCodeTypedNull_matchesTypedNull(t *testing.T) {
+	t.Parallel()
+	// Deprecated API: must stay equivalent to TypedNull(typector.ElemCodeToArrayType(...)) until removed.
 	got := gcvctor.ArrayCodeTypedNull(sppb.TypeCode_INT64)
-	want := gcvctor.TypedNull(typector.ElemCodeToArrayType(sppb.TypeCode_INT64))
+	want := spanner.GenericColumnValue{
+		Type:  typector.ElemCodeToArrayType(sppb.TypeCode_INT64),
+		Value: structpb.NewNullValue(),
+	}
 
 	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
 		t.Errorf("diff (-want, +got) = %v", diff)
@@ -381,25 +386,49 @@ func TestNullRawValueFromType_STRUCT(t *testing.T) {
 	}
 }
 
-func TestArrayTypeTypedNull(t *testing.T) {
+func TestDeprecated_ArrayTypeTypedNull_matchesTypedNull(t *testing.T) {
+	t.Parallel()
+	// Deprecated API: must stay equivalent to TypedNull(typector.ElemTypeToArrayType(...)) until removed.
 	structType := typector.NameCodeToStructType("n", sppb.TypeCode_INT64)
 	got := gcvctor.ArrayTypeTypedNull(structType)
-	want := gcvctor.TypedNull(typector.ElemTypeToArrayType(structType))
+	want := spanner.GenericColumnValue{
+		Type:  typector.ElemTypeToArrayType(structType),
+		Value: structpb.NewNullValue(),
+	}
 
 	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
 		t.Errorf("diff (-want, +got) = %v", diff)
 	}
 }
 
-func TestArrayValue_zeroArgsIsEmptyInt64Array(t *testing.T) {
+func TestArrayValue_zeroLengthIsEmptyInt64Array(t *testing.T) {
 	t.Parallel()
-	got, err := gcvctor.ArrayValue()
-	if err != nil {
-		t.Fatalf("ArrayValue: %v", err)
+	want := spanner.GenericColumnValue{
+		Type:  typector.ElemCodeToArrayType(sppb.TypeCode_INT64),
+		Value: structpb.NewListValue(&structpb.ListValue{}),
 	}
-	want := gcvctor.ElemTypeCodeToEmptyArray(sppb.TypeCode_INT64)
-	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
-		t.Errorf("mismatch (-want +got):\n%s", diff)
+
+	for _, name := range []string{"no args", "nil slice", "empty slice"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var got spanner.GenericColumnValue
+			var err error
+			switch name {
+			case "no args":
+				got, err = gcvctor.ArrayValue()
+			case "nil slice":
+				var nilSlice []spanner.GenericColumnValue
+				got, err = gcvctor.ArrayValue(nilSlice...)
+			case "empty slice":
+				got, err = gcvctor.ArrayValue([]spanner.GenericColumnValue{}...)
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
@@ -418,16 +447,31 @@ func TestArrayValueWithType(t *testing.T) {
 		errIs     error
 	}{
 		{
-			desc:     "empty INT64 matches ElemTypeToEmptyArray",
+			desc:     "empty INT64 (nil elems)",
 			elemType: int64Elem,
 			elems:    nil,
-			want:     gcvctor.ElemTypeToEmptyArray(int64Elem),
+			want: spanner.GenericColumnValue{
+				Type:  typector.ElemTypeToArrayType(int64Elem),
+				Value: structpb.NewListValue(&structpb.ListValue{}),
+			},
 		},
 		{
-			desc:     "empty ARRAY<STRUCT<n INT64>>",
+			desc:     "empty ARRAY<STRUCT<n INT64>> (nil elems)",
 			elemType: structElem,
 			elems:    nil,
-			want:     gcvctor.ElemTypeToEmptyArray(structElem),
+			want: spanner.GenericColumnValue{
+				Type:  typector.ElemTypeToArrayType(structElem),
+				Value: structpb.NewListValue(&structpb.ListValue{}),
+			},
+		},
+		{
+			desc:     "empty INT64 (non-nil empty slice)",
+			elemType: int64Elem,
+			elems:    []spanner.GenericColumnValue{},
+			want: spanner.GenericColumnValue{
+				Type:  typector.ElemTypeToArrayType(int64Elem),
+				Value: structpb.NewListValue(&structpb.ListValue{}),
+			},
 		},
 		{
 			desc:     "non-empty INT64",

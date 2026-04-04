@@ -134,9 +134,15 @@ func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 }
 
 // ArrayValue constructs ARRAY GenericColumnValue.
-// With no arguments it returns an empty ARRAY<INT64> (not a scalar NULL), using a concrete element type
-// so the Type field is always a well-formed [cloud.google.com/go/spanner/apiv1/spannerpb.Type]. For other
-// element types or explicit typing policy, use ArrayValueWithType or ElemTypeToEmptyArray.
+//
+// With no elements (including a nil or empty variadic slice), it returns an empty ARRAY<INT64>
+// (SQL length zero, not SQL NULL), using a concrete element type so the Type field is a well-formed
+// [cloud.google.com/go/spanner/apiv1/spannerpb.Type] (including array_element_type for ARRAY shapes).
+// For a typed NULL ARRAY<INT64>, use [TypedNull] with
+// [github.com/apstndb/spantype/typector.ElemCodeToArrayType] (or [github.com/apstndb/spantype/typector.ElemTypeToArrayType]).
+//
+// For other element types or explicit typing policy, use [ArrayValueWithType] or [ElemTypeToEmptyArray].
+//
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
 func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if len(vs) == 0 {
@@ -146,8 +152,11 @@ func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, e
 }
 
 // ArrayValueWithType constructs ARRAY GenericColumnValue using elemType as the element type
-// instead of inferring it from the first element. When elems is empty, it returns an empty
-// ARRAY<elemType>. Each element's Type must match elemType (no coercion).
+// instead of inferring it from the first element. When elems is empty (nil or length zero), it
+// returns an empty ARRAY<elemType> (SQL length zero, not SQL NULL). For a typed NULL ARRAY<elemType>,
+// use [TypedNull] with [github.com/apstndb/spantype/typector.ElemTypeToArrayType] or [github.com/apstndb/spantype/typector.ElemCodeToArrayType].
+//
+// Each element's Type must match elemType (no coercion).
 func ArrayValueWithType(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if elemType == nil {
 		return spanner.GenericColumnValue{}, fmt.Errorf("nil element type")
@@ -194,8 +203,8 @@ func StructValue(names []string, gcvs []spanner.GenericColumnValue) (spanner.Gen
 }
 
 // SimpleTypedNull returns a typed NULL for a simple scalar type code.
-// The Value field is always a protobuf NullValue; see [TypedNull] for STRUCT and ARRAY
-// semantics.
+// The [cloud.google.com/go/spanner.GenericColumnValue] Value field is always a protobuf
+// NullValue; see [TypedNull] for STRUCT and ARRAY semantics.
 func SimpleTypedNull(code sppb.TypeCode) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(code),
@@ -204,7 +213,8 @@ func SimpleTypedNull(code sppb.TypeCode) spanner.GenericColumnValue {
 }
 
 // TypedNull returns a typed NULL for typ.
-// The Value field is always a protobuf NullValue, including when typ is STRUCT or ARRAY.
+// The [cloud.google.com/go/spanner.GenericColumnValue] Value field is always a protobuf
+// NullValue, including when typ is STRUCT or ARRAY.
 // It does not represent a non-null STRUCT whose fields are all null—use StructValue with
 // per-field nulls (using [TypedNull] or [SimpleTypedNull] for each field) when you need that shape.
 func TypedNull(typ *sppb.Type) spanner.GenericColumnValue {
@@ -215,11 +225,21 @@ func TypedNull(typ *sppb.Type) spanner.GenericColumnValue {
 }
 
 // ArrayTypeTypedNull constructs a NULL ARRAY with the given element type.
+//
+// Deprecated: Use [github.com/apstndb/spanvalue/gcvctor.TypedNull] with
+// [github.com/apstndb/spantype/typector.ElemTypeToArrayType] instead:
+//
+//	TypedNull(typector.ElemTypeToArrayType(elemType))
 func ArrayTypeTypedNull(elemType *sppb.Type) spanner.GenericColumnValue {
 	return TypedNull(typector.ElemTypeToArrayType(elemType))
 }
 
 // ArrayCodeTypedNull constructs a NULL ARRAY with a simple element type code.
+//
+// Deprecated: Use [github.com/apstndb/spanvalue/gcvctor.TypedNull] with
+// [github.com/apstndb/spantype/typector.ElemCodeToArrayType] instead:
+//
+//	TypedNull(typector.ElemCodeToArrayType(elemCode))
 func ArrayCodeTypedNull(elemCode sppb.TypeCode) spanner.GenericColumnValue {
 	return TypedNull(typector.ElemCodeToArrayType(elemCode))
 }
