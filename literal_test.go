@@ -434,12 +434,12 @@ func TestDecodeColumnLiteral(t *testing.T) {
 			want:  "NULL",
 		},
 		{
-			desc:  "null array proto",
+			desc:  "null proto",
 			value: gcvctor.NullOf(typector.FQNToProtoType("package.ProtoType")),
 			want:  "NULL",
 		},
 		{
-			desc:  "null array enum",
+			desc:  "null enum",
 			value: gcvctor.NullOf(typector.FQNToEnumType("package.EnumType")),
 			want:  "NULL",
 		},
