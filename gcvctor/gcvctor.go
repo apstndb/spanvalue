@@ -136,7 +136,9 @@ func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 // ArrayValue constructs ARRAY GenericColumnValue.
 //
 // With no elements (including a nil or empty variadic slice), it returns an empty ARRAY<INT64>
-// (SQL length zero, not SQL NULL). For a typed NULL ARRAY<INT64>, use [TypedNull] with
+// (SQL length zero, not SQL NULL), using a concrete element type so the Type field is a well-formed
+// [cloud.google.com/go/spanner/apiv1/spannerpb.Type] (including array_element_type for ARRAY shapes).
+// For a typed NULL ARRAY<INT64>, use [TypedNull] with
 // [github.com/apstndb/spantype/typector.ElemCodeToArrayType] (or [github.com/apstndb/spantype/typector.ElemTypeToArrayType]).
 //
 // For other element types or explicit typing policy, use [ArrayValueWithType] or [ElemTypeToEmptyArray].
