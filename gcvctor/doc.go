@@ -11,9 +11,9 @@
 //
 // Zero-argument [ArrayValue] returns an empty ARRAY<INT64> with complete type metadata in the Type field
 // of the [cloud.google.com/go/spanner.GenericColumnValue]. For empty arrays, callers typically must supply
-// explicit SQL type information through these constructors or through param_types on
-// [cloud.google.com/go/spanner/apiv1/spannerpb.ExecuteSqlRequest], because an empty list value does not
-// specify an element type by itself.
+// explicit SQL type information through these constructors or through the ParamTypes field (protobuf:
+// param_types) on [cloud.google.com/go/spanner/apiv1/spannerpb.ExecuteSqlRequest], because an empty list value
+// does not specify an element type by itself.
 //
 // [TypedNull] returns a typed NULL for any [cloud.google.com/go/spanner/apiv1/spannerpb.Type], including STRUCT and ARRAY; the
 // stored Value is always a scalar protobuf null. [SimpleTypedNull] does the same for simple
