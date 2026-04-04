@@ -68,23 +68,50 @@ func TestJSONLWriterWriteRow(t *testing.T) {
 func TestSQLInsertWriterWriteValues(t *testing.T) {
 	t.Parallel()
 
-	var out bytes.Buffer
-	w := NewSQLInsertWriter(&out, "user`table")
-
-	err := w.WriteValues(
-		[]string{"id", "na`me"},
-		[]spanner.GenericColumnValue{
-			gcvctor.Int64Value(42),
-			gcvctor.StringValue("Alice"),
+	tests := []struct {
+		name        string
+		table       string
+		columnNames []string
+		values      []spanner.GenericColumnValue
+		want        string
+	}{
+		{
+			name:        "identifier escaping",
+			table:       "user`table",
+			columnNames: []string{"id", "na`me"},
+			values: []spanner.GenericColumnValue{
+				gcvctor.Int64Value(42),
+				gcvctor.StringValue("Alice"),
+			},
+			want: "INSERT INTO `user``table` (`id`, `na``me`) VALUES (42, \"Alice\");\n",
 		},
-	)
-	if err != nil {
-		t.Fatalf("WriteValues() error = %v", err)
+		{
+			name:        "value escaping delegated to literal formatter",
+			table:       "users",
+			columnNames: []string{"payload"},
+			values: []spanner.GenericColumnValue{
+				gcvctor.StringValue("semi;\nline"),
+			},
+			want: "INSERT INTO `users` (`payload`) VALUES (\"semi;\\nline\");\n",
+		},
 	}
 
-	want := "INSERT INTO `user``table` (`id`, `na``me`) VALUES (42, \"Alice\");\n"
-	if diff := cmp.Diff(want, out.String()); diff != "" {
-		t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var out bytes.Buffer
+			w := NewSQLInsertWriter(&out, tt.table)
+
+			err := w.WriteValues(tt.columnNames, tt.values)
+			if err != nil {
+				t.Fatalf("WriteValues() error = %v", err)
+			}
+
+			if diff := cmp.Diff(tt.want, out.String()); diff != "" {
+				t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 

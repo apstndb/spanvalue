@@ -15,10 +15,14 @@ import (
 )
 
 var (
-	ErrEmptyTableName  = errors.New("empty table name")
+	// ErrEmptyTableName reports that SQLInsertWriter.Table is empty.
+	ErrEmptyTableName = errors.New("empty table name")
+	// ErrEmptyColumnName reports that a SQL writer received an empty column name.
 	ErrEmptyColumnName = errors.New("empty column name")
-	errNilOutputWriter = errors.New("nil output writer")
-	errNilRow          = errors.New("nil row")
+	// ErrNilOutputWriter reports that a writer was constructed without an output.
+	ErrNilOutputWriter = errors.New("nil output writer")
+	// ErrNilRow reports that WriteRow was called with a nil row.
+	ErrNilRow = errors.New("nil row")
 )
 
 // Writer writes rows or column/value pairs to an output stream.
@@ -96,7 +100,7 @@ func (w *CSVWriter) csvWriter() (*csv.Writer, error) {
 		return w.writer, nil
 	}
 	if w.out == nil {
-		return nil, errNilOutputWriter
+		return nil, ErrNilOutputWriter
 	}
 	w.writer = csv.NewWriter(w.out)
 	return w.writer, nil
@@ -120,7 +124,7 @@ func NewJSONLWriter(out io.Writer) *JSONLWriter {
 
 func (w *JSONLWriter) WriteRow(row *spanner.Row) error {
 	if w.out == nil {
-		return errNilOutputWriter
+		return ErrNilOutputWriter
 	}
 	s, err := spanvalue.FormatRowJSONObject(w.formatter(), row, w.UnnamedFieldNamer)
 	if err != nil {
@@ -132,7 +136,7 @@ func (w *JSONLWriter) WriteRow(row *spanner.Row) error {
 
 func (w *JSONLWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
 	if w.out == nil {
-		return errNilOutputWriter
+		return ErrNilOutputWriter
 	}
 	s, err := spanvalue.FormatRowJSONObjectFromColumns(w.formatter(), columnNames, values, w.UnnamedFieldNamer)
 	if err != nil {
@@ -175,7 +179,7 @@ func (w *SQLInsertWriter) WriteRow(row *spanner.Row) error {
 
 func (w *SQLInsertWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
 	if w.out == nil {
-		return errNilOutputWriter
+		return ErrNilOutputWriter
 	}
 	if w.Table == "" {
 		return ErrEmptyTableName
@@ -211,7 +215,7 @@ func (w *SQLInsertWriter) formatter() *spanvalue.FormatConfig {
 // rowData extracts column names and GenericColumnValue cells from row.
 func rowData(row *spanner.Row) ([]string, []spanner.GenericColumnValue, error) {
 	if row == nil {
-		return nil, nil, errNilRow
+		return nil, nil, ErrNilRow
 	}
 	values := make([]spanner.GenericColumnValue, row.Size())
 	ptrs := make([]interface{}, len(values))
