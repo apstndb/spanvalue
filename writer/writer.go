@@ -208,6 +208,7 @@ func (w *SQLInsertWriter) formatter() *spanvalue.FormatConfig {
 	return spanvalue.LiteralFormatConfig()
 }
 
+// rowData extracts column names and GenericColumnValue cells from row.
 func rowData(row *spanner.Row) ([]string, []spanner.GenericColumnValue, error) {
 	if row == nil {
 		return nil, nil, errNilRow
@@ -223,6 +224,7 @@ func rowData(row *spanner.Row) ([]string, []spanner.GenericColumnValue, error) {
 	return row.ColumnNames(), values, nil
 }
 
+// quoteIdentifiers quotes GoogleSQL identifiers and rejects empty names.
 func quoteIdentifiers(names []string) ([]string, error) {
 	quoted := make([]string, len(names))
 	for i, name := range names {
@@ -234,6 +236,7 @@ func quoteIdentifiers(names []string) ([]string, error) {
 	return quoted, nil
 }
 
+// quoteIdentifier quotes a GoogleSQL identifier, escaping backticks by doubling them.
 func quoteIdentifier(name string) string {
 	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
 }
