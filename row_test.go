@@ -36,12 +36,80 @@ func TestColumnNames(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := ColumnNames(tt.fields, tt.namer)
+			got, err := ColumnNames(tt.fields, tt.namer)
+			if err != nil {
+				t.Fatalf("ColumnNames() error = %v", err)
+			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("ColumnNames() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
+}
+
+func TestColumnNames_Errors(t *testing.T) {
+	t.Parallel()
+
+	fields := typector.MustNameCodeSlicesToStructType([]string{""}, []sppb.TypeCode{sppb.TypeCode_INT64}).GetStructType().GetFields()
+
+	t.Run("empty name error", func(t *testing.T) {
+		_, err := ColumnNames(fields, func(int) string { return "" })
+		if err == nil {
+			t.Fatal("ColumnNames() error = nil, want non-nil for empty name")
+		}
+		want := "unnamed field namer returned empty string (field index 0, generated index 0)"
+		if got := err.Error(); got != want {
+			t.Errorf("ColumnNames() error = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("repeated name error", func(t *testing.T) {
+		fields2 := typector.MustNameCodeSlicesToStructType([]string{"", "A"}, []sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_INT64}).GetStructType().GetFields()
+		_, err := ColumnNames(fields2, func(int) string { return "A" })
+		if err == nil {
+			t.Fatal("ColumnNames() error = nil, want non-nil for repeated name")
+		}
+		want := `unnamed field namer returned repeated colliding name "A" (field index 0, generated index 1)`
+		if got := err.Error(); got != want {
+			t.Errorf("ColumnNames() error = %q, want %q", got, want)
+		}
+	})
+}
+
+func TestFormatRowJSONObjectFromColumns_Error(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty name", func(t *testing.T) {
+		t.Parallel()
+		columnNames := []string{""}
+		values := []spanner.GenericColumnValue{gcvctor.Int64Value(1)}
+		_, err := FormatRowJSONObjectFromColumns(JSONFormatConfig(), columnNames, values, func(i int) string {
+			return ""
+		})
+		if err == nil {
+			t.Fatal("expected error for empty name resolution, got nil")
+		}
+		want := "unnamed field namer returned empty string (field index 0, generated index 0)"
+		if got := err.Error(); got != want {
+			t.Errorf("error = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("duplicate name", func(t *testing.T) {
+		t.Parallel()
+		columnNames := []string{"dup", ""}
+		values := []spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.Int64Value(2)}
+		_, err := FormatRowJSONObjectFromColumns(JSONFormatConfig(), columnNames, values, func(i int) string {
+			return "dup"
+		})
+		if err == nil {
+			t.Fatal("expected error for duplicate name resolution, got nil")
+		}
+		want := "unnamed field namer returned repeated colliding name \"dup\" (field index 1, generated index 1)"
+		if got := err.Error(); got != want {
+			t.Errorf("error = %q, want %q", got, want)
+		}
+	})
 }
 
 func TestFormatRowColumns(t *testing.T) {

@@ -109,7 +109,7 @@ func TestNewJSONObjectStructFormatter_NilNamer(t *testing.T) {
 
 	formatter := NewJSONObjectStructFormatter(nil)
 	typ := typector.MustNameCodeSlicesToStructType([]string{"", ""}, []sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_INT64})
-	got := formatter(typ, false, []string{"1", "2"})
+	got := lo.Must(formatter(typ, false, []string{"1", "2"}))
 	want := `{"":1,"":2}`
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("mismatch (-want +got):\n%s", diff)
@@ -126,7 +126,7 @@ func TestNewJSONObjectStructFormatter_CustomNamer(t *testing.T) {
 		[]string{"", "name"},
 		[]*sppb.Type{typector.CodeToSimpleType(sppb.TypeCode_INT64), typector.CodeToSimpleType(sppb.TypeCode_STRING)},
 	)
-	got := formatter(typ, false, []string{"42", `"Alice"`})
+	got := lo.Must(formatter(typ, false, []string{"42", `"Alice"`}))
 	want := `{"col1":42,"name":"Alice"}`
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("mismatch (-want +got):\n%s", diff)
@@ -145,7 +145,7 @@ func TestNewJSONObjectStructFormatter_CollisionAvoidance(t *testing.T) {
 			typector.CodeToSimpleType(sppb.TypeCode_INT64),
 		},
 	)
-	got := formatter(typ, false, []string{"1", "2", "3"})
+	got := lo.Must(formatter(typ, false, []string{"1", "2", "3"}))
 	// _0 for first unnamed, _1 is taken by named field, so second unnamed gets _2
 	want := `{"_0":1,"_2":2,"_1":3}`
 	if diff := cmp.Diff(want, got); diff != "" {
@@ -170,7 +170,7 @@ func TestFormatCompactArray(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := FormatCompactArray(nil, false, tt.elems)
+			got := lo.Must(FormatCompactArray(nil, false, tt.elems))
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("FormatCompactArray mismatch (-want +got):\n%s", diff)
 			}
@@ -210,10 +210,83 @@ func TestFormatJSONObjectStruct(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := FormatJSONObjectStruct(tt.typ, false, tt.fields)
+			got := lo.Must(FormatJSONObjectStruct(tt.typ, false, tt.fields))
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("FormatJSONObjectStruct mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
+}
+
+func TestNewJSONObjectStructFormatter_Error(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty name", func(t *testing.T) {
+		t.Parallel()
+		formatter := NewJSONObjectStructFormatter(func(i int) string {
+			return ""
+		})
+		typ := typector.MustNameCodeSlicesToStructType([]string{""}, []sppb.TypeCode{sppb.TypeCode_INT64})
+		_, err := formatter(typ, false, []string{"1"})
+		if err == nil {
+			t.Fatal("expected error for empty name, got nil")
+		}
+		want := "unnamed field namer returned empty string (field index 0, generated index 0)"
+		if got := err.Error(); got != want {
+			t.Errorf("error = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("duplicate name", func(t *testing.T) {
+		t.Parallel()
+		formatter := NewJSONObjectStructFormatter(func(i int) string {
+			return "dup"
+		})
+		typ := typector.MustNameCodeSlicesToStructType([]string{"", ""}, []sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_INT64})
+		_, err := formatter(typ, false, []string{"1", "2"})
+		if err == nil {
+			t.Fatal("expected error for duplicate name, got nil")
+		}
+		want := "unnamed field namer returned repeated colliding name \"dup\" (field index 1, generated index 2)"
+		if got := err.Error(); got != want {
+			t.Errorf("error = %q, want %q", got, want)
+		}
+	})
+}
+
+func TestFormatRowJSONObject_Error(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty name", func(t *testing.T) {
+		t.Parallel()
+		row := lo.Must(spanner.NewRow([]string{""}, []interface{}{1}))
+		_, err := FormatRowJSONObject(JSONFormatConfig(), row, func(i int) string {
+			return ""
+		})
+		if err == nil {
+			t.Fatal("expected error for empty name resolution, got nil")
+		}
+		want := "unnamed field namer returned empty string (field index 0, generated index 0)"
+		if got := err.Error(); got != want {
+			t.Errorf("error = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("duplicate name", func(t *testing.T) {
+		t.Parallel()
+		// First column is named "dup", second is unnamed.
+		// Namer returns "dup" for index 0, but it's taken by first column.
+		// Namer returns "dup" again for index 1, which should trigger an error.
+		row := lo.Must(spanner.NewRow([]string{"dup", ""}, []interface{}{1, 2}))
+		_, err := FormatRowJSONObject(JSONFormatConfig(), row, func(i int) string {
+			return "dup"
+		})
+		if err == nil {
+			t.Fatal("expected error for duplicate name resolution, got nil")
+		}
+		want := "unnamed field namer returned repeated colliding name \"dup\" (field index 1, generated index 1)"
+		if got := err.Error(); got != want {
+			t.Errorf("error = %q, want %q", got, want)
+		}
+	})
 }

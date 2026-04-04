@@ -184,8 +184,8 @@ type FormatStruct struct {
 
 func (fc *FormatConfig) GetNullString() string { return fc.NullString }
 
-type FormatArrayFunc func(typ *sppb.Type, toplevel bool, elemStrings []string) string
-type FormatStructParenFunc func(typ *sppb.Type, toplevel bool, fieldStrings []string) string
+type FormatArrayFunc func(typ *sppb.Type, toplevel bool, elemStrings []string) (string, error)
+type FormatStructParenFunc func(typ *sppb.Type, toplevel bool, fieldStrings []string) (string, error)
 type FormatStructFieldFunc func(fc *FormatConfig, field *sppb.StructType_Field, value *structpb.Value) (string, error)
 type FormatNullableFunc = func(value NullableValue) (string, error)
 
@@ -216,7 +216,7 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 			return "", err
 		}
 
-		return fc.FormatArray(value.Type, toplevel, elemStrings), nil
+		return fc.FormatArray(valType, toplevel, elemStrings)
 	case sppb.TypeCode_STRUCT:
 		if IsNull(value) {
 			return fc.GetNullString(), nil
@@ -233,7 +233,7 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 			return "", err
 		}
 
-		return fc.FormatStruct.FormatStructParen(value.Type, toplevel, fieldStrings), nil
+		return fc.FormatStruct.FormatStructParen(valType, toplevel, fieldStrings)
 	default:
 		return fc.formatSimpleColumn(value)
 	}

@@ -30,8 +30,11 @@
 - Keep `sppb` as the alias for `cloud.google.com/go/spanner/apiv1/spannerpb`.
 - Preserve copied-test attribution comments in `literal_test.go` and `spanner_cli_compatible_test.go`.
 - Use `ErrFallthrough` from `FormatComplexFunc` plugins to defer to the built-in array/struct/scalar logic.
-- `IsNull` treats a `spanner.GenericColumnValue` as NULL when its `Value` field is nil or a protobuf `NullValue`; plugins should check it early when they need custom NULL handling.
-- `gcvctor.ArrayValue` and `gcvctor.StructValue` are strict: they do not coerce types, arrays must be homogeneous, and struct field names must line up with values.
+- `IsNull` treats a `spanner.GenericColumnValue` as NULL when its `Value` field is nil or a protobuf `NullValue`; `gcvctor.TypedNull` returns a scalar `NullValue` for all types including `STRUCT` and `ARRAY`. Plugins should check it early when they need custom NULL handling.
+- `gcvctor.ArrayValue` and `gcvctor.StructValue` are strict: they do not coerce types, arrays must be homogeneous, and struct field names must line up with values. They return sentinel errors (`ErrTypeMismatch`, `ErrMismatchedCounts`) on failure.
+- `FormatColumn` and formatting functions return sentinel errors (`ErrUnknownType`, `ErrMismatchedFields`) on failure.
 - `gcvctor.Float32Value` and `Float64Value` encode `NaN` and `±Inf` as string values to match Spanner's wire format.
 - Tests commonly use `t.Parallel()`, `cmp.Diff`, and `protocmp.Transform()` when comparing protobuf-backed values.
-- For JSON row output, unnamed fields are handled through `UnnamedFieldNamer`/`IndexedUnnamedFieldNamer`; `nil` means keep empty JSON keys.
+- For JSON row output, unnamed fields are handled through `UnnamedFieldNamer`/`IndexedUnnamedFieldNamer`; these must return non-empty unique names, otherwise an error is returned (replacing previous `panic` behavior). `nil` means keep empty JSON keys.
+- Prefer single quotes for shell commands. In double quotes, escape backticks (e.g., `` ` ``).
+- Use `merge` instead of `rebase & force push` for branch management; pull requests are merged using `squash and merge`.
