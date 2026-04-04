@@ -385,6 +385,18 @@ func TestArrayTypeTypedNull(t *testing.T) {
 	}
 }
 
+func TestArrayValue_zeroArgsIsEmptyInt64Array(t *testing.T) {
+	t.Parallel()
+	got, err := gcvctor.ArrayValue()
+	if err != nil {
+		t.Fatalf("ArrayValue: %v", err)
+	}
+	want := gcvctor.ElemTypeCodeToEmptyArray(sppb.TypeCode_INT64)
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Errorf("mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestArrayValueWithType(t *testing.T) {
 	t.Parallel()
 	int64Elem := typector.CodeToSimpleType(sppb.TypeCode_INT64)
