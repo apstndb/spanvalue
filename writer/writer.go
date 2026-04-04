@@ -305,9 +305,10 @@ func metadataColumnNames(metadata *sppb.ResultSetMetadata) []string {
 	if metadata == nil || metadata.GetRowType() == nil {
 		return nil
 	}
-	names, err := spanvalue.ColumnNames(metadata.GetRowType().GetFields(), nil)
-	if err != nil {
-		return nil
+	fields := metadata.GetRowType().GetFields()
+	names := make([]string, len(fields))
+	for i, field := range fields {
+		names[i] = field.GetName()
 	}
 	return names
 }
