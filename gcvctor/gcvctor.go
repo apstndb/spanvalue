@@ -142,7 +142,7 @@ func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, e
 	}
 
 	typ := vs[0].Type
-	var values []*structpb.Value
+	values := make([]*structpb.Value, 0, len(vs))
 	for i, v := range vs {
 		if !gocmp.Equal(typ, v.Type, protocmp.Transform()) {
 			return spanner.GenericColumnValue{}, fmt.Errorf("%w: %v is not %v", ErrTypeMismatch, spantype.FormatTypeMoreVerbose(vs[i].Type), spantype.FormatTypeMoreVerbose(typ))
@@ -166,7 +166,7 @@ func ArrayValueWithType(elemType *sppb.Type, elems ...spanner.GenericColumnValue
 	if len(elems) == 0 {
 		return ElemTypeToEmptyArray(elemType), nil
 	}
-	var values []*structpb.Value
+	values := make([]*structpb.Value, 0, len(elems))
 	for i, v := range elems {
 		if !gocmp.Equal(elemType, v.Type, protocmp.Transform()) {
 			return spanner.GenericColumnValue{}, fmt.Errorf("%w: element %d: %v is not %v", ErrTypeMismatch, i, spantype.FormatTypeMoreVerbose(v.Type), spantype.FormatTypeMoreVerbose(elemType))
