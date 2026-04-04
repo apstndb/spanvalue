@@ -345,7 +345,7 @@ func TestNullRawValueFromType_ARRAY(t *testing.T) {
 	}
 }
 
-func TestTypedNull_STRUCT(t *testing.T) {
+func TestNullOf_STRUCT(t *testing.T) {
 	structType := typector.NameCodeToStructType("n", sppb.TypeCode_INT64)
 	got := gcvctor.NullOf(structType)
 	want := spanner.GenericColumnValue{Type: structType, Value: structpb.NewNullValue()}
@@ -355,7 +355,7 @@ func TestTypedNull_STRUCT(t *testing.T) {
 	}
 }
 
-func TestDeprecated_ArrayCodeTypedNull_matchesTypedNull(t *testing.T) {
+func TestDeprecated_ArrayCodeTypedNull_matchesNullArrayFromCode(t *testing.T) {
 	t.Parallel()
 	// Deprecated API: must stay equivalent to NullArrayFromCode until removed.
 	got := gcvctor.ArrayCodeTypedNull(sppb.TypeCode_INT64)
@@ -386,7 +386,7 @@ func TestNullRawValueFromType_STRUCT(t *testing.T) {
 	}
 }
 
-func TestDeprecated_ArrayTypeTypedNull_matchesTypedNull(t *testing.T) {
+func TestDeprecated_ArrayTypeTypedNull_matchesNullArrayOf(t *testing.T) {
 	t.Parallel()
 	// Deprecated API: must stay equivalent to NullArrayOf until removed.
 	structType := typector.NameCodeToStructType("n", sppb.TypeCode_INT64)

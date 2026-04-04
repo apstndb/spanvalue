@@ -40,3 +40,4 @@
 - For JSON row output, unnamed fields are handled through `UnnamedFieldNamer`/`IndexedUnnamedFieldNamer`; these must return non-empty unique names, otherwise an error is returned (replacing previous `panic` behavior). `nil` means keep empty JSON keys.
 - Prefer single quotes for shell commands. In double quotes, escape backticks (e.g., `` ` ``).
 - Use `merge` instead of `rebase & force push` for branch management; pull requests are merged using `squash and merge`.
+- Write GitHub-facing text in **English** only: issue and PR titles and bodies, review threads, and inline review replies. Keep Japanese (or other languages) for local notes if needed, but not on github.com.
