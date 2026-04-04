@@ -1,6 +1,7 @@
 // Package spanvalue formats Cloud Spanner data from the Go client
-// (cloud.google.com/go/spanner): [spanner.GenericColumnValue] and [*spanner.Row],
-// into strings for SQL literals, JSON, Spanner CLI–compatible text, and related styles.
+// (cloud.google.com/go/spanner): [spanner.GenericColumnValue] and [spanner.Row] values
+// passed as `*spanner.Row`, into strings for SQL literals, JSON, Spanner CLI–compatible text,
+// and related styles.
 //
 // Configure output with [FormatConfig]. Use the constructors [LiteralFormatConfig],
 // [SimpleFormatConfig], [SpannerCLICompatibleFormatConfig], and [JSONFormatConfig] to pick

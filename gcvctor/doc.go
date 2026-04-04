@@ -5,9 +5,10 @@
 // ARRAY<INT64> when called with no arguments). [ArrayValueWithType] takes the element type
 // explicitly. [StructValue] pairs field names with values; counts must match.
 //
-// [TypedNull] and [SimpleTypedNull] always set the top-level protobuf value to a scalar
-// null ([structpb.NullValue]) for every Spanner type, including STRUCT and ARRAY—they do
-// not build a non-null STRUCT whose fields are all null; use [StructValue] with
+// [TypedNull] returns a typed NULL for any [sppb.Type], including STRUCT and ARRAY; the
+// stored Value is always a scalar protobuf null. [SimpleTypedNull] does the same for simple
+// scalar type codes only—it cannot express STRUCT field layouts or ARRAY element types.
+// Neither encodes a non-null STRUCT whose fields are all null; use [StructValue] with
 // per-field nulls when you need that shape.
 //
 // Formatting these values as strings is provided by the sibling package
