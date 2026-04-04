@@ -224,7 +224,8 @@ func TypedNull(typ *sppb.Type) spanner.GenericColumnValue {
 
 // ArrayTypeTypedNull constructs a NULL ARRAY with the given element type.
 //
-// Deprecated: Use [github.com/apstndb/spanvalue/gcvctor.TypedNull] with [github.com/apstndb/spantype/typector.ElemTypeToArrayType] instead:
+// Deprecated: Use [github.com/apstndb/spanvalue/gcvctor.TypedNull] with
+// [github.com/apstndb/spantype/typector.ElemTypeToArrayType] instead:
 //
 //	TypedNull(typector.ElemTypeToArrayType(elemType))
 func ArrayTypeTypedNull(elemType *sppb.Type) spanner.GenericColumnValue {
@@ -233,7 +234,8 @@ func ArrayTypeTypedNull(elemType *sppb.Type) spanner.GenericColumnValue {
 
 // ArrayCodeTypedNull constructs a NULL ARRAY with a simple element type code.
 //
-// Deprecated: Use [github.com/apstndb/spanvalue/gcvctor.TypedNull] with [github.com/apstndb/spantype/typector.ElemCodeToArrayType] instead:
+// Deprecated: Use [github.com/apstndb/spanvalue/gcvctor.TypedNull] with
+// [github.com/apstndb/spantype/typector.ElemCodeToArrayType] instead:
 //
 //	TypedNull(typector.ElemCodeToArrayType(elemCode))
 func ArrayCodeTypedNull(elemCode sppb.TypeCode) spanner.GenericColumnValue {
