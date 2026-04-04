@@ -356,6 +356,7 @@ func TestTypedNull_STRUCT(t *testing.T) {
 }
 
 func TestDeprecated_ArrayCodeTypedNull_matchesTypedNull(t *testing.T) {
+	t.Parallel()
 	// Deprecated API: must stay equivalent to TypedNull(typector.ElemCodeToArrayType(...)) until removed.
 	got := gcvctor.ArrayCodeTypedNull(sppb.TypeCode_INT64)
 	want := spanner.GenericColumnValue{
@@ -386,6 +387,7 @@ func TestNullRawValueFromType_STRUCT(t *testing.T) {
 }
 
 func TestDeprecated_ArrayTypeTypedNull_matchesTypedNull(t *testing.T) {
+	t.Parallel()
 	// Deprecated API: must stay equivalent to TypedNull(typector.ElemTypeToArrayType(...)) until removed.
 	structType := typector.NameCodeToStructType("n", sppb.TypeCode_INT64)
 	got := gcvctor.ArrayTypeTypedNull(structType)
@@ -400,6 +402,7 @@ func TestDeprecated_ArrayTypeTypedNull_matchesTypedNull(t *testing.T) {
 }
 
 func TestArrayValue_zeroLengthIsEmptyInt64Array(t *testing.T) {
+	t.Parallel()
 	want := spanner.GenericColumnValue{
 		Type:  typector.ElemCodeToArrayType(sppb.TypeCode_INT64),
 		Value: structpb.NewListValue(&structpb.ListValue{}),
