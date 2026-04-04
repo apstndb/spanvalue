@@ -1,6 +1,6 @@
 // Package spanvalue formats Cloud Spanner data from the Go client
-// (cloud.google.com/go/spanner): [spanner.GenericColumnValue] values for individual columns
-// and `*spanner.Row` values for full rows ([spanner.Row]), into strings for SQL literals, JSON,
+// (cloud.google.com/go/spanner): [cloud.google.com/go/spanner.GenericColumnValue] values for individual columns
+// and `*spanner.Row` values for full rows ([cloud.google.com/go/spanner.Row]), into strings for SQL literals, JSON,
 // Spanner CLI–compatible text, and related styles.
 //
 // Configure output with [FormatConfig]. Use the constructors [LiteralFormatConfig],
@@ -10,6 +10,6 @@
 // [FormatRowLiteral], [FormatColumnLiteral], [FormatRowJSONObject], and
 // [FormatRowSpannerCLICompatible].
 //
-// To build [spanner.GenericColumnValue] values from Go types, see the sibling package
+// To build [cloud.google.com/go/spanner.GenericColumnValue] values from Go types, see the sibling package
 // [github.com/apstndb/spanvalue/gcvctor].
 package spanvalue
