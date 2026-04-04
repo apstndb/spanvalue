@@ -391,37 +391,28 @@ func TestArrayTypeTypedNull(t *testing.T) {
 	}
 }
 
-func TestArrayValue_noArgsIsTypedNullArrayInt64(t *testing.T) {
+func TestArrayValue_zeroLengthIsEmptyInt64Array(t *testing.T) {
 	t.Parallel()
-	got, err := gcvctor.ArrayValue()
-	if err != nil {
-		t.Fatalf("ArrayValue: %v", err)
-	}
-	want := gcvctor.ArrayCodeTypedNull(sppb.TypeCode_INT64)
-	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
-		t.Errorf("mismatch (-want +got):\n%s", diff)
-	}
-
-	var nilSlice []spanner.GenericColumnValue
-	got2, err := gcvctor.ArrayValue(nilSlice...)
-	if err != nil {
-		t.Fatalf("ArrayValue(nil...): %v", err)
-	}
-	if diff := cmp.Diff(want, got2, protocmp.Transform()); diff != "" {
-		t.Errorf("ArrayValue(nil...): mismatch (-want +got):\n%s", diff)
-	}
-}
-
-func TestArrayValue_emptyNonNilSliceIsEmptyInt64Array(t *testing.T) {
-	t.Parallel()
-	empty := []spanner.GenericColumnValue{}
-	got, err := gcvctor.ArrayValue(empty...)
-	if err != nil {
-		t.Fatalf("ArrayValue: %v", err)
-	}
 	want := gcvctor.ElemTypeCodeToEmptyArray(sppb.TypeCode_INT64)
-	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
-		t.Errorf("mismatch (-want +got):\n%s", diff)
+
+	for _, name := range []string{"no args", "nil slice", "empty slice"} {
+		var got spanner.GenericColumnValue
+		var err error
+		switch name {
+		case "no args":
+			got, err = gcvctor.ArrayValue()
+		case "nil slice":
+			var nilSlice []spanner.GenericColumnValue
+			got, err = gcvctor.ArrayValue(nilSlice...)
+		case "empty slice":
+			got, err = gcvctor.ArrayValue([]spanner.GenericColumnValue{}...)
+		}
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+			t.Errorf("%s: mismatch (-want +got):\n%s", name, diff)
+		}
 	}
 }
 
@@ -440,28 +431,22 @@ func TestArrayValueWithType(t *testing.T) {
 		errIs     error
 	}{
 		{
-			desc:     "nil elems: typed NULL ARRAY<INT64>",
+			desc:     "empty INT64 (nil elems)",
 			elemType: int64Elem,
 			elems:    nil,
-			want:     gcvctor.ArrayTypeTypedNull(int64Elem),
-		},
-		{
-			desc:     "nil elems: typed NULL ARRAY<STRUCT<n INT64>>",
-			elemType: structElem,
-			elems:    nil,
-			want:     gcvctor.ArrayTypeTypedNull(structElem),
-		},
-		{
-			desc:     "non-nil empty INT64 slice",
-			elemType: int64Elem,
-			elems:    []spanner.GenericColumnValue{},
 			want:     gcvctor.ElemTypeToEmptyArray(int64Elem),
 		},
 		{
-			desc:     "non-nil empty STRUCT element slice",
+			desc:     "empty ARRAY<STRUCT<n INT64>> (nil elems)",
 			elemType: structElem,
-			elems:    []spanner.GenericColumnValue{},
+			elems:    nil,
 			want:     gcvctor.ElemTypeToEmptyArray(structElem),
+		},
+		{
+			desc:     "empty INT64 (non-nil empty slice)",
+			elemType: int64Elem,
+			elems:    []spanner.GenericColumnValue{},
+			want:     gcvctor.ElemTypeToEmptyArray(int64Elem),
 		},
 		{
 			desc:     "non-empty INT64",

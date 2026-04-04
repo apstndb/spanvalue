@@ -135,39 +135,29 @@ func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 
 // ArrayValue constructs ARRAY GenericColumnValue.
 //
-// If vs is nil—either [ArrayValue] with no arguments or [ArrayValue] with a nil slice argument
-// (ArrayValue(nil...))—the result is a typed SQL NULL of type ARRAY<INT64> (see [ArrayCodeTypedNull]);
-// the [cloud.google.com/go/spanner.GenericColumnValue.Value] is a scalar protobuf null at the top level.
+// With no elements (including a nil or empty variadic slice), it returns an empty ARRAY<INT64>
+// (SQL length zero, not SQL NULL). For a typed NULL ARRAY<INT64>, use [ArrayCodeTypedNull] or
+// [ArrayTypeTypedNull] with the element type; see also [TypedNull].
 //
-// If vs is a non-nil empty slice (ArrayValue([]GenericColumnValue{}...)), the result is a non-null
-// empty ARRAY<INT64> (zero elements). For other element types or explicit typing policy, use
-// [ArrayValueWithType] or [ElemTypeToEmptyArray].
+// For other element types or explicit typing policy, use [ArrayValueWithType] or [ElemTypeToEmptyArray].
 //
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
 func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
-	if vs == nil {
-		return ArrayCodeTypedNull(sppb.TypeCode_INT64), nil
-	}
 	if len(vs) == 0 {
-		return ArrayValueWithType(typector.CodeToSimpleType(sppb.TypeCode_INT64), vs...)
+		return ElemTypeCodeToEmptyArray(sppb.TypeCode_INT64), nil
 	}
 	return ArrayValueWithType(vs[0].Type, vs...)
 }
 
 // ArrayValueWithType constructs ARRAY GenericColumnValue using elemType as the element type
-// instead of inferring it from the first element.
+// instead of inferring it from the first element. When elems is empty (nil or length zero), it
+// returns an empty ARRAY<elemType> (SQL length zero, not SQL NULL). For a typed NULL ARRAY<elemType>,
+// use [ArrayTypeTypedNull] or [TypedNull]; see also [ArrayCodeTypedNull] for simple element codes.
 //
-// If elems is nil—either only elemType was passed or ArrayValueWithType(elemType, nil...) was
-// used—the result is a typed SQL NULL ARRAY<elemType> (see [ArrayTypeTypedNull]).
-//
-// If elems is a non-nil empty slice, the result is a non-null empty ARRAY<elemType>. Each
-// non-empty element's Type must match elemType (no coercion).
+// Each element's Type must match elemType (no coercion).
 func ArrayValueWithType(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if elemType == nil {
 		return spanner.GenericColumnValue{}, fmt.Errorf("nil element type")
-	}
-	if elems == nil {
-		return ArrayTypeTypedNull(elemType), nil
 	}
 	if len(elems) == 0 {
 		return ElemTypeToEmptyArray(elemType), nil
