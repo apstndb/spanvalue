@@ -440,15 +440,27 @@ func TestArrayValueWithType(t *testing.T) {
 		errIs     error
 	}{
 		{
-			desc:     "empty INT64 matches ElemTypeToEmptyArray",
+			desc:     "nil elems: typed NULL ARRAY<INT64>",
 			elemType: int64Elem,
 			elems:    nil,
+			want:     gcvctor.ArrayTypeTypedNull(int64Elem),
+		},
+		{
+			desc:     "nil elems: typed NULL ARRAY<STRUCT<n INT64>>",
+			elemType: structElem,
+			elems:    nil,
+			want:     gcvctor.ArrayTypeTypedNull(structElem),
+		},
+		{
+			desc:     "non-nil empty INT64 slice",
+			elemType: int64Elem,
+			elems:    []spanner.GenericColumnValue{},
 			want:     gcvctor.ElemTypeToEmptyArray(int64Elem),
 		},
 		{
-			desc:     "empty ARRAY<STRUCT<n INT64>>",
+			desc:     "non-nil empty STRUCT element slice",
 			elemType: structElem,
-			elems:    nil,
+			elems:    []spanner.GenericColumnValue{},
 			want:     gcvctor.ElemTypeToEmptyArray(structElem),
 		},
 		{

@@ -4,7 +4,9 @@
 // [ArrayValue] infers the element type from the first element when arguments are non-empty.
 // With no arguments, or with ArrayValue(nil...), it returns a typed NULL ARRAY<INT64> ([ArrayCodeTypedNull]).
 // With a non-nil empty slice (ArrayValue([]GenericColumnValue{}...)), it returns a non-null empty ARRAY<INT64>.
-// [ArrayValueWithType] takes the element type explicitly. [StructValue] pairs field names with values; counts must match.
+// [ArrayValueWithType] takes the element type explicitly and follows the same variadic rule: nil elems
+// yields a typed NULL ARRAY<elemType> ([ArrayTypeTypedNull]); a non-nil empty slice yields an empty
+// non-null array. [StructValue] pairs field names with values; counts must match.
 //
 // [TypedNull] returns a typed NULL for any [cloud.google.com/go/spanner/apiv1/spannerpb.Type], including STRUCT and ARRAY; the
 // stored Value is always a scalar protobuf null. [SimpleTypedNull] does the same for simple

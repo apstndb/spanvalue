@@ -149,17 +149,25 @@ func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, e
 		return ArrayCodeTypedNull(sppb.TypeCode_INT64), nil
 	}
 	if len(vs) == 0 {
-		return ElemTypeCodeToEmptyArray(sppb.TypeCode_INT64), nil
+		return ArrayValueWithType(typector.CodeToSimpleType(sppb.TypeCode_INT64), vs...)
 	}
 	return ArrayValueWithType(vs[0].Type, vs...)
 }
 
 // ArrayValueWithType constructs ARRAY GenericColumnValue using elemType as the element type
-// instead of inferring it from the first element. When elems is empty, it returns an empty
-// ARRAY<elemType>. Each element's Type must match elemType (no coercion).
+// instead of inferring it from the first element.
+//
+// If elems is nil—either only elemType was passed or ArrayValueWithType(elemType, nil...) was
+// used—the result is a typed SQL NULL ARRAY<elemType> (see [ArrayTypeTypedNull]).
+//
+// If elems is a non-nil empty slice, the result is a non-null empty ARRAY<elemType>. Each
+// non-empty element's Type must match elemType (no coercion).
 func ArrayValueWithType(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if elemType == nil {
 		return spanner.GenericColumnValue{}, fmt.Errorf("nil element type")
+	}
+	if elems == nil {
+		return ArrayTypeTypedNull(elemType), nil
 	}
 	if len(elems) == 0 {
 		return ElemTypeToEmptyArray(elemType), nil
