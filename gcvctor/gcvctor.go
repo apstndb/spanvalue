@@ -139,20 +139,7 @@ func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, e
 	if len(vs) == 0 {
 		return SimpleTypedNull(sppb.TypeCode_INT64), nil
 	}
-
-	typ := vs[0].Type
-	values := make([]*structpb.Value, len(vs))
-	for i, v := range vs {
-		if !proto.Equal(typ, v.Type) {
-			return spanner.GenericColumnValue{}, fmt.Errorf("%w: element %d: %v is not %v", ErrTypeMismatch, i, spantype.FormatTypeMoreVerbose(v.Type), spantype.FormatTypeMoreVerbose(typ))
-		}
-		values[i] = v.Value
-	}
-
-	return spanner.GenericColumnValue{
-		Type:  typector.ElemTypeToArrayType(typ),
-		Value: structpb.NewListValue(&structpb.ListValue{Values: values}),
-	}, nil
+	return ArrayValueWithType(vs[0].Type, vs...)
 }
 
 // ArrayValueWithType constructs ARRAY GenericColumnValue using elemType as the element type
