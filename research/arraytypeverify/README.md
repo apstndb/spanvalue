@@ -33,10 +33,10 @@ go test -v -run TestAgainstReal ./...
 
 For each case, the test runs:
 
-1. `SELECT @p AS p` with the bound `GenericColumnValue`.
-2. `AnalyzeQuery` with the same statement (plan / validation path).
+1. **`ReadOnlyTransaction.Query`** — `ExecuteSql` in **NORMAL** mode (first row of `SELECT @p AS p` with the bound `GenericColumnValue`).
+2. **`ReadOnlyTransaction.QueryWithOptions`** with **`ExecuteSqlRequest.QueryMode` = `PLAN`** (same SQL and params). The iterator is drained; then **`RowIterator.Metadata`** (`[google.spanner.v1.ResultSetMetadata]`) is logged as JSON. In PLAN mode this includes **`row_type`**, **`undeclared_parameters`** (when populated), and **`transaction`**. When the backend attaches a plan to the stream, **`RowIterator.QueryPlan`** may be non-nil.
 
-On the **emulator**, `AnalyzeQuery` may return **Internal** / `query plan unavailable` even when `Query` succeeds (see `RESEARCH.md`). **Real Spanner** returned OK for both paths on well-formed ARRAYs in our runs.
+Prefer this over **`AnalyzeQuery`**: it uses the same PLAN RPC path but exposes **full `ResultSetMetadata`**, which is what documents parameter typing for undeclared names.
 
 Cases include:
 
@@ -46,4 +46,4 @@ Cases include:
 
 ## Recording results
 
-After running both backends, paste concise outcomes into `RESEARCH.md` (error strings or `OK`) and use that to update package docs (#26) and the issue #29 write-up.
+After running both backends, paste concise outcomes into `RESEARCH.md` and use that to update package docs (#26) and the issue #29 write-up.
