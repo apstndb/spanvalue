@@ -140,7 +140,7 @@ type JSONLWriter struct {
 	UnnamedFieldNamer spanvalue.UnnamedFieldNamer
 
 	columnNames []string
-	out io.Writer
+	out         io.Writer
 }
 
 func NewJSONLWriter(out io.Writer, metadata ...*sppb.ResultSetMetadata) *JSONLWriter {
@@ -204,7 +204,7 @@ type SQLInsertWriter struct {
 	Formatter *spanvalue.FormatConfig
 
 	columnNames []string
-	out io.Writer
+	out         io.Writer
 }
 
 func NewSQLInsertWriter(out io.Writer, table string, metadata ...*sppb.ResultSetMetadata) *SQLInsertWriter {
