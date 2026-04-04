@@ -3,6 +3,7 @@ package gcvctor
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -23,6 +24,8 @@ import (
 var (
 	ErrTypeMismatch     = fmt.Errorf("type mismatch")
 	ErrMismatchedCounts = fmt.Errorf("mismatched name/value count")
+	// ErrNilElementType is returned by [ArrayValueWithType] when elemType is nil.
+	ErrNilElementType = errors.New("gcvctor: nil array element type")
 )
 
 func BoolValue(v bool) spanner.GenericColumnValue {
@@ -156,10 +159,10 @@ func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, e
 // returns an empty ARRAY<elemType> (SQL length zero, not SQL NULL). For a typed NULL ARRAY<elemType>,
 // use [TypedNull] with [github.com/apstndb/spantype/typector.ElemTypeToArrayType] or [github.com/apstndb/spantype/typector.ElemCodeToArrayType].
 //
-// Each element's Type must match elemType (no coercion).
+// Each element's Type must match elemType (no coercion). A nil elemType returns [ErrNilElementType].
 func ArrayValueWithType(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if elemType == nil {
-		return spanner.GenericColumnValue{}, fmt.Errorf("nil element type")
+		return spanner.GenericColumnValue{}, fmt.Errorf("%w", ErrNilElementType)
 	}
 	if len(elems) == 0 {
 		return ElemTypeToEmptyArray(elemType), nil

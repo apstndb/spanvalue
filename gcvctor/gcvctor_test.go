@@ -506,6 +506,7 @@ func TestArrayValueWithType(t *testing.T) {
 			elemType:  nil,
 			elems:     []spanner.GenericColumnValue{gcvctor.Int64Value(1)},
 			expectErr: true,
+			errIs:     gcvctor.ErrNilElementType,
 		},
 		{
 			desc:      "element type mismatch",
