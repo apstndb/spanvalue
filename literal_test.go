@@ -288,12 +288,12 @@ func TestDecodeColumnLiteral(t *testing.T) {
 		},
 		{
 			desc:  "null proto",
-			value: gcvctor.TypedNull(typector.FQNToProtoType("package.ProtoType")),
+			value: gcvctor.NullOf(typector.FQNToProtoType("package.ProtoType")),
 			want:  "NULL",
 		},
 		{
 			desc:  "null enum",
-			value: gcvctor.TypedNull(typector.FQNToEnumType("package.EnumType")),
+			value: gcvctor.NullOf(typector.FQNToEnumType("package.EnumType")),
 			want:  "NULL",
 		},
 		// array non-nullable
@@ -389,7 +389,7 @@ func TestDecodeColumnLiteral(t *testing.T) {
 			want:  "NULL",
 		},
 		{
-			desc:  "nul array float64",
+			desc:  "null array float64",
 			value: []float64(nil),
 			want:  "NULL",
 		},
@@ -435,12 +435,12 @@ func TestDecodeColumnLiteral(t *testing.T) {
 		},
 		{
 			desc:  "null array proto",
-			value: gcvctor.TypedNull(typector.FQNToProtoType("package.ProtoType")),
+			value: gcvctor.NullArrayOf(typector.FQNToProtoType("package.ProtoType")),
 			want:  "NULL",
 		},
 		{
 			desc:  "null array enum",
-			value: gcvctor.TypedNull(typector.FQNToEnumType("package.EnumType")),
+			value: gcvctor.NullArrayOf(typector.FQNToEnumType("package.EnumType")),
 			want:  "NULL",
 		},
 	} {
