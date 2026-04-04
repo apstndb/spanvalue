@@ -32,7 +32,7 @@
 - Use `ErrFallthrough` from `FormatComplexFunc` plugins to defer to the built-in array/struct/scalar logic.
 - `IsNull` treats a `spanner.GenericColumnValue` as NULL when its `Value` field is nil or a protobuf `NullValue`; `gcvctor.TypedNull` returns a scalar `NullValue` for all types including `STRUCT` and `ARRAY`. Plugins should check it early when they need custom NULL handling.
 - `gcvctor.ArrayValue` and `gcvctor.StructValue` are strict: they do not coerce types, arrays must be homogeneous, and struct field names must line up with values. They return sentinel errors (`ErrTypeMismatch`, `ErrMismatchedCounts`) on failure.
-- Empty variadic `ArrayValue` / `ArrayValueWithType` builds an empty SQL array (length 0), not NULL; use `TypedNull` with `typector.ElemTypeToArrayType` or `typector.ElemCodeToArrayType` for NULL ARRAYs.
+- Empty variadic `ArrayValue` / `ArrayValueWithType` builds an empty SQL array (length 0), not NULL; use `SimpleTypedNullArray` for NULL ARRAYs with a simple scalar element code, or `TypedNull` with `typector.ElemTypeToArrayType` / `ElemCodeToArrayType` for other element shapes.
 - `FormatColumn` and formatting functions return sentinel errors (`ErrUnknownType`, `ErrMismatchedFields`) on failure.
 - `gcvctor.Float32Value` and `Float64Value` encode `NaN` and `±Inf` as string values to match Spanner's wire format.
 - Tests commonly use `t.Parallel()`, `cmp.Diff`, and `protocmp.Transform()` when comparing protobuf-backed values.

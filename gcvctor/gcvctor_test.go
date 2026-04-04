@@ -355,9 +355,21 @@ func TestTypedNull_STRUCT(t *testing.T) {
 	}
 }
 
+func TestSimpleTypedNullArray_matchesTypedNull(t *testing.T) {
+	t.Parallel()
+	got := gcvctor.SimpleTypedNullArray(sppb.TypeCode_INT64)
+	want := spanner.GenericColumnValue{
+		Type:  typector.ElemCodeToArrayType(sppb.TypeCode_INT64),
+		Value: structpb.NewNullValue(),
+	}
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Errorf("diff (-want, +got) = %v", diff)
+	}
+}
+
 func TestDeprecated_ArrayCodeTypedNull_matchesTypedNull(t *testing.T) {
 	t.Parallel()
-	// Deprecated API: must stay equivalent to TypedNull(typector.ElemCodeToArrayType(...)) until removed.
+	// Deprecated API: must stay equivalent to SimpleTypedNullArray / TypedNull(typector.ElemCodeToArrayType(...)) until removed.
 	got := gcvctor.ArrayCodeTypedNull(sppb.TypeCode_INT64)
 	want := spanner.GenericColumnValue{
 		Type:  typector.ElemCodeToArrayType(sppb.TypeCode_INT64),
