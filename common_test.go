@@ -16,7 +16,7 @@ func TestFormatColumnComplexPlugins(t *testing.T) {
 	t.Parallel()
 
 	arrayValue := lo.Must(gcvctor.ArrayValue(gcvctor.Int64Value(1), gcvctor.Int64Value(2)))
-	structValue := lo.Must(gcvctor.StructValue(
+	structValue := lo.Must(gcvctor.StructValueOf(
 		[]string{"name"},
 		[]spanner.GenericColumnValue{gcvctor.StringValue("Alice")},
 	))
