@@ -35,6 +35,22 @@ In sample runs, the **emulator** populated `undeclared_parameters.fields` with `
 - **`Type` with `code = ARRAY` and no `array_element_type`**: rejected with **`InvalidArgument`** before meaningful metadata is returned (`Metadata` nil on failure).
 - Use **`QueryWithOptions` + PLAN** and **`RowIterator.Metadata`** (not only `AnalyzeQuery`) when documenting parameter / result typing from the plan path.
 
+## Raw API: empty `params` list with **no** `param_types`
+
+Using [`ExecuteSqlRequest`](https://pkg.go.dev/cloud.google.com/go/spanner/apiv1/spannerpb#ExecuteSqlRequest) directly (`raw_grpc_test.go`): `sql = SELECT @p AS p`, `params.p` = empty `list_value`, **`param_types` omitted**, `query_mode = PLAN`.
+
+| Backend | Result |
+|---------|--------|
+| Emulator | `InvalidArgument`: e.g. `Could not parse list_value { } as INT64` |
+| Real | `InvalidArgument`: e.g. `Invalid value for bind parameter p: Expected INT64.` |
+
+So an **empty list** in `params` does **not** get inferred as `ARRAY<INT64>` without either:
+
+- explicit **`param_types`**, or  
+- a value shape that disambiguates (the high-level Go client sends **`Type`** on [`GenericColumnValue`](https://pkg.go.dev/cloud.google.com/go/spanner#GenericColumnValue), not JSON-only inference).
+
+**Control:** same empty `list_value` with `param_types["p"] = ARRAY<INT64>` succeeds; metadata matches the typed `gcvctor` path.
+
 ## Follow-ups
 
 - Keep building ARRAY types via `typector` / `gcvctor` helpers so `array_element_type` is always set.

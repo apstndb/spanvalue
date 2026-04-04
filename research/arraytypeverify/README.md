@@ -44,6 +44,21 @@ Cases include:
 - `gcvctor.ArrayValueWithType(INT64)` with no elements.
 - A deliberately malformed `Type`: `code = ARRAY` and no `array_element_type`, with an empty list value.
 
+## Raw gRPC (`ExecuteSqlRequest` without going through `cloud.google.com/go/spanner` Statement)
+
+[`ExecuteSqlRequest`](https://pkg.go.dev/cloud.google.com/go/spanner/apiv1/spannerpb#ExecuteSqlRequest) has optional **`param_types`**. The field comment states that Spanner cannot always infer the SQL type from JSON-like **`params`** alone (e.g. `BYTES` vs `STRING`), so callers may supply `param_types` for some or all parameters.
+
+Tests in **`raw_grpc_test.go`** use the gapic client ([`spanner.NewClient`](https://pkg.go.dev/cloud.google.com/go/spanner/apiv1#NewClient) from `cloud.google.com/go/spanner/apiv1`) and call **`ExecuteStreamingSql`** with:
+
+- **`params`**: `@p` = empty protobuf `list_value` (`structpb` empty list).
+- **`param_types`**: omitted vs explicitly `ARRAY<INT64>`.
+
+This checks whether an **empty list with no `param_types`** is enough for the server to treat `@p` as `ARRAY<INT64>` (it is not, in our runs — see `RESEARCH.md`).
+
+```bash
+go test -v -run TestRawGRPC ./...
+```
+
 ## Recording results
 
 After running both backends, paste concise outcomes into `RESEARCH.md` and use that to update package docs (#26) and the issue #29 write-up.
