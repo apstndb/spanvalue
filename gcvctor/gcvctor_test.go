@@ -355,7 +355,8 @@ func TestTypedNull_STRUCT(t *testing.T) {
 	}
 }
 
-func TestArrayCodeTypedNull(t *testing.T) {
+func TestDeprecated_ArrayCodeTypedNull_matchesTypedNull(t *testing.T) {
+	// Deprecated API: must stay equivalent to TypedNull(typector.ElemCodeToArrayType(...)) until removed.
 	got := gcvctor.ArrayCodeTypedNull(sppb.TypeCode_INT64)
 	want := gcvctor.TypedNull(typector.ElemCodeToArrayType(sppb.TypeCode_INT64))
 
@@ -381,7 +382,8 @@ func TestNullRawValueFromType_STRUCT(t *testing.T) {
 	}
 }
 
-func TestArrayTypeTypedNull(t *testing.T) {
+func TestDeprecated_ArrayTypeTypedNull_matchesTypedNull(t *testing.T) {
+	// Deprecated API: must stay equivalent to TypedNull(typector.ElemTypeToArrayType(...)) until removed.
 	structType := typector.NameCodeToStructType("n", sppb.TypeCode_INT64)
 	got := gcvctor.ArrayTypeTypedNull(structType)
 	want := gcvctor.TypedNull(typector.ElemTypeToArrayType(structType))

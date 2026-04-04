@@ -136,8 +136,8 @@ func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 // ArrayValue constructs ARRAY GenericColumnValue.
 //
 // With no elements (including a nil or empty variadic slice), it returns an empty ARRAY<INT64>
-// (SQL length zero, not SQL NULL). For a typed NULL ARRAY<INT64>, use [ArrayCodeTypedNull] or
-// [ArrayTypeTypedNull] with the element type; see also [TypedNull].
+// (SQL length zero, not SQL NULL). For a typed NULL ARRAY<INT64>, use [TypedNull] with
+// [github.com/apstndb/spantype/typector.ElemCodeToArrayType] (or ElemTypeToArrayType).
 //
 // For other element types or explicit typing policy, use [ArrayValueWithType] or [ElemTypeToEmptyArray].
 //
@@ -152,7 +152,7 @@ func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, e
 // ArrayValueWithType constructs ARRAY GenericColumnValue using elemType as the element type
 // instead of inferring it from the first element. When elems is empty (nil or length zero), it
 // returns an empty ARRAY<elemType> (SQL length zero, not SQL NULL). For a typed NULL ARRAY<elemType>,
-// use [ArrayTypeTypedNull] or [TypedNull]; see also [ArrayCodeTypedNull] for simple element codes.
+// use [TypedNull] with [github.com/apstndb/spantype/typector.ElemTypeToArrayType] or ElemCodeToArrayType.
 //
 // Each element's Type must match elemType (no coercion).
 func ArrayValueWithType(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
@@ -222,11 +222,19 @@ func TypedNull(typ *sppb.Type) spanner.GenericColumnValue {
 }
 
 // ArrayTypeTypedNull constructs a NULL ARRAY with the given element type.
+//
+// Deprecated: use [TypedNull] with [github.com/apstndb/spantype/typector.ElemTypeToArrayType]:
+//
+//	TypedNull(typector.ElemTypeToArrayType(elemType))
 func ArrayTypeTypedNull(elemType *sppb.Type) spanner.GenericColumnValue {
 	return TypedNull(typector.ElemTypeToArrayType(elemType))
 }
 
 // ArrayCodeTypedNull constructs a NULL ARRAY with a simple element type code.
+//
+// Deprecated: use [TypedNull] with [github.com/apstndb/spantype/typector.ElemCodeToArrayType]:
+//
+//	TypedNull(typector.ElemCodeToArrayType(elemCode))
 func ArrayCodeTypedNull(elemCode sppb.TypeCode) spanner.GenericColumnValue {
 	return TypedNull(typector.ElemCodeToArrayType(elemCode))
 }
