@@ -391,9 +391,31 @@ func TestArrayTypeTypedNull(t *testing.T) {
 	}
 }
 
-func TestArrayValue_zeroArgsIsEmptyInt64Array(t *testing.T) {
+func TestArrayValue_noArgsIsTypedNullArrayInt64(t *testing.T) {
 	t.Parallel()
 	got, err := gcvctor.ArrayValue()
+	if err != nil {
+		t.Fatalf("ArrayValue: %v", err)
+	}
+	want := gcvctor.ArrayCodeTypedNull(sppb.TypeCode_INT64)
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Errorf("mismatch (-want +got):\n%s", diff)
+	}
+
+	var nilSlice []spanner.GenericColumnValue
+	got2, err := gcvctor.ArrayValue(nilSlice...)
+	if err != nil {
+		t.Fatalf("ArrayValue(nil...): %v", err)
+	}
+	if diff := cmp.Diff(want, got2, protocmp.Transform()); diff != "" {
+		t.Errorf("ArrayValue(nil...): mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestArrayValue_emptyNonNilSliceIsEmptyInt64Array(t *testing.T) {
+	t.Parallel()
+	empty := []spanner.GenericColumnValue{}
+	got, err := gcvctor.ArrayValue(empty...)
 	if err != nil {
 		t.Fatalf("ArrayValue: %v", err)
 	}

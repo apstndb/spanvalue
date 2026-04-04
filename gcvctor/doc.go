@@ -1,9 +1,10 @@
 // Package gcvctor constructs [cloud.google.com/go/spanner.GenericColumnValue] values from Go values and
 // explicit [cloud.google.com/go/spanner/apiv1/spannerpb.Type] metadata, using [github.com/apstndb/spantype/typector] for type shapes.
 //
-// [ArrayValue] infers the element type from the first element (or uses a default empty
-// ARRAY<INT64> when called with no arguments). [ArrayValueWithType] takes the element type
-// explicitly. [StructValue] pairs field names with values; counts must match.
+// [ArrayValue] infers the element type from the first element when arguments are non-empty.
+// With no arguments, or with ArrayValue(nil...), it returns a typed NULL ARRAY<INT64> ([ArrayCodeTypedNull]).
+// With a non-nil empty slice (ArrayValue([]GenericColumnValue{}...)), it returns a non-null empty ARRAY<INT64>.
+// [ArrayValueWithType] takes the element type explicitly. [StructValue] pairs field names with values; counts must match.
 //
 // [TypedNull] returns a typed NULL for any [cloud.google.com/go/spanner/apiv1/spannerpb.Type], including STRUCT and ARRAY; the
 // stored Value is always a scalar protobuf null. [SimpleTypedNull] does the same for simple
