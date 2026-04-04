@@ -9,7 +9,7 @@
 // names with values; counts must match.
 //
 // [TypedNull] returns a typed NULL for any [cloud.google.com/go/spanner/apiv1/spannerpb.Type], including STRUCT and ARRAY; the
-// stored Value is always a scalar protobuf null. [SimpleTypedNull] does the same for simple
+// [cloud.google.com/go/spanner.GenericColumnValue] Value field is always a scalar protobuf null at the top level. [SimpleTypedNull] does the same for simple
 // scalar type codes only—it cannot express STRUCT field layouts or ARRAY element types.
 // Neither encodes a non-null STRUCT whose fields are all null; use [StructValue] with
 // per-field nulls when you need that shape.

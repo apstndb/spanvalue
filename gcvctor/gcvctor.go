@@ -201,8 +201,8 @@ func StructValue(names []string, gcvs []spanner.GenericColumnValue) (spanner.Gen
 }
 
 // SimpleTypedNull returns a typed NULL for a simple scalar type code.
-// The Value field is always a protobuf NullValue; see [TypedNull] for STRUCT and ARRAY
-// semantics.
+// The [cloud.google.com/go/spanner.GenericColumnValue] Value field is always a protobuf
+// NullValue; see [TypedNull] for STRUCT and ARRAY semantics.
 func SimpleTypedNull(code sppb.TypeCode) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(code),
@@ -211,7 +211,8 @@ func SimpleTypedNull(code sppb.TypeCode) spanner.GenericColumnValue {
 }
 
 // TypedNull returns a typed NULL for typ.
-// The Value field is always a protobuf NullValue, including when typ is STRUCT or ARRAY.
+// The [cloud.google.com/go/spanner.GenericColumnValue] Value field is always a protobuf
+// NullValue, including when typ is STRUCT or ARRAY.
 // It does not represent a non-null STRUCT whose fields are all null—use StructValue with
 // per-field nulls (using [TypedNull] or [SimpleTypedNull] for each field) when you need that shape.
 func TypedNull(typ *sppb.Type) spanner.GenericColumnValue {
