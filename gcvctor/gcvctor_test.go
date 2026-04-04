@@ -427,13 +427,29 @@ func TestArrayValueWithType(t *testing.T) {
 			desc:     "non-empty INT64",
 			elemType: int64Elem,
 			elems:    []spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.Int64Value(2)},
-			want:     must(gcvctor.ArrayValue(gcvctor.Int64Value(1), gcvctor.Int64Value(2))),
+			want: spanner.GenericColumnValue{
+				Type: typector.ElemTypeToArrayType(int64Elem),
+				Value: structpb.NewListValue(&structpb.ListValue{
+					Values: []*structpb.Value{
+						structpb.NewStringValue("1"),
+						structpb.NewStringValue("2"),
+					},
+				}),
+			},
 		},
 		{
 			desc:     "explicit STRING type with string elements",
 			elemType: stringElem,
 			elems:    []spanner.GenericColumnValue{gcvctor.StringValue("a"), gcvctor.StringValue("b")},
-			want:     must(gcvctor.ArrayValue(gcvctor.StringValue("a"), gcvctor.StringValue("b"))),
+			want: spanner.GenericColumnValue{
+				Type: typector.ElemTypeToArrayType(stringElem),
+				Value: structpb.NewListValue(&structpb.ListValue{
+					Values: []*structpb.Value{
+						structpb.NewStringValue("a"),
+						structpb.NewStringValue("b"),
+					},
+				}),
+			},
 		},
 		{
 			desc:      "nil element type",
