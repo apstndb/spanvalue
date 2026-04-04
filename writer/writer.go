@@ -61,7 +61,7 @@ func (w *CSVWriter) WriteValues(columnNames []string, values []spanner.GenericCo
 		return err
 	}
 
-	writer, err := w.csvWriter()
+	csvWriter, err := w.csvWriter()
 	if err != nil {
 		return err
 	}
@@ -71,17 +71,17 @@ func (w *CSVWriter) WriteValues(columnNames []string, values []spanner.GenericCo
 		if err != nil {
 			return err
 		}
-		if err := writer.Write(resolvedNames); err != nil {
+		if err := csvWriter.Write(resolvedNames); err != nil {
 			return err
 		}
 		w.wroteHeader = true
 	}
 
-	if err := writer.Write(formattedValues); err != nil {
+	if err := csvWriter.Write(formattedValues); err != nil {
 		return err
 	}
-	writer.Flush()
-	return writer.Error()
+	csvWriter.Flush()
+	return csvWriter.Error()
 }
 
 func (w *CSVWriter) formatter() *spanvalue.FormatConfig {

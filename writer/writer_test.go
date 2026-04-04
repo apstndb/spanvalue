@@ -9,7 +9,6 @@ import (
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/spanvalue/gcvctor"
 	"github.com/google/go-cmp/cmp"
-	"github.com/samber/lo"
 )
 
 func TestCSVWriterWriteValues(t *testing.T) {
@@ -51,7 +50,10 @@ func TestJSONLWriterWriteRow(t *testing.T) {
 
 	var out bytes.Buffer
 	w := NewJSONLWriter(&out)
-	row := lo.Must(spanner.NewRow([]string{"id", ""}, []interface{}{int64(42), "hello"}))
+	row, err := spanner.NewRow([]string{"id", ""}, []interface{}{int64(42), "hello"})
+	if err != nil {
+		t.Fatalf("spanner.NewRow() error = %v", err)
+	}
 
 	if err := w.WriteRow(row); err != nil {
 		t.Fatalf("WriteRow() error = %v", err)
