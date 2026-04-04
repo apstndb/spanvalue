@@ -247,7 +247,7 @@ func TestNewJSONObjectStructFormatter_Error(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for duplicate name, got nil")
 		}
-		want := `unnamed field namer returned repeated colliding name "dup" (field index 1, generated index 2)`
+		want := "unnamed field namer returned repeated colliding name \"dup\" (field index 1, generated index 2)"
 		if got := err.Error(); got != want {
 			t.Errorf("error = %q, want %q", got, want)
 		}
@@ -284,7 +284,7 @@ func TestFormatRowJSONObject_Error(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for duplicate name resolution, got nil")
 		}
-		want := `unnamed field namer returned repeated colliding name "dup" (field index 1, generated index 1)`
+		want := "unnamed field namer returned repeated colliding name \"dup\" (field index 1, generated index 1)"
 		if got := err.Error(); got != want {
 			t.Errorf("error = %q, want %q", got, want)
 		}
