@@ -10,9 +10,8 @@ import (
 	"time"
 
 	"github.com/apstndb/spantype"
-	gocmp "github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
-	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/proto"
 
 	"cloud.google.com/go/civil"
 	"cloud.google.com/go/spanner"
@@ -135,23 +134,35 @@ func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 }
 
 // ArrayValue constructs ARRAY GenericColumnValue.
+// With no arguments it returns an empty ARRAY<INT64> (not a scalar NULL). For other
+// element types or explicit typing policy, use ArrayValueWithType or ElemTypeToEmptyArray.
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
 func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if len(vs) == 0 {
-		return SimpleTypedNull(sppb.TypeCode_INT64), nil
+		return ElemTypeCodeToEmptyArray(sppb.TypeCode_INT64), nil
 	}
+	return ArrayValueWithType(vs[0].Type, vs...)
+}
 
-	typ := vs[0].Type
-	var values []*structpb.Value
-	for i, v := range vs {
-		if !gocmp.Equal(typ, v.Type, protocmp.Transform()) {
-			return spanner.GenericColumnValue{}, fmt.Errorf("%w: %v is not %v", ErrTypeMismatch, spantype.FormatTypeMoreVerbose(vs[i].Type), spantype.FormatTypeMoreVerbose(typ))
+// ArrayValueWithType constructs ARRAY GenericColumnValue using elemType as the element type
+// instead of inferring it from the first element. When elems is empty, it returns an empty
+// ARRAY<elemType>. Each element's Type must match elemType (no coercion).
+func ArrayValueWithType(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
+	if elemType == nil {
+		return spanner.GenericColumnValue{}, fmt.Errorf("nil element type")
+	}
+	if len(elems) == 0 {
+		return ElemTypeToEmptyArray(elemType), nil
+	}
+	values := make([]*structpb.Value, len(elems))
+	for i, v := range elems {
+		if !proto.Equal(elemType, v.Type) {
+			return spanner.GenericColumnValue{}, fmt.Errorf("%w: element %d: %v is not %v", ErrTypeMismatch, i, spantype.FormatTypeMoreVerbose(v.Type), spantype.FormatTypeMoreVerbose(elemType))
 		}
-		values = append(values, v.Value)
+		values[i] = v.Value
 	}
-
 	return spanner.GenericColumnValue{
-		Type:  typector.ElemTypeToArrayType(typ),
+		Type:  typector.ElemTypeToArrayType(elemType),
 		Value: structpb.NewListValue(&structpb.ListValue{Values: values}),
 	}, nil
 }
