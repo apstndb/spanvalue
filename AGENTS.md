@@ -14,6 +14,14 @@
 - `golangci-lint run` - run lint locally.
 - `make test` and `make lint` - thin wrappers for the Go test and lint commands above.
 - `make vet` - run `go vet ./...`.
+- `make test-integration` - run `integration/pgtypeannotation` tests (nested module; Docker or real Spanner — see that directory’s `README.md`). Not part of `make check`.
+
+## Integration tests (nested module)
+
+- [`integration/pgtypeannotation`](./integration/pgtypeannotation/) is a **separate Go module** with its own `go.mod`. Heavy test-only dependencies (e.g. [`github.com/apstndb/spanemuboost`](https://github.com/apstndb/spanemuboost)) stay out of the **root** module; the submodule uses `replace github.com/apstndb/spanvalue => ../..` to build against the checkout root.
+- Root `go test ./...` does **not** include nested modules; use `make test-integration` or `cd integration/pgtypeannotation && go test ./...`.
+- CI runs integration tests in a separate workflow job (see [`.github/workflows/go.yml`](./.github/workflows/go.yml)).
+- Optional multi-module local setup: copy [`go.work.example`](./go.work.example) to `go.work` (gitignored).
 
 ## Architecture
 
