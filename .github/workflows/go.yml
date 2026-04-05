@@ -39,7 +39,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          # Nested module may require a newer Go than the root library (see integration/go.mod).
+          go-version-file: integration/pgtypeannotation/go.mod
           cache: false
 
       - name: Clear Go caches
