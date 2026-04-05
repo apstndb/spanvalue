@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"math"
+	"math/big"
 	"testing"
 	"time"
 
@@ -175,6 +176,22 @@ func TestParseExpr(t *testing.T) {
 			must(gcvctor.JSONValue(map[string]string{"foo": "bar"})),
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_JSON),
+				Value: structpb.NewStringValue(`{"foo":"bar"}`),
+			},
+		},
+		{
+			`PG NUMERIC 3.14`,
+			gcvctor.PGNumericValue(big.NewRat(314, 100)),
+			spanner.GenericColumnValue{
+				Type:  typector.PGNumeric(),
+				Value: structpb.NewStringValue(spanner.NumericString(big.NewRat(314, 100))),
+			},
+		},
+		{
+			`PG JSONB {"foo":"bar"}`,
+			must(gcvctor.PGJSONBValue(map[string]string{"foo": "bar"})),
+			spanner.GenericColumnValue{
+				Type:  typector.PGJSONB(),
 				Value: structpb.NewStringValue(`{"foo":"bar"}`),
 			},
 		},

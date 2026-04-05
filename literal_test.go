@@ -207,6 +207,16 @@ func TestDecodeColumnLiteral(t *testing.T) {
 			want:  `JSON '{"msg":"\\"foo\\""}'`,
 		},
 		{
+			desc:  "pg numeric (PG_NUMERIC annotation)",
+			value: gcvctor.PGNumericValue(big.NewRat(1234123456789, 1e9)),
+			want:  `NUMERIC "1234.123456789"`,
+		},
+		{
+			desc:  "pg jsonb (PG_JSONB annotation)",
+			value: lo.Must(gcvctor.PGJSONBValue(jsonMessage{Msg: "foo"})),
+			want:  `JSON '{"msg":"foo"}'`,
+		},
+		{
 			desc: "interval",
 			value: spanner.NullInterval{Interval: spanner.Interval{
 				Months: 13,
@@ -264,6 +274,16 @@ func TestDecodeColumnLiteral(t *testing.T) {
 		{
 			desc:  "null json",
 			value: spanner.NullJSON{Value: jsonMessage{}, Valid: false},
+			want:  `NULL`,
+		},
+		{
+			desc:  "null pg numeric",
+			value: gcvctor.NullOf(typector.PGNumeric()),
+			want:  `NULL`,
+		},
+		{
+			desc:  "null pg jsonb",
+			value: gcvctor.NullOf(typector.PGJSONB()),
 			want:  `NULL`,
 		},
 		{

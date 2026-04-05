@@ -25,12 +25,16 @@ import (
 	"time"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"github.com/apstndb/spantype/typector"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/typepb"
 
 	"cloud.google.com/go/civil"
 	"cloud.google.com/go/spanner"
+
+	"github.com/apstndb/spanvalue/gcvctor"
 )
 
 func createRow(t *testing.T, values []interface{}) *spanner.Row {
@@ -142,6 +146,16 @@ func TestDecodeColumn(t *testing.T) {
 			value: spanner.NullJSON{Value: nil, Valid: true},
 			want:  `null`,
 		},
+		{
+			desc:  "pg numeric",
+			value: gcvctor.PGNumericValue(big.NewRat(123, 100)),
+			want:  "1.23",
+		},
+		{
+			desc:  "pg jsonb",
+			value: lo.Must(gcvctor.PGJSONBValue(jsonMessage{Msg: "foo"})),
+			want:  `{"msg":"foo"}`,
+		},
 
 		{
 			desc:  "interval",
@@ -203,6 +217,16 @@ func TestDecodeColumn(t *testing.T) {
 		{
 			desc:  "null json",
 			value: spanner.NullJSON{Value: nil, Valid: false},
+			want:  "NULL",
+		},
+		{
+			desc:  "null pg numeric",
+			value: gcvctor.NullOf(typector.PGNumeric()),
+			want:  "NULL",
+		},
+		{
+			desc:  "null pg jsonb",
+			value: gcvctor.NullOf(typector.PGJSONB()),
 			want:  "NULL",
 		},
 

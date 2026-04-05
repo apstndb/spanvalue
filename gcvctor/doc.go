@@ -24,6 +24,10 @@
 // Neither encodes a non-null STRUCT whose fields are all null; use [StructValueOf] with
 // per-field nulls when you need that shape.
 //
+// [PGNumericValue] and [PGJSONBValue] build PostgreSQL-dialect annotated NUMERIC/JSON values
+// ([cloud.google.com/go/spanner/apiv1/spannerpb.TypeAnnotationCode_PG_NUMERIC],
+// [cloud.google.com/go/spanner/apiv1/spannerpb.TypeAnnotationCode_PG_JSONB]).
+//
 // Formatting these values as strings is provided by the sibling package
 // [github.com/apstndb/spanvalue].
 package gcvctor

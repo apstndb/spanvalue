@@ -40,4 +40,5 @@
 - For JSON row output, unnamed fields are handled through `UnnamedFieldNamer`/`IndexedUnnamedFieldNamer`; these must return non-empty unique names, otherwise an error is returned (replacing previous `panic` behavior). `nil` means keep empty JSON keys.
 - Prefer single quotes for shell commands. In double quotes, escape backticks (e.g., `` ` ``).
 - Use `merge` instead of `rebase & force push` for branch management; pull requests are merged using `squash and merge`.
+- After you push commits that address PR review feedback, request a fresh Copilot review with `gh copilot-review request <pr> --wait` (requires the [`gh-copilot-review`](https://github.com/apstndb/gh-copilot-review) `gh` extension), unless the user asks not to.
 - Write GitHub-facing text in **English** only: issue and PR titles and bodies, review threads, and inline review replies. Keep Japanese (or other languages) for local notes if needed, but not on github.com.
