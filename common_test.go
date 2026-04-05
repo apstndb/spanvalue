@@ -1,10 +1,12 @@
 package spanvalue
 
 import (
+	"math/big"
 	"testing"
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"github.com/apstndb/spantype"
 	"github.com/apstndb/spantype/typector"
 	"github.com/apstndb/spanvalue/gcvctor"
 	"github.com/google/go-cmp/cmp"
@@ -119,5 +121,51 @@ func TestIsNull(t *testing.T) {
 
 	if !IsNull(spanner.GenericColumnValue{Type: structType, Value: nil}) {
 		t.Errorf("Expected gcv with nil Value to be IsNull == true")
+	}
+}
+
+func TestFormatColumn_PostgreSQLAnnotatedTypes(t *testing.T) {
+	t.Parallel()
+
+	rat := big.NewRat(314, 100)
+	numGCV := gcvctor.PGNumericValue(rat)
+	wantSimple := spanner.NumericString(rat)
+	gotSimple, err := SimpleFormatConfig().FormatToplevelColumn(numGCV)
+	if err != nil {
+		t.Fatalf("simple PGNumeric: %v", err)
+	}
+	if gotSimple != wantSimple {
+		t.Errorf("simple PGNumeric: got %q want %q", gotSimple, wantSimple)
+	}
+	wantLiteral, err := FormatColumnLiteral(gcvctor.NumericValue(rat))
+	if err != nil {
+		t.Fatalf("want literal: %v", err)
+	}
+	gotLiteral, err := FormatColumnLiteral(numGCV)
+	if err != nil {
+		t.Fatalf("literal PGNumeric: %v", err)
+	}
+	if gotLiteral != wantLiteral {
+		t.Errorf("literal PGNumeric: got %q want %q", gotLiteral, wantLiteral)
+	}
+
+	jsonGCV := lo.Must(gcvctor.PGJsonBValue(map[string]int{"k": 1}))
+	wantJSONSimple, err := SimpleFormatConfig().FormatToplevelColumn(lo.Must(gcvctor.JSONValue(map[string]int{"k": 1})))
+	if err != nil {
+		t.Fatalf("want json simple: %v", err)
+	}
+	gotJSONSimple, err := SimpleFormatConfig().FormatToplevelColumn(jsonGCV)
+	if err != nil {
+		t.Fatalf("simple PGJsonB: %v", err)
+	}
+	if gotJSONSimple != wantJSONSimple {
+		t.Errorf("simple PGJsonB: got %q want %q", gotJSONSimple, wantJSONSimple)
+	}
+
+	if got, want := spantype.FormatTypeVerbose(typector.PGNumeric()), "NUMERIC(PG_NUMERIC)"; got != want {
+		t.Errorf("FormatTypeVerbose(PGNumeric): got %q want %q", got, want)
+	}
+	if got, want := spantype.FormatTypeVerbose(typector.PGJsonB()), "JSON(PG_JSONB)"; got != want {
+		t.Errorf("FormatTypeVerbose(PGJsonB): got %q want %q", got, want)
 	}
 }
