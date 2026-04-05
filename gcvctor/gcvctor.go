@@ -168,15 +168,15 @@ func PGNumericValue(v *big.Rat) spanner.GenericColumnValue {
 	}
 }
 
-// PGJsonBValue marshals v to JSON and returns a non-null PostgreSQL-dialect JSON GenericColumnValue
+// PGJSONBValue marshals v to JSON and returns a non-null PostgreSQL-dialect JSON GenericColumnValue
 // ([sppb.TypeAnnotationCode_PG_JSONB]).
-func PGJsonBValue(v any) (spanner.GenericColumnValue, error) {
+func PGJSONBValue(v any) (spanner.GenericColumnValue, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return spanner.GenericColumnValue{}, err
 	}
 	return spanner.GenericColumnValue{
-		Type:  typector.PGJsonB(),
+		Type:  typector.PGJSONB(),
 		Value: structpb.NewStringValue(string(b)),
 	}, nil
 }

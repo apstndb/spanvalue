@@ -189,9 +189,9 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			`PG JSONB {"foo":"bar"}`,
-			must(gcvctor.PGJsonBValue(map[string]string{"foo": "bar"})),
+			must(gcvctor.PGJSONBValue(map[string]string{"foo": "bar"})),
 			spanner.GenericColumnValue{
-				Type:  typector.PGJsonB(),
+				Type:  typector.PGJSONB(),
 				Value: structpb.NewStringValue(`{"foo":"bar"}`),
 			},
 		},

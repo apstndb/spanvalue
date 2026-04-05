@@ -149,23 +149,23 @@ func TestFormatColumn_PostgreSQLAnnotatedTypes(t *testing.T) {
 		t.Errorf("literal PGNumeric: got %q want %q", gotLiteral, wantLiteral)
 	}
 
-	jsonGCV := lo.Must(gcvctor.PGJsonBValue(map[string]int{"k": 1}))
+	jsonGCV := lo.Must(gcvctor.PGJSONBValue(map[string]int{"k": 1}))
 	wantJSONSimple, err := SimpleFormatConfig().FormatToplevelColumn(lo.Must(gcvctor.JSONValue(map[string]int{"k": 1})))
 	if err != nil {
 		t.Fatalf("want json simple: %v", err)
 	}
 	gotJSONSimple, err := SimpleFormatConfig().FormatToplevelColumn(jsonGCV)
 	if err != nil {
-		t.Fatalf("simple PGJsonB: %v", err)
+		t.Fatalf("simple PGJSONB: %v", err)
 	}
 	if gotJSONSimple != wantJSONSimple {
-		t.Errorf("simple PGJsonB: got %q want %q", gotJSONSimple, wantJSONSimple)
+		t.Errorf("simple PGJSONB: got %q want %q", gotJSONSimple, wantJSONSimple)
 	}
 
 	if got, want := spantype.FormatTypeVerbose(typector.PGNumeric()), "NUMERIC(PG_NUMERIC)"; got != want {
 		t.Errorf("FormatTypeVerbose(PGNumeric): got %q want %q", got, want)
 	}
-	if got, want := spantype.FormatTypeVerbose(typector.PGJsonB()), "JSON(PG_JSONB)"; got != want {
-		t.Errorf("FormatTypeVerbose(PGJsonB): got %q want %q", got, want)
+	if got, want := spantype.FormatTypeVerbose(typector.PGJSONB()), "JSON(PG_JSONB)"; got != want {
+		t.Errorf("FormatTypeVerbose(PGJSONB): got %q want %q", got, want)
 	}
 }
