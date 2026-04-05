@@ -20,7 +20,6 @@ var (
 	ErrMismatchedFields = errors.New("mismatched struct value/field count")
 )
 
-// TODO: PGNumeric, PBJsonB,
 const (
 	nullStringUpperCase = "NULL"
 	nullStringClientLib = "<null>"
@@ -54,6 +53,8 @@ func (n NullBytes) String() string {
 var _, _ NullableValue = (NullBytes)(nil), (*NullBytes)(nil)
 var _, _ NullableValue = spanner.NullString{}, (*spanner.NullString)(nil)
 var _, _ NullableValue = spanner.NullDate{}, (*spanner.NullDate)(nil)
+var _, _ NullableValue = spanner.PGNumeric{}, (*spanner.PGNumeric)(nil)
+var _, _ NullableValue = spanner.PGJsonB{}, (*spanner.PGJsonB)(nil)
 
 // FormatComplexFunc is a function to format spanner.GenericColumnValue.
 // If it returns ErrFallthrough, value will pass through to next step.
@@ -84,8 +85,14 @@ func simpleGCVToNullable(value spanner.GenericColumnValue) (NullableValue, error
 	case sppb.TypeCode_BYTES, sppb.TypeCode_PROTO:
 		return decodeScalar[NullBytes](value)
 	case sppb.TypeCode_NUMERIC:
+		if value.Type.GetTypeAnnotation() == sppb.TypeAnnotationCode_PG_NUMERIC {
+			return decodeScalar[spanner.PGNumeric](value)
+		}
 		return decodeScalar[spanner.NullNumeric](value)
 	case sppb.TypeCode_JSON:
+		if value.Type.GetTypeAnnotation() == sppb.TypeAnnotationCode_PG_JSONB {
+			return decodeScalar[spanner.PGJsonB](value)
+		}
 		return decodeScalar[spanner.NullJSON](value)
 	case sppb.TypeCode_INTERVAL:
 		return decodeScalar[spanner.NullInterval](value)

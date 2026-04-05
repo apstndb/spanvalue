@@ -4,6 +4,8 @@ go 1.23.0
 
 toolchain go1.23.2
 
+replace github.com/apstndb/spantype => ./third_party/spantype
+
 require (
 	cloud.google.com/go v0.121.4
 	cloud.google.com/go/spanner v1.84.1

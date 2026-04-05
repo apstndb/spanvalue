@@ -159,6 +159,28 @@ func JSONValue(v any) (spanner.GenericColumnValue, error) {
 	return StringBasedValueFromCode(sppb.TypeCode_JSON, string(b)), nil
 }
 
+// PGNumericValue returns a non-null PostgreSQL-dialect NUMERIC GenericColumnValue
+// ([sppb.TypeAnnotationCode_PG_NUMERIC]).
+func PGNumericValue(v *big.Rat) spanner.GenericColumnValue {
+	return spanner.GenericColumnValue{
+		Type:  typector.PGNumeric(),
+		Value: structpb.NewStringValue(spanner.NumericString(v)),
+	}
+}
+
+// PGJsonBValue marshals v to JSON and returns a non-null PostgreSQL-dialect JSON GenericColumnValue
+// ([sppb.TypeAnnotationCode_PG_JSONB]).
+func PGJsonBValue(v any) (spanner.GenericColumnValue, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return spanner.GenericColumnValue{}, err
+	}
+	return spanner.GenericColumnValue{
+		Type:  typector.PGJsonB(),
+		Value: structpb.NewStringValue(string(b)),
+	}, nil
+}
+
 // ProtoValue returns a non-null PROTO GenericColumnValue for the fully qualified message name fqn.
 func ProtoValue(fqn string, b []byte) spanner.GenericColumnValue {
 	return BytesBasedValueOf(typector.FQNToProtoType(fqn), b)
