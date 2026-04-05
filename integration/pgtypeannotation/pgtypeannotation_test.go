@@ -3,9 +3,11 @@
 //
 // Real instance: set SPANVALUE_PROJECT_ID and SPANVALUE_INSTANCE_ID (Application Default Credentials).
 //
-// Emulator: set SPANNER_EMULATOR_HOST (e.g. localhost:9010). Creates project/instance/database
-// on the emulator; if CreateDatabase with POSTGRESQL dialect fails, the test is skipped (many
-// emulator versions still do not support PG — see cloud.google.com/go/spanner integration tests).
+// Default (no env): starts the Cloud Spanner emulator via [github.com/apstndb/spanemuboost]
+// (Docker / testcontainers) with POSTGRESQL dialect.
+//
+// Manual emulator: set SPANNER_EMULATOR_HOST (e.g. localhost:9010). Creates project/instance/database
+// on the emulator; if CreateDatabase with POSTGRESQL dialect fails, the test is skipped.
 package pgtypeannotation_test
 
 import (
@@ -21,6 +23,7 @@ import (
 	instance "cloud.google.com/go/spanner/admin/instance/apiv1"
 	instancepb "cloud.google.com/go/spanner/admin/instance/apiv1/instancepb"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"github.com/apstndb/spanemuboost"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -52,7 +55,7 @@ func projectID(t *testing.T) string {
 	}
 	p := os.Getenv("SPANVALUE_PROJECT_ID")
 	if p == "" {
-		t.Skip("SPANVALUE_PROJECT_ID is not set (required for non-emulator runs)")
+		t.Fatal("SPANVALUE_PROJECT_ID is not set")
 	}
 	return p
 }
@@ -64,7 +67,7 @@ func instanceID(t *testing.T) string {
 	}
 	inst := os.Getenv("SPANVALUE_INSTANCE_ID")
 	if inst == "" {
-		t.Skip("SPANVALUE_INSTANCE_ID is not set (required for non-emulator runs)")
+		t.Fatal("SPANVALUE_INSTANCE_ID is not set")
 	}
 	return inst
 }
@@ -148,31 +151,69 @@ func TestPostgreSQL_TypeAnnotation_QueryParam_and_RowType(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
 
-	if os.Getenv("SPANNER_EMULATOR_HOST") != "" {
-		ensureEmulatorInstance(ctx, t)
-	}
+	var client *spanner.Client
+	cleanup := func() {}
 
-	dbID := fmt.Sprintf("pgta_%d", time.Now().UnixNano())
-	dbPath, dropDB, err := createPostgreSQLDatabase(ctx, t, dbID)
-	if err != nil {
-		if os.Getenv("SPANNER_EMULATOR_HOST") != "" {
-			t.Skipf("PostgreSQL dialect database not available on this environment (often the emulator): %v", err)
+	pid := os.Getenv("SPANVALUE_PROJECT_ID")
+	iid := os.Getenv("SPANVALUE_INSTANCE_ID")
+	emulatorHost := os.Getenv("SPANNER_EMULATOR_HOST")
+
+	switch {
+	case pid != "" && iid != "":
+		dbID := fmt.Sprintf("pgta_%d", time.Now().UnixNano())
+		dbPath, dropDB, err := createPostgreSQLDatabase(ctx, t, dbID)
+		if err != nil {
+			t.Fatalf("CreateDatabase: %v", err)
 		}
-		t.Fatalf("CreateDatabase: %v", err)
-	}
-	defer dropDB()
+		c, err := spanner.NewClient(ctx, dbPath, clientOpts()...)
+		if err != nil {
+			dropDB()
+			t.Fatalf("NewClient: %v", err)
+		}
+		client = c
+		cleanup = func() {
+			c.Close()
+			dropDB()
+		}
 
-	client, err := spanner.NewClient(ctx, dbPath, clientOpts()...)
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
+	case pid != "" || iid != "":
+		t.Skip("set both SPANVALUE_PROJECT_ID and SPANVALUE_INSTANCE_ID for real Cloud Spanner, or neither")
+
+	case emulatorHost != "":
+		ensureEmulatorInstance(ctx, t)
+		dbID := fmt.Sprintf("pgta_%d", time.Now().UnixNano())
+		dbPath, dropDB, err := createPostgreSQLDatabase(ctx, t, dbID)
+		if err != nil {
+			t.Skipf("PostgreSQL dialect database not available on this environment: %v", err)
+		}
+		c, err := spanner.NewClient(ctx, dbPath, clientOpts()...)
+		if err != nil {
+			dropDB()
+			t.Fatalf("NewClient: %v", err)
+		}
+		client = c
+		cleanup = func() {
+			c.Close()
+			dropDB()
+		}
+
+	default:
+		env := spanemuboost.SetupEmulatorWithClients(t,
+			spanemuboost.WithDatabaseDialect(adminpb.DatabaseDialect_POSTGRESQL),
+			spanemuboost.WithRandomDatabaseID(),
+		)
+		client = env.Client
 	}
-	defer client.Close()
+
+	defer cleanup()
 
 	t.Run("PGNumeric_param_and_row_metadata", func(t *testing.T) {
+		// PostgreSQL dialect uses $1, $2, … placeholders; params map keys are still p1, p2, …
+		// (see cloud.google.com/go/spanner integration tests).
 		stmt := spanner.Statement{
-			SQL: `SELECT @p AS out_col`,
+			SQL: `SELECT $1 AS out_col`,
 			Params: map[string]interface{}{
-				"p": spanner.PGNumeric{Numeric: "3.14", Valid: true},
+				"p1": spanner.PGNumeric{Numeric: "3.14", Valid: true},
 			},
 		}
 		iter := client.Single().Query(ctx, stmt)
@@ -213,9 +254,9 @@ func TestPostgreSQL_TypeAnnotation_QueryParam_and_RowType(t *testing.T) {
 
 	t.Run("PGJsonB_param_and_row_metadata", func(t *testing.T) {
 		stmt := spanner.Statement{
-			SQL: `SELECT @j AS out_col`,
+			SQL: `SELECT $1 AS out_col`,
 			Params: map[string]interface{}{
-				"j": spanner.PGJsonB{Value: map[string]any{"k": 1.0}, Valid: true},
+				"p1": spanner.PGJsonB{Value: map[string]any{"k": 1.0}, Valid: true},
 			},
 		}
 		iter := client.Single().Query(ctx, stmt)
@@ -250,4 +291,3 @@ func TestPostgreSQL_TypeAnnotation_QueryParam_and_RowType(t *testing.T) {
 		}
 	})
 }
-
