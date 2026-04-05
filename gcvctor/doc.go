@@ -25,7 +25,8 @@
 // per-field nulls when you need that shape.
 //
 // [PGNumericValue] and [PGJSONBValue] build PostgreSQL-dialect annotated NUMERIC/JSON values
-// ([sppb.TypeAnnotationCode_PG_NUMERIC], [sppb.TypeAnnotationCode_PG_JSONB]).
+// ([cloud.google.com/go/spanner/apiv1/spannerpb.TypeAnnotationCode_PG_NUMERIC],
+// [cloud.google.com/go/spanner/apiv1/spannerpb.TypeAnnotationCode_PG_JSONB]).
 //
 // Formatting these values as strings is provided by the sibling package
 // [github.com/apstndb/spanvalue].
