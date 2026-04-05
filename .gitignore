@@ -10,6 +10,6 @@
 # OS-specific
 .DS_Store
 
-# Local Go workspace (see go.work.example)
+# Local Go workspace
 go.work
 go.work.sum

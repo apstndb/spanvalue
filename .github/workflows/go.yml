@@ -29,22 +29,3 @@ jobs:
 
       - name: Test
         run: go test -v ./...
-
-  integration:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          # Nested module may require a newer Go than the root library (see integration/go.mod).
-          go-version-file: integration/pgtypeannotation/go.mod
-          cache: false
-
-      - name: Clear Go caches
-        run: go clean -cache -testcache
-
-      - name: Integration tests (pgtypeannotation)
-        run: make test-integration
