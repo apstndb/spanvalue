@@ -1,12 +1,13 @@
 package spanvalue
 
 import (
-	"encoding/json"
 	"strconv"
 	"strings"
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+
+	"github.com/apstndb/spanvalue/internal"
 )
 
 // JSONFormatConfig returns a new FormatConfig that produces valid JSON value
@@ -66,35 +67,7 @@ func assembleJSONObject(columnNames []string, values []string, namer UnnamedFiel
 	if err != nil {
 		return "", err
 	}
-	return assembleResolvedJSONObject(resolvedNames, values)
-}
-
-// assembleResolvedJSONObject combines already-resolved column names and
-// pre-formatted JSON value strings into a single JSON object.
-func assembleResolvedJSONObject(columnNames []string, values []string) (string, error) {
-	var b strings.Builder
-	b.WriteByte('{')
-	for i, val := range values {
-		if i > 0 {
-			b.WriteByte(',')
-		}
-		var name string
-		if i < len(columnNames) {
-			name = columnNames[i]
-		}
-		// While json.Marshal on a Go string is technically infallible, we check the error for robustness.
-		// Note: strconv.Quote is not suitable here because it produces Go string
-		// literal escapes (e.g., \a, \v) that are not valid JSON escape sequences.
-		key, err := json.Marshal(name)
-		if err != nil {
-			return "", err
-		}
-		b.Write(key)
-		b.WriteByte(':')
-		b.WriteString(val)
-	}
-	b.WriteByte('}')
-	return b.String(), nil
+	return internal.AssembleResolvedJSONObject(resolvedNames, values)
 }
 
 // FormatCompactArray formats array elements without spaces between separators.
@@ -137,7 +110,7 @@ func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc
 		if err != nil {
 			return "", err
 		}
-		return assembleResolvedJSONObject(resolvedNames, fieldStrings)
+		return internal.AssembleResolvedJSONObject(resolvedNames, fieldStrings)
 	}
 }
 

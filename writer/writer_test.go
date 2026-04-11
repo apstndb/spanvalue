@@ -24,6 +24,13 @@ func metadataWithColumnNames(names ...string) *sppb.ResultSetMetadata {
 	}
 }
 
+func flushCSVWriter(t *testing.T, w *CSVWriter) {
+	t.Helper()
+	if err := w.Flush(); err != nil {
+		t.Fatalf("Flush() error = %v", err)
+	}
+}
+
 func TestCSVWriterWriteValues(t *testing.T) {
 	t.Parallel()
 
@@ -51,6 +58,7 @@ func TestCSVWriterWriteValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteValues() second call error = %v", err)
 	}
+	flushCSVWriter(t, w)
 
 	want := "name,_0\nAlice,<null>\nBob,7\n"
 	if diff := cmp.Diff(want, out.String()); diff != "" {
@@ -71,6 +79,7 @@ func TestCSVWriterWriteGCVsWithMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteGCVs() error = %v", err)
 	}
+	flushCSVWriter(t, w)
 
 	want := "name,age\nAlice,42\n"
 	if diff := cmp.Diff(want, out.String()); diff != "" {
@@ -87,6 +96,7 @@ func TestCSVWriterWriteHeaderWithMetadata(t *testing.T) {
 	if err := w.WriteHeader(); err != nil {
 		t.Fatalf("WriteHeader() error = %v", err)
 	}
+	flushCSVWriter(t, w)
 
 	want := "name,age\n"
 	if diff := cmp.Diff(want, out.String()); diff != "" {
@@ -110,6 +120,7 @@ func TestCSVWriterWriteHeaderThenWriteGCVs(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("WriteGCVs() error = %v", err)
 	}
+	flushCSVWriter(t, w)
 
 	want := "name,age\nAlice,42\n"
 	if diff := cmp.Diff(want, out.String()); diff != "" {
@@ -138,6 +149,28 @@ func TestCSVWriterWriteGCVsWithoutMetadata(t *testing.T) {
 	err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")})
 	if !errors.Is(err, ErrMissingColumnNames) {
 		t.Fatalf("WriteGCVs() error = %v, want ErrMissingColumnNames", err)
+	}
+}
+
+func TestCSVWriterWriteValuesColumnNamesMismatch(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewCSVWriter(&out)
+
+	if err := w.WriteValues(
+		[]string{"name"},
+		[]spanner.GenericColumnValue{gcvctor.StringValue("Alice")},
+	); err != nil {
+		t.Fatalf("WriteValues() first call error = %v", err)
+	}
+
+	err := w.WriteValues(
+		[]string{"age"},
+		[]spanner.GenericColumnValue{gcvctor.Int64Value(42)},
+	)
+	if !errors.Is(err, ErrColumnNamesMismatch) {
+		t.Fatalf("WriteValues() mismatch error = %v, want ErrColumnNamesMismatch", err)
 	}
 }
 
@@ -254,6 +287,21 @@ func TestSQLInsertWriterWriteValuesEmptyColumnName(t *testing.T) {
 	}
 }
 
+func TestSQLInsertWriterWriteValuesEmptyTableName(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewSQLInsertWriter(&out, "")
+
+	err := w.WriteValues(
+		[]string{"id"},
+		[]spanner.GenericColumnValue{gcvctor.Int64Value(42)},
+	)
+	if !errors.Is(err, ErrEmptyTableName) {
+		t.Fatalf("WriteValues() error = %v, want ErrEmptyTableName", err)
+	}
+}
+
 func TestSQLInsertWriterWriteGCVsWithoutMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -263,5 +311,17 @@ func TestSQLInsertWriterWriteGCVsWithoutMetadata(t *testing.T) {
 	err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(42)})
 	if !errors.Is(err, ErrMissingColumnNames) {
 		t.Fatalf("WriteGCVs() error = %v, want ErrMissingColumnNames", err)
+	}
+}
+
+func TestSQLInsertWriterWriteGCVsEmptyTableName(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewSQLInsertWriter(&out, "", metadataWithColumnNames("id"))
+
+	err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(42)})
+	if !errors.Is(err, ErrEmptyTableName) {
+		t.Fatalf("WriteGCVs() error = %v, want ErrEmptyTableName", err)
 	}
 }
