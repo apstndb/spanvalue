@@ -3,6 +3,7 @@ package writer
 import (
 	"bytes"
 	"errors"
+	"strings"
 	"testing"
 
 	"cloud.google.com/go/spanner"
@@ -171,6 +172,9 @@ func TestCSVWriterWriteValuesColumnNamesMismatch(t *testing.T) {
 	)
 	if !errors.Is(err, ErrColumnNamesMismatch) {
 		t.Fatalf("WriteValues() mismatch error = %v, want ErrColumnNamesMismatch", err)
+	}
+	if !strings.Contains(err.Error(), "got [age] want [name]") {
+		t.Fatalf("WriteValues() mismatch error = %q, want readable column names", err)
 	}
 }
 

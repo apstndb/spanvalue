@@ -39,8 +39,10 @@ type Writer interface {
 
 // CSVWriter writes rows as CSV. Call Flush after the final write.
 type CSVWriter struct {
-	Formatter         *spanvalue.FormatConfig
-	Header            bool
+	Formatter *spanvalue.FormatConfig
+	Header    bool
+	// Set before the first write. Once names have been resolved for the current
+	// schema, later changes do not retroactively rewrite cached header names.
 	UnnamedFieldNamer spanvalue.UnnamedFieldNamer
 
 	columnNames         []string
@@ -190,7 +192,9 @@ func (w *CSVWriter) resolvedNames() ([]string, error) {
 
 // JSONLWriter writes one JSON object per line.
 type JSONLWriter struct {
-	Formatter         *spanvalue.FormatConfig
+	Formatter *spanvalue.FormatConfig
+	// Set before the first write. Once names have been resolved for the current
+	// schema, later changes do not retroactively rewrite cached object keys.
 	UnnamedFieldNamer spanvalue.UnnamedFieldNamer
 
 	columnNames         []string
@@ -292,7 +296,6 @@ type SQLInsertWriter struct {
 
 	columnNames       []string
 	quotedColumnNames string
-	quotedTableName   string
 	out               io.Writer
 }
 
@@ -342,15 +345,10 @@ func (w *SQLInsertWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	if err != nil {
 		return err
 	}
-	quotedTable, err := w.quotedTable()
-	if err != nil {
-		return err
-	}
-
 	_, err = fmt.Fprintf(
 		w.out,
 		"INSERT INTO %s (%s) VALUES (%s);\n",
-		quotedTable,
+		quoteIdentifier(w.Table),
 		quotedColumns,
 		strings.Join(formattedValues, ", "),
 	)
@@ -390,16 +388,6 @@ func (w *SQLInsertWriter) quotedColumns() (string, error) {
 	}
 	w.quotedColumnNames = strings.Join(quotedColumns, ", ")
 	return w.quotedColumnNames, nil
-}
-
-func (w *SQLInsertWriter) quotedTable() (string, error) {
-	if w.Table == "" {
-		return "", ErrEmptyTableName
-	}
-	if w.quotedTableName == "" {
-		w.quotedTableName = quoteIdentifier(w.Table)
-	}
-	return w.quotedTableName, nil
 }
 
 // rowData extracts column names and GenericColumnValue cells from row.
@@ -452,7 +440,7 @@ func initOrValidateColumnNames(dst *[]string, columnNames []string) error {
 		return nil
 	}
 	if !slices.Equal(*dst, columnNames) {
-		return fmt.Errorf("%w: got %q want %q", ErrColumnNamesMismatch, columnNames, *dst)
+		return fmt.Errorf("%w: got %v want %v", ErrColumnNamesMismatch, columnNames, *dst)
 	}
 	return nil
 }
