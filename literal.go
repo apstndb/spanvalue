@@ -1,6 +1,7 @@
 package spanvalue
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -73,12 +74,20 @@ func formatNullableValueLiteral(value NullableValue) (string, error) {
 		return strconv.FormatInt(v.Int64, 10), nil
 	case spanner.NullNumeric:
 		return stringBasedLiteral("NUMERIC", spanner.NumericString(&v.Numeric)), nil
+	case spanner.PGNumeric:
+		return stringBasedLiteral("NUMERIC", v.Numeric), nil
 	case spanner.NullTime:
 		return stringBasedLiteral("TIMESTAMP", v.Time.Format(time.RFC3339Nano)), nil
 	case spanner.NullDate:
 		return stringBasedLiteral("DATE", v.Date.String()), nil
 	case spanner.NullJSON:
 		return stringBasedLiteral("JSON", v.String()), nil
+	case spanner.PGJsonB:
+		b, err := json.Marshal(v.Value)
+		if err != nil {
+			return "", err
+		}
+		return stringBasedLiteral("JSON", string(b)), nil
 	case spanner.NullInterval:
 		// Use CAST for INTERVAL. Literal notation is unintuitive for information preservation.
 		return stringLiteralCast("INTERVAL", v.String()), nil

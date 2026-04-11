@@ -51,11 +51,13 @@ func FormatNullableSpannerCLICompatible(value NullableValue) (string, error) {
 		return fmt.Sprintf("%f", v.Float64), nil
 	case spanner.NullNumeric:
 		return trailingPointZeroRe.ReplaceAllString(v.String(), ""), nil
+	case spanner.PGNumeric:
+		return trailingPointZeroRe.ReplaceAllString(v.Numeric, ""), nil
 	case spanner.NullTime:
 		return v.Time.Format(time.RFC3339Nano), nil
 	// They are actually processed by the default case, but explicitly written here for clarity.
 	case spanner.NullString, spanner.NullBool, spanner.NullInt64, spanner.NullDate,
-		spanner.NullJSON, spanner.NullInterval, spanner.NullUUID:
+		spanner.NullJSON, spanner.NullInterval, spanner.NullUUID, spanner.PGJsonB:
 		return v.String(), nil
 	default:
 		return value.String(), nil

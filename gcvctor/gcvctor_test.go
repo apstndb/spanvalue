@@ -1,8 +1,16 @@
+// Package gcvctor_test exercises github.com/apstndb/spanvalue/gcvctor.
+//
+// When an expected value exercises a specific API (e.g. ArrayValueOf),
+// build want from typector + structpb (and spanner.GenericColumnValue literals)
+// instead of other gcvctor helpers that delegate to the same implementation,
+// so the test compares against an independent oracle rather than the code under test.
 package gcvctor_test
 
 import (
 	"encoding/base64"
+	"errors"
 	"math"
+	"math/big"
 	"testing"
 	"time"
 
@@ -34,7 +42,7 @@ func TestParseExpr(t *testing.T) {
 	}{
 		{
 			"NULL",
-			gcvctor.SimpleTypedNull(sppb.TypeCode_INT64),
+			gcvctor.NullFromCode(sppb.TypeCode_INT64),
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_INT64),
 				Value: structpb.NewNullValue(),
@@ -172,6 +180,22 @@ func TestParseExpr(t *testing.T) {
 			},
 		},
 		{
+			`PG NUMERIC 3.14`,
+			gcvctor.PGNumericValue(big.NewRat(314, 100)),
+			spanner.GenericColumnValue{
+				Type:  typector.PGNumeric(),
+				Value: structpb.NewStringValue(spanner.NumericString(big.NewRat(314, 100))),
+			},
+		},
+		{
+			`PG JSONB {"foo":"bar"}`,
+			must(gcvctor.PGJSONBValue(map[string]string{"foo": "bar"})),
+			spanner.GenericColumnValue{
+				Type:  typector.PGJSONB(),
+				Value: structpb.NewStringValue(`{"foo":"bar"}`),
+			},
+		},
+		{
 			`INTERVAL "P1Y1M1DT1H1M1S"`,
 			gcvctor.IntervalValue(lo.Must(spanner.ParseInterval(`P1Y1M1DT1H1M1S`))),
 			spanner.GenericColumnValue{
@@ -205,7 +229,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			`(1, "foo", 3.14)`,
-			must(gcvctor.StructValue(
+			must(gcvctor.StructValueOf(
 				[]string{"", "", ""},
 				[]spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.StringValue("foo"), gcvctor.Float64Value(3.14)},
 			)),
@@ -228,7 +252,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			`STRUCT(1 AS int64_value, "foo" AS string_value, 3.14 AS float64_value)`,
-			must(gcvctor.StructValue(
+			must(gcvctor.StructValueOf(
 				[]string{"int64_value", "string_value", "float64_value"},
 				[]spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.StringValue("foo"), gcvctor.Float64Value(3.14)},
 			)),
@@ -250,7 +274,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			`STRUCT<int64_value INT64, string_value STRING, float64_value FLOAT64>(1, "foo", 3.14)`,
-			must(gcvctor.StructValue(
+			must(gcvctor.StructValueOf(
 				[]string{"int64_value", "string_value", "float64_value"},
 				[]spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.StringValue("foo"), gcvctor.Float64Value(3.14)},
 			)),
@@ -280,7 +304,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			"ARRAY<INT64>[]",
-			gcvctor.ElemTypeToEmptyArray(typector.CodeToSimpleType(sppb.TypeCode_INT64)),
+			gcvctor.EmptyArrayOf(typector.CodeToSimpleType(sppb.TypeCode_INT64)),
 			spanner.GenericColumnValue{
 				Type:  typector.ElemCodeToArrayType(sppb.TypeCode_INT64),
 				Value: structpb.NewListValue(&structpb.ListValue{}),
@@ -288,7 +312,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			"ARRAY<STRUCT<n INT64>>[]",
-			gcvctor.ElemTypeToEmptyArray(typector.NameCodeToStructType("n", sppb.TypeCode_INT64)),
+			gcvctor.EmptyArrayOf(typector.NameCodeToStructType("n", sppb.TypeCode_INT64)),
 			spanner.GenericColumnValue{
 				Type:  typector.ElemTypeToArrayType(typector.NameCodeToStructType("n", sppb.TypeCode_INT64)),
 				Value: structpb.NewListValue(&structpb.ListValue{}),
@@ -296,7 +320,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			"PENDING_COMMIT_TIMESTAMP()",
-			gcvctor.StringBasedValue(sppb.TypeCode_TIMESTAMP, "spanner.commit_timestamp()"),
+			gcvctor.StringBasedValueFromCode(sppb.TypeCode_TIMESTAMP, "spanner.commit_timestamp()"),
 			spanner.GenericColumnValue{
 				Type:  typector.CodeToSimpleType(sppb.TypeCode_TIMESTAMP),
 				Value: structpb.NewStringValue("spanner.commit_timestamp()"),
@@ -318,7 +342,7 @@ func TestNullRawValueFromType_EnumerateSimpleTypes(t *testing.T) {
 			continue
 		}
 		simpleType := typector.CodeToSimpleType(sppb.TypeCode(rawcode))
-		got := gcvctor.TypedNull(simpleType)
+		got := gcvctor.NullOf(simpleType)
 		want := spanner.GenericColumnValue{Type: simpleType, Value: structpb.NewNullValue()}
 		t.Run(typename, func(t *testing.T) {
 			if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
@@ -331,16 +355,16 @@ func TestNullRawValueFromType_EnumerateSimpleTypes(t *testing.T) {
 func TestNullRawValueFromType_ARRAY(t *testing.T) {
 	input := typector.ElemCodeToArrayType(sppb.TypeCode_STRING)
 	want := spanner.GenericColumnValue{Type: input, Value: structpb.NewNullValue()}
-	got := gcvctor.TypedNull(input)
+	got := gcvctor.NullOf(input)
 
 	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
 		t.Errorf("diff (-want, +got) = %v", diff)
 	}
 }
 
-func TestTypedNull_STRUCT(t *testing.T) {
+func TestNullOf_STRUCT(t *testing.T) {
 	structType := typector.NameCodeToStructType("n", sppb.TypeCode_INT64)
-	got := gcvctor.TypedNull(structType)
+	got := gcvctor.NullOf(structType)
 	want := spanner.GenericColumnValue{Type: structType, Value: structpb.NewNullValue()}
 
 	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
@@ -348,9 +372,14 @@ func TestTypedNull_STRUCT(t *testing.T) {
 	}
 }
 
-func TestArrayCodeTypedNull(t *testing.T) {
+func TestDeprecated_ArrayCodeTypedNull_matchesNullArrayFromCode(t *testing.T) {
+	t.Parallel()
+	// Deprecated API: must stay equivalent to NullArrayFromCode until removed.
 	got := gcvctor.ArrayCodeTypedNull(sppb.TypeCode_INT64)
-	want := gcvctor.TypedNull(typector.ElemCodeToArrayType(sppb.TypeCode_INT64))
+	want := spanner.GenericColumnValue{
+		Type:  typector.ElemCodeToArrayType(sppb.TypeCode_INT64),
+		Value: structpb.NewNullValue(),
+	}
 
 	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
 		t.Errorf("diff (-want, +got) = %v", diff)
@@ -363,7 +392,7 @@ func TestNullRawValueFromType_STRUCT(t *testing.T) {
 		[]sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_STRING},
 	))
 	want := spanner.GenericColumnValue{Type: structType, Value: structpb.NewNullValue()}
-	got := gcvctor.TypedNull(structType)
+	got := gcvctor.NullOf(structType)
 
 	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
 		t.Errorf("diff (-want, +got) = %v", diff)
@@ -374,12 +403,184 @@ func TestNullRawValueFromType_STRUCT(t *testing.T) {
 	}
 }
 
-func TestArrayTypeTypedNull(t *testing.T) {
+func TestDeprecated_ArrayTypeTypedNull_matchesNullArrayOf(t *testing.T) {
+	t.Parallel()
+	// Deprecated API: must stay equivalent to NullArrayOf until removed.
 	structType := typector.NameCodeToStructType("n", sppb.TypeCode_INT64)
 	got := gcvctor.ArrayTypeTypedNull(structType)
-	want := gcvctor.TypedNull(typector.ElemTypeToArrayType(structType))
+	want := spanner.GenericColumnValue{
+		Type:  typector.ElemTypeToArrayType(structType),
+		Value: structpb.NewNullValue(),
+	}
 
 	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
 		t.Errorf("diff (-want, +got) = %v", diff)
+	}
+}
+
+func TestNullArrayFromCode_matchesNullOf(t *testing.T) {
+	t.Parallel()
+	got := gcvctor.NullArrayFromCode(sppb.TypeCode_INT64)
+	want := spanner.GenericColumnValue{
+		Type:  typector.ElemCodeToArrayType(sppb.TypeCode_INT64),
+		Value: structpb.NewNullValue(),
+	}
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Errorf("diff (-want, +got) = %v", diff)
+	}
+}
+
+func TestNullArrayOf_matchesNullOf(t *testing.T) {
+	t.Parallel()
+	elem := typector.NameCodeToStructType("n", sppb.TypeCode_INT64)
+	got := gcvctor.NullArrayOf(elem)
+	want := spanner.GenericColumnValue{
+		Type:  typector.ElemTypeToArrayType(elem),
+		Value: structpb.NewNullValue(),
+	}
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Errorf("diff (-want, +got) = %v", diff)
+	}
+}
+
+func TestArrayValue_zeroLengthIsEmptyInt64Array(t *testing.T) {
+	t.Parallel()
+	want := spanner.GenericColumnValue{
+		Type:  typector.ElemCodeToArrayType(sppb.TypeCode_INT64),
+		Value: structpb.NewListValue(&structpb.ListValue{}),
+	}
+
+	for _, name := range []string{"no args", "nil slice", "empty slice"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var got spanner.GenericColumnValue
+			var err error
+			switch name {
+			case "no args":
+				got, err = gcvctor.ArrayValue()
+			case "nil slice":
+				var nilSlice []spanner.GenericColumnValue
+				got, err = gcvctor.ArrayValue(nilSlice...)
+			case "empty slice":
+				got, err = gcvctor.ArrayValue([]spanner.GenericColumnValue{}...)
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestArrayValueOf(t *testing.T) {
+	t.Parallel()
+	int64Elem := typector.CodeToSimpleType(sppb.TypeCode_INT64)
+	stringElem := typector.CodeToSimpleType(sppb.TypeCode_STRING)
+	structElem := typector.NameCodeToStructType("n", sppb.TypeCode_INT64)
+
+	tests := []struct {
+		desc      string
+		elemType  *sppb.Type
+		elems     []spanner.GenericColumnValue
+		want      spanner.GenericColumnValue
+		expectErr bool
+		errIs     error
+	}{
+		{
+			desc:     "empty INT64 (nil elems)",
+			elemType: int64Elem,
+			elems:    nil,
+			want: spanner.GenericColumnValue{
+				Type:  typector.ElemTypeToArrayType(int64Elem),
+				Value: structpb.NewListValue(&structpb.ListValue{}),
+			},
+		},
+		{
+			desc:     "empty ARRAY<STRUCT<n INT64>> (nil elems)",
+			elemType: structElem,
+			elems:    nil,
+			want: spanner.GenericColumnValue{
+				Type:  typector.ElemTypeToArrayType(structElem),
+				Value: structpb.NewListValue(&structpb.ListValue{}),
+			},
+		},
+		{
+			desc:     "empty INT64 (non-nil empty slice)",
+			elemType: int64Elem,
+			elems:    []spanner.GenericColumnValue{},
+			want: spanner.GenericColumnValue{
+				Type:  typector.ElemTypeToArrayType(int64Elem),
+				Value: structpb.NewListValue(&structpb.ListValue{}),
+			},
+		},
+		{
+			desc:     "non-empty INT64",
+			elemType: int64Elem,
+			elems:    []spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.Int64Value(2)},
+			want: spanner.GenericColumnValue{
+				Type: typector.ElemTypeToArrayType(int64Elem),
+				Value: structpb.NewListValue(&structpb.ListValue{
+					Values: []*structpb.Value{
+						structpb.NewStringValue("1"),
+						structpb.NewStringValue("2"),
+					},
+				}),
+			},
+		},
+		{
+			desc:     "explicit STRING type with string elements",
+			elemType: stringElem,
+			elems:    []spanner.GenericColumnValue{gcvctor.StringValue("a"), gcvctor.StringValue("b")},
+			want: spanner.GenericColumnValue{
+				Type: typector.ElemTypeToArrayType(stringElem),
+				Value: structpb.NewListValue(&structpb.ListValue{
+					Values: []*structpb.Value{
+						structpb.NewStringValue("a"),
+						structpb.NewStringValue("b"),
+					},
+				}),
+			},
+		},
+		{
+			desc:      "nil element type",
+			elemType:  nil,
+			elems:     []spanner.GenericColumnValue{gcvctor.Int64Value(1)},
+			expectErr: true,
+			errIs:     gcvctor.ErrNilElementType,
+		},
+		{
+			desc:      "element type mismatch",
+			elemType:  stringElem,
+			elems:     []spanner.GenericColumnValue{gcvctor.Int64Value(1)},
+			expectErr: true,
+			errIs:     gcvctor.ErrTypeMismatch,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			t.Parallel()
+			got, err := gcvctor.ArrayValueOf(tt.elemType, tt.elems...)
+			if tt.expectErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				if tt.errIs != nil && !errors.Is(err, tt.errIs) {
+					t.Fatalf("errors.Is(err, %v) = false; err = %v", tt.errIs, err)
+				}
+				var zero spanner.GenericColumnValue
+				if diff := cmp.Diff(zero, got, protocmp.Transform()); diff != "" {
+					t.Errorf("expected zero value on error (-want +got):\n%s", diff)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(tt.want, got, protocmp.Transform()); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }

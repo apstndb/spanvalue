@@ -9,3 +9,7 @@
 
 # OS-specific
 .DS_Store
+
+# Local Go workspace
+go.work
+go.work.sum

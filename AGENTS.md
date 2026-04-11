@@ -15,6 +15,8 @@
 - `make test` and `make lint` - thin wrappers for the Go test and lint commands above.
 - `make vet` - run `go vet ./...`.
 
+PostgreSQL-dialect Spanner **client integration probes** (TypeAnnotation on params and result metadata) live in [`github.com/apstndb/spanpg`](https://github.com/apstndb/spanpg) under `integration/pgtypeannotation`, not in this repo — see that module’s `README.md` and `Makefile`.
+
 ## Architecture
 
 - The root package formats `cloud.google.com/go/spanner.GenericColumnValue` and `*spanner.Row` values into strings through `FormatConfig`.
@@ -30,11 +32,15 @@
 - Keep `sppb` as the alias for `cloud.google.com/go/spanner/apiv1/spannerpb`.
 - Preserve copied-test attribution comments in `literal_test.go` and `spanner_cli_compatible_test.go`.
 - Use `ErrFallthrough` from `FormatComplexFunc` plugins to defer to the built-in array/struct/scalar logic.
-- `IsNull` treats a `spanner.GenericColumnValue` as NULL when its `Value` field is nil or a protobuf `NullValue`; `gcvctor.TypedNull` returns a scalar `NullValue` for all types including `STRUCT` and `ARRAY`. Plugins should check it early when they need custom NULL handling.
-- `gcvctor.ArrayValue` and `gcvctor.StructValue` are strict: they do not coerce types, arrays must be homogeneous, and struct field names must line up with values. They return sentinel errors (`ErrTypeMismatch`, `ErrMismatchedCounts`) on failure.
+- `IsNull` treats a `spanner.GenericColumnValue` as NULL when its `Value` field is nil or a protobuf `NullValue`; `gcvctor.NullOf` returns a scalar `NullValue` for all types including `STRUCT` and `ARRAY`. Plugins should check it early when they need custom NULL handling.
+- `gcvctor.ArrayValue` and `gcvctor.StructValueOf` are strict: they do not coerce types, arrays must be homogeneous, and struct field names must line up with values. They return sentinel errors (`ErrTypeMismatch`, `ErrMismatchedCounts`, `ErrNilElementType` for a nil `ArrayValueOf` element type) on failure.
+- Empty variadic `ArrayValue` / `ArrayValueOf` builds an empty SQL array (length 0), not NULL; use `NullOf` with `typector.ElemTypeToArrayType` or `typector.ElemCodeToArrayType` (or `NullArrayFromCode` for simple element codes) for NULL ARRAYs.
 - `FormatColumn` and formatting functions return sentinel errors (`ErrUnknownType`, `ErrMismatchedFields`) on failure.
 - `gcvctor.Float32Value` and `Float64Value` encode `NaN` and `±Inf` as string values to match Spanner's wire format.
 - Tests commonly use `t.Parallel()`, `cmp.Diff`, and `protocmp.Transform()` when comparing protobuf-backed values.
+- In `gcvctor` tests, prefer building expected `spanner.GenericColumnValue` values with `typector` and `structpb` (plus literals) instead of other `gcvctor` helpers when those helpers share code with the function under test, so `want` stays an independent oracle.
 - For JSON row output, unnamed fields are handled through `UnnamedFieldNamer`/`IndexedUnnamedFieldNamer`; these must return non-empty unique names, otherwise an error is returned (replacing previous `panic` behavior). `nil` means keep empty JSON keys.
 - Prefer single quotes for shell commands. In double quotes, escape backticks (e.g., `` ` ``).
 - Use `merge` instead of `rebase & force push` for branch management; pull requests are merged using `squash and merge`.
+- After you push commits that address PR review feedback, request a fresh Copilot review with `gh copilot-review request <pr> --wait` (requires the [`gh-copilot-review`](https://github.com/apstndb/gh-copilot-review) `gh` extension), unless the user asks not to.
+- Write GitHub-facing text in **English** only: issue and PR titles and bodies, review threads, and inline review replies. Keep Japanese (or other languages) for local notes if needed, but not on github.com.

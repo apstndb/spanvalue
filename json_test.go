@@ -22,10 +22,10 @@ func TestJSONFormatConfig(t *testing.T) {
 	fc := JSONFormatConfig()
 
 	arrayOfInt64 := lo.Must(gcvctor.ArrayValue(gcvctor.Int64Value(1), gcvctor.Int64Value(2), gcvctor.Int64Value(3)))
-	arrayWithNull := lo.Must(gcvctor.ArrayValue(gcvctor.Int64Value(1), gcvctor.SimpleTypedNull(sppb.TypeCode_INT64), gcvctor.Int64Value(3)))
-	structVal := lo.Must(gcvctor.StructValue([]string{"name", "age"}, []spanner.GenericColumnValue{gcvctor.StringValue("Alice"), gcvctor.Int64Value(30)}))
-	unnamedStruct := lo.Must(gcvctor.StructValue([]string{"", ""}, []spanner.GenericColumnValue{gcvctor.StringValue("value"), gcvctor.Int64Value(42)}))
-	structElem := lo.Must(gcvctor.StructValue([]string{"COUNT", "MEAN"}, []spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.Float64Value(0.057294)}))
+	arrayWithNull := lo.Must(gcvctor.ArrayValue(gcvctor.Int64Value(1), gcvctor.NullFromCode(sppb.TypeCode_INT64), gcvctor.Int64Value(3)))
+	structVal := lo.Must(gcvctor.StructValueOf([]string{"name", "age"}, []spanner.GenericColumnValue{gcvctor.StringValue("Alice"), gcvctor.Int64Value(30)}))
+	unnamedStruct := lo.Must(gcvctor.StructValueOf([]string{"", ""}, []spanner.GenericColumnValue{gcvctor.StringValue("value"), gcvctor.Int64Value(42)}))
+	structElem := lo.Must(gcvctor.StructValueOf([]string{"COUNT", "MEAN"}, []spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.Float64Value(0.057294)}))
 	arrayOfStruct := lo.Must(gcvctor.ArrayValue(structElem))
 	jsonVal := lo.Must(gcvctor.JSONValue(map[string]string{"key": "value"}))
 
@@ -34,8 +34,8 @@ func TestJSONFormatConfig(t *testing.T) {
 		gcv      spanner.GenericColumnValue
 		wantJSON string
 	}{
-		{name: "NULL STRING", gcv: gcvctor.SimpleTypedNull(sppb.TypeCode_STRING), wantJSON: "null"},
-		{name: "NULL INT64", gcv: gcvctor.SimpleTypedNull(sppb.TypeCode_INT64), wantJSON: "null"},
+		{name: "NULL STRING", gcv: gcvctor.NullFromCode(sppb.TypeCode_STRING), wantJSON: "null"},
+		{name: "NULL INT64", gcv: gcvctor.NullFromCode(sppb.TypeCode_INT64), wantJSON: "null"},
 		{name: "BOOL true", gcv: gcvctor.BoolValue(true), wantJSON: "true"},
 		{name: "BOOL false", gcv: gcvctor.BoolValue(false), wantJSON: "false"},
 		{name: "INT64", gcv: gcvctor.Int64Value(42), wantJSON: "42"},
@@ -52,15 +52,15 @@ func TestJSONFormatConfig(t *testing.T) {
 		{name: "STRING with special chars", gcv: gcvctor.StringValue("line1\nline2"), wantJSON: `"line1\nline2"`},
 		{name: "TIMESTAMP", gcv: gcvctor.TimestampValue(time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)), wantJSON: `"2024-01-15T12:00:00Z"`},
 		{name: "DATE", gcv: gcvctor.DateValue(civil.Date{Year: 2024, Month: 1, Day: 15}), wantJSON: `"2024-01-15"`},
-		{name: "NUMERIC", gcv: gcvctor.StringBasedValue(sppb.TypeCode_NUMERIC, "123.456"), wantJSON: `"123.456"`},
+		{name: "NUMERIC", gcv: gcvctor.StringBasedValueFromCode(sppb.TypeCode_NUMERIC, "123.456"), wantJSON: `"123.456"`},
 		{name: "JSON column", gcv: jsonVal, wantJSON: `{"key":"value"}`},
 		{name: "BYTES", gcv: gcvctor.BytesValue([]byte("Hello")), wantJSON: `"SGVsbG8="`},
 		{name: "ENUM", gcv: gcvctor.EnumValue("my.proto.Enum", 42), wantJSON: `42`},
-		{name: "INTERVAL", gcv: gcvctor.StringBasedValue(sppb.TypeCode_INTERVAL, "P1Y2M3DT4H5M6.5S"), wantJSON: `"P1Y2M3DT4H5M6.5S"`},
+		{name: "INTERVAL", gcv: gcvctor.StringBasedValueFromCode(sppb.TypeCode_INTERVAL, "P1Y2M3DT4H5M6.5S"), wantJSON: `"P1Y2M3DT4H5M6.5S"`},
 		{name: "UUID", gcv: gcvctor.UUIDValue(uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")), wantJSON: `"550e8400-e29b-41d4-a716-446655440000"`},
 		{name: "ARRAY of INT64", gcv: arrayOfInt64, wantJSON: `[1,2,3]`},
 		{name: "ARRAY with NULL element", gcv: arrayWithNull, wantJSON: `[1,null,3]`},
-		{name: "NULL ARRAY", gcv: gcvctor.TypedNull(typector.ElemCodeToArrayType(sppb.TypeCode_INT64)), wantJSON: "null"},
+		{name: "NULL ARRAY", gcv: gcvctor.NullOf(typector.ElemCodeToArrayType(sppb.TypeCode_INT64)), wantJSON: "null"},
 		{name: "STRUCT", gcv: structVal, wantJSON: `{"name":"Alice","age":30}`},
 		{name: "STRUCT with unnamed fields", gcv: unnamedStruct, wantJSON: `{"":"value","":42}`},
 		{name: "ARRAY of STRUCT", gcv: arrayOfStruct, wantJSON: `[{"COUNT":1,"MEAN":0.057294}]`},

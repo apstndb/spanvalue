@@ -147,11 +147,11 @@ func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc
 //
 // For most types, structpb.Value.MarshalJSON() produces the correct JSON representation
 // (BOOL→true/false, FLOAT→number, STRING→"quoted", NULL→null, NaN/Inf→"NaN"/"Infinity").
-// Only INT64, ENUM, and JSON columns need special handling:
+// Only INT64, ENUM, and JSON (including PostgreSQL PG_JSONB-annotated JSON) columns need special handling:
 //   - INT64: Spanner encodes as StringValue("42"), MarshalJSON() would produce "42" (quoted),
 //     but we want 42 (unquoted number).
 //   - ENUM: Spanner stores proto enum values as INT64; same handling as INT64.
-//   - JSON: Spanner encodes as StringValue('{"key":"value"}'), MarshalJSON() would produce
+//   - JSON / PG_JSONB: Spanner encodes as StringValue('{"key":"value"}'), MarshalJSON() would produce
 //     escaped quoted string, but we want the raw JSON value passed through.
 func FormatJSONSimpleValue(formatter Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
 	switch value.Type.GetCode() {

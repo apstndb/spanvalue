@@ -207,6 +207,16 @@ func TestDecodeColumnLiteral(t *testing.T) {
 			want:  `JSON '{"msg":"\\"foo\\""}'`,
 		},
 		{
+			desc:  "pg numeric (PG_NUMERIC annotation)",
+			value: gcvctor.PGNumericValue(big.NewRat(1234123456789, 1e9)),
+			want:  `NUMERIC "1234.123456789"`,
+		},
+		{
+			desc:  "pg jsonb (PG_JSONB annotation)",
+			value: lo.Must(gcvctor.PGJSONBValue(jsonMessage{Msg: "foo"})),
+			want:  `JSON '{"msg":"foo"}'`,
+		},
+		{
 			desc: "interval",
 			value: spanner.NullInterval{Interval: spanner.Interval{
 				Months: 13,
@@ -267,6 +277,16 @@ func TestDecodeColumnLiteral(t *testing.T) {
 			want:  `NULL`,
 		},
 		{
+			desc:  "null pg numeric",
+			value: gcvctor.NullOf(typector.PGNumeric()),
+			want:  `NULL`,
+		},
+		{
+			desc:  "null pg jsonb",
+			value: gcvctor.NullOf(typector.PGJSONB()),
+			want:  `NULL`,
+		},
+		{
 			desc:  "null interval",
 			value: spanner.NullInterval{Valid: false},
 			want:  `NULL`,
@@ -288,12 +308,12 @@ func TestDecodeColumnLiteral(t *testing.T) {
 		},
 		{
 			desc:  "null proto",
-			value: gcvctor.TypedNull(typector.FQNToProtoType("package.ProtoType")),
+			value: gcvctor.NullOf(typector.FQNToProtoType("package.ProtoType")),
 			want:  "NULL",
 		},
 		{
 			desc:  "null enum",
-			value: gcvctor.TypedNull(typector.FQNToEnumType("package.EnumType")),
+			value: gcvctor.NullOf(typector.FQNToEnumType("package.EnumType")),
 			want:  "NULL",
 		},
 		// array non-nullable
@@ -389,7 +409,7 @@ func TestDecodeColumnLiteral(t *testing.T) {
 			want:  "NULL",
 		},
 		{
-			desc:  "nul array float64",
+			desc:  "null array float64",
 			value: []float64(nil),
 			want:  "NULL",
 		},
@@ -435,12 +455,12 @@ func TestDecodeColumnLiteral(t *testing.T) {
 		},
 		{
 			desc:  "null array proto",
-			value: gcvctor.TypedNull(typector.FQNToProtoType("package.ProtoType")),
+			value: gcvctor.NullArrayOf(typector.FQNToProtoType("package.ProtoType")),
 			want:  "NULL",
 		},
 		{
 			desc:  "null array enum",
-			value: gcvctor.TypedNull(typector.FQNToEnumType("package.EnumType")),
+			value: gcvctor.NullArrayOf(typector.FQNToEnumType("package.EnumType")),
 			want:  "NULL",
 		},
 	} {
