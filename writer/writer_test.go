@@ -153,6 +153,87 @@ func TestCSVWriterWriteGCVsWithoutMetadata(t *testing.T) {
 	}
 }
 
+func TestWritersReturnErrNilOutputWriter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{
+			name: "csv",
+			run: func() error {
+				w := NewCSVWriter(nil, metadataWithColumnNames("name"))
+				return w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")})
+			},
+		},
+		{
+			name: "jsonl",
+			run: func() error {
+				w := NewJSONLWriter(nil, metadataWithColumnNames("name"))
+				return w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")})
+			},
+		},
+		{
+			name: "sql",
+			run: func() error {
+				w := NewSQLInsertWriter(nil, "users", metadataWithColumnNames("name"))
+				return w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tt.run()
+			if !errors.Is(err, ErrNilOutputWriter) {
+				t.Fatalf("error = %v, want ErrNilOutputWriter", err)
+			}
+		})
+	}
+}
+
+func TestWritersReturnErrNilRow(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{
+			name: "csv",
+			run: func() error {
+				return NewCSVWriter(&bytes.Buffer{}).WriteRow(nil)
+			},
+		},
+		{
+			name: "jsonl",
+			run: func() error {
+				return NewJSONLWriter(&bytes.Buffer{}).WriteRow(nil)
+			},
+		},
+		{
+			name: "sql",
+			run: func() error {
+				return NewSQLInsertWriter(&bytes.Buffer{}, "users").WriteRow(nil)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tt.run()
+			if !errors.Is(err, ErrNilRow) {
+				t.Fatalf("error = %v, want ErrNilRow", err)
+			}
+		})
+	}
+}
+
 func TestCSVWriterWriteValuesColumnNamesMismatch(t *testing.T) {
 	t.Parallel()
 
