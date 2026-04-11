@@ -31,10 +31,9 @@ var (
 	ErrColumnNamesMismatch = errors.New("column names mismatch")
 )
 
-// Writer writes rows or column/value pairs to an output stream.
+// Writer writes rows to an output stream.
 type Writer interface {
 	WriteRow(row *spanner.Row) error
-	WriteValues(columnNames []string, values []spanner.GenericColumnValue) error
 }
 
 // CSVWriter writes rows as CSV.
