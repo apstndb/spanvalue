@@ -88,6 +88,28 @@ func TestCSVWriterWriteGCVsWithMetadata(t *testing.T) {
 	}
 }
 
+func TestCSVWriterWriteRow(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewCSVWriter(&out)
+
+	row, err := spanner.NewRow([]string{"id", ""}, []interface{}{int64(42), "hello"})
+	if err != nil {
+		t.Fatalf("spanner.NewRow() error = %v", err)
+	}
+
+	if err := w.WriteRow(row); err != nil {
+		t.Fatalf("WriteRow() error = %v", err)
+	}
+	flushCSVWriter(t, w)
+
+	want := "id,_0\n42,hello\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("CSV output mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestCSVWriterWriteHeaderWithMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -354,6 +376,27 @@ func TestSQLInsertWriterWriteValues(t *testing.T) {
 				t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestSQLInsertWriterWriteRow(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewSQLInsertWriter(&out, "user`table")
+
+	row, err := spanner.NewRow([]string{"na`me", "payload"}, []interface{}{"Alice", "semi;\nline"})
+	if err != nil {
+		t.Fatalf("spanner.NewRow() error = %v", err)
+	}
+
+	if err := w.WriteRow(row); err != nil {
+		t.Fatalf("WriteRow() error = %v", err)
+	}
+
+	want := "INSERT INTO `user``table` (`na``me`, `payload`) VALUES (\"Alice\", \"semi;\\nline\");\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
 	}
 }
 
