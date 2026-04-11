@@ -78,6 +78,57 @@ func TestCSVWriterWriteGCVsWithMetadata(t *testing.T) {
 	}
 }
 
+func TestCSVWriterWriteHeaderWithMetadata(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewCSVWriter(&out, metadataWithColumnNames("name", "age"))
+
+	if err := w.WriteHeader(); err != nil {
+		t.Fatalf("WriteHeader() error = %v", err)
+	}
+
+	want := "name,age\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("CSV header mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCSVWriterWriteHeaderThenWriteGCVs(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewCSVWriter(&out, metadataWithColumnNames("name", "age"))
+
+	if err := w.WriteHeader(); err != nil {
+		t.Fatalf("WriteHeader() error = %v", err)
+	}
+
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.StringValue("Alice"),
+		gcvctor.Int64Value(42),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+
+	want := "name,age\nAlice,42\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("CSV output mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCSVWriterWriteHeaderWithoutMetadata(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewCSVWriter(&out)
+
+	err := w.WriteHeader()
+	if !errors.Is(err, ErrMissingColumnNames) {
+		t.Fatalf("WriteHeader() error = %v, want ErrMissingColumnNames", err)
+	}
+}
+
 func TestCSVWriterWriteGCVsWithoutMetadata(t *testing.T) {
 	t.Parallel()
 

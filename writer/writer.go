@@ -49,6 +49,7 @@ type CSVWriter struct {
 	wroteHeader bool
 }
 
+// NewCSVWriter returns a CSV writer optionally initialized from result-set metadata.
 func NewCSVWriter(out io.Writer, metadata ...*sppb.ResultSetMetadata) *CSVWriter {
 	w := &CSVWriter{
 		Formatter:         spanvalue.SimpleFormatConfig(),
@@ -60,12 +61,39 @@ func NewCSVWriter(out io.Writer, metadata ...*sppb.ResultSetMetadata) *CSVWriter
 	return w
 }
 
+// WriteRow writes one CSV row, initializing the schema from row metadata if needed.
 func (w *CSVWriter) WriteRow(row *spanner.Row) error {
 	columnNames, values, err := rowData(row)
 	if err != nil {
 		return err
 	}
 	return w.WriteValues(columnNames, values)
+}
+
+// WriteHeader writes the CSV header once using the initialized column names.
+func (w *CSVWriter) WriteHeader() error {
+	if w.wroteHeader {
+		return nil
+	}
+	if len(w.columnNames) == 0 {
+		return ErrMissingColumnNames
+	}
+
+	csvWriter, err := w.csvWriter()
+	if err != nil {
+		return err
+	}
+
+	resolvedNames, err := internal.ResolveColumnNames(w.columnNames, w.UnnamedFieldNamer)
+	if err != nil {
+		return err
+	}
+	if err := csvWriter.Write(resolvedNames); err != nil {
+		return err
+	}
+	w.wroteHeader = true
+	csvWriter.Flush()
+	return csvWriter.Error()
 }
 
 func (w *CSVWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
@@ -90,15 +118,10 @@ func (w *CSVWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 		return err
 	}
 
-	if w.Header && !w.wroteHeader {
-		resolvedNames, err := internal.ResolveColumnNames(w.columnNames, w.UnnamedFieldNamer)
-		if err != nil {
+	if w.Header {
+		if err := w.WriteHeader(); err != nil {
 			return err
 		}
-		if err := csvWriter.Write(resolvedNames); err != nil {
-			return err
-		}
-		w.wroteHeader = true
 	}
 
 	if err := csvWriter.Write(formattedValues); err != nil {
@@ -143,6 +166,7 @@ type JSONLWriter struct {
 	out         io.Writer
 }
 
+// NewJSONLWriter returns a JSONL writer optionally initialized from result-set metadata.
 func NewJSONLWriter(out io.Writer, metadata ...*sppb.ResultSetMetadata) *JSONLWriter {
 	w := &JSONLWriter{
 		Formatter:         spanvalue.JSONFormatConfig(),
@@ -207,6 +231,7 @@ type SQLInsertWriter struct {
 	out         io.Writer
 }
 
+// NewSQLInsertWriter returns a SQL INSERT writer optionally initialized from result-set metadata.
 func NewSQLInsertWriter(out io.Writer, table string, metadata ...*sppb.ResultSetMetadata) *SQLInsertWriter {
 	w := &SQLInsertWriter{
 		Table:     table,
