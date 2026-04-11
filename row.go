@@ -23,12 +23,6 @@ func ColumnNames(fields []*sppb.StructType_Field, namer UnnamedFieldNamer) ([]st
 	return resolveColumnNamesInPlace(names, namer)
 }
 
-// ResolveColumnNames resolves unnamed column names using namer while preserving
-// already named columns. If namer is nil, the input names are preserved as-is.
-func ResolveColumnNames(columnNames []string, namer UnnamedFieldNamer) ([]string, error) {
-	return resolveColumnNames(columnNames, namer)
-}
-
 // FormatRowColumns formats a row represented as column names plus GCV values.
 // The column names are validated for shape compatibility, but the formatted cell
 // values come from the GCVs themselves.
