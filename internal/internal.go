@@ -4,12 +4,63 @@ import (
 	"fmt"
 	"iter"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/samber/lo/it"
 )
+
+// ResolveColumnNames returns a copy of columnNames with every empty string
+// replaced by a name produced by namer. Already-named columns are preserved.
+// If namer is nil the input slice is returned unchanged without copying.
+func ResolveColumnNames(columnNames []string, namer func(int) string) ([]string, error) {
+	if namer == nil {
+		return columnNames, nil
+	}
+	return resolveColumnNamesInPlace(slices.Clone(columnNames), namer)
+}
+
+func resolveColumnNamesInPlace(names []string, namer func(int) string) ([]string, error) {
+	usedNames := make(map[string]bool, len(names))
+	for _, name := range names {
+		if name != "" {
+			usedNames[name] = true
+		}
+	}
+
+	autoIdx := 0
+	var attempted map[string]bool
+	for i, name := range names {
+		if name != "" {
+			continue
+		}
+		if attempted == nil {
+			attempted = make(map[string]bool)
+		} else {
+			clear(attempted)
+		}
+		for {
+			name = namer(autoIdx)
+			autoIdx++
+			if name == "" {
+				return nil, fmt.Errorf("unnamed field namer returned empty string (field index %d, generated index %d)", i, autoIdx-1)
+			}
+			if !usedNames[name] {
+				break
+			}
+			if attempted[name] {
+				return nil, fmt.Errorf("unnamed field namer returned repeated colliding name %q (field index %d, generated index %d)", name, i, autoIdx-1)
+			}
+			attempted[name] = true
+		}
+		names[i] = name
+		usedNames[name] = true
+	}
+
+	return names, nil
+}
 
 // ByteToEscapeSequenceReadable formats a byte as a string without quote processing
 func ByteToEscapeSequenceReadable(b byte) string {

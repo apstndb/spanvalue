@@ -34,7 +34,7 @@ func TestCSVWriterWriteValues(t *testing.T) {
 		[]string{"name", ""},
 		[]spanner.GenericColumnValue{
 			gcvctor.StringValue("Alice"),
-			gcvctor.SimpleTypedNull(sppb.TypeCode_INT64),
+			gcvctor.NullFromCode(sppb.TypeCode_INT64),
 		},
 	)
 	if err != nil {
