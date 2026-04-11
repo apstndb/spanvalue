@@ -21,7 +21,7 @@ func ColumnNames(fields []*sppb.StructType_Field, namer UnnamedFieldNamer) ([]st
 	for i, field := range fields {
 		names[i] = field.GetName()
 	}
-	return internal.ResolveColumnNames(names, namer)
+	return internal.ResolveColumnNamesInPlace(names, namer)
 }
 
 // FormatRowColumns formats a row represented as column names plus GCV values.

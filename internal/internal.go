@@ -20,10 +20,16 @@ func ResolveColumnNames(columnNames []string, namer func(int) string) ([]string,
 	if namer == nil {
 		return columnNames, nil
 	}
-	return resolveColumnNamesInPlace(slices.Clone(columnNames), namer)
+	return ResolveColumnNamesInPlace(slices.Clone(columnNames), namer)
 }
 
-func resolveColumnNamesInPlace(names []string, namer func(int) string) ([]string, error) {
+// ResolveColumnNamesInPlace resolves unnamed columns in names directly.
+// If namer is nil the input slice is returned unchanged.
+func ResolveColumnNamesInPlace(names []string, namer func(int) string) ([]string, error) {
+	if namer == nil {
+		return names, nil
+	}
+
 	usedNames := make(map[string]bool, len(names))
 	for _, name := range names {
 		if name != "" {
