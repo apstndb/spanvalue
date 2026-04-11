@@ -175,6 +175,24 @@ func TestCSVWriterWriteGCVsWithoutMetadata(t *testing.T) {
 	}
 }
 
+func TestCSVWriterWriteGCVsNilOutputWithoutMetadata(t *testing.T) {
+	t.Parallel()
+
+	err := NewCSVWriter(nil).WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")})
+	if !errors.Is(err, ErrNilOutputWriter) {
+		t.Fatalf("WriteGCVs() error = %v, want ErrNilOutputWriter", err)
+	}
+}
+
+func TestCSVWriterWriteHeaderNilOutputWithoutMetadata(t *testing.T) {
+	t.Parallel()
+
+	err := NewCSVWriter(nil).WriteHeader()
+	if !errors.Is(err, ErrNilOutputWriter) {
+		t.Fatalf("WriteHeader() error = %v, want ErrNilOutputWriter", err)
+	}
+}
+
 func TestWritersReturnErrNilOutputWriter(t *testing.T) {
 	t.Parallel()
 
@@ -412,6 +430,34 @@ func TestSQLInsertWriterWriteValuesEmptyColumnName(t *testing.T) {
 	)
 	if !errors.Is(err, ErrEmptyColumnName) {
 		t.Fatalf("WriteValues() error = %v, want ErrEmptyColumnName", err)
+	}
+}
+
+func TestSQLInsertWriterWriteValuesRecoverAfterEmptyColumnName(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewSQLInsertWriter(&out, "users")
+
+	err := w.WriteValues(
+		[]string{""},
+		[]spanner.GenericColumnValue{gcvctor.Int64Value(42)},
+	)
+	if !errors.Is(err, ErrEmptyColumnName) {
+		t.Fatalf("first WriteValues() error = %v, want ErrEmptyColumnName", err)
+	}
+
+	err = w.WriteValues(
+		[]string{"id"},
+		[]spanner.GenericColumnValue{gcvctor.Int64Value(42)},
+	)
+	if err != nil {
+		t.Fatalf("second WriteValues() error = %v", err)
+	}
+
+	want := "INSERT INTO `users` (`id`) VALUES (42);\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
 	}
 }
 

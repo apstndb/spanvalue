@@ -78,13 +78,13 @@ func (w *CSVWriter) WriteHeader() error {
 	if w.wroteHeader {
 		return nil
 	}
-	if len(w.columnNames) == 0 {
-		return ErrMissingColumnNames
-	}
 
 	csvWriter, err := w.csvWriter()
 	if err != nil {
 		return err
+	}
+	if len(w.columnNames) == 0 {
+		return ErrMissingColumnNames
 	}
 
 	resolvedNames, err := w.resolvedNames()
@@ -106,13 +106,12 @@ func (w *CSVWriter) WriteValues(columnNames []string, values []spanner.GenericCo
 }
 
 func (w *CSVWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
-	if len(w.columnNames) == 0 {
-		return ErrMissingColumnNames
-	}
-
 	csvWriter, err := w.csvWriter()
 	if err != nil {
 		return err
+	}
+	if len(w.columnNames) == 0 {
+		return ErrMissingColumnNames
 	}
 
 	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.columnNames, values)
@@ -319,6 +318,11 @@ func (w *SQLInsertWriter) WriteRow(row *spanner.Row) error {
 }
 
 func (w *SQLInsertWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
+	if len(w.columnNames) == 0 && len(columnNames) > 0 {
+		if _, err := quoteIdentifiers(columnNames); err != nil {
+			return err
+		}
+	}
 	if err := w.initOrValidateColumnNames(columnNames); err != nil {
 		return err
 	}
