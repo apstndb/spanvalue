@@ -110,12 +110,12 @@ func (w *CSVWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 		return ErrMissingColumnNames
 	}
 
-	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.columnNames, values)
+	csvWriter, err := w.csvWriter()
 	if err != nil {
 		return err
 	}
 
-	csvWriter, err := w.csvWriter()
+	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.columnNames, values)
 	if err != nil {
 		return err
 	}
@@ -336,12 +336,12 @@ func (w *SQLInsertWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 		return ErrMissingColumnNames
 	}
 
-	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.columnNames, values)
+	quotedColumns, err := w.quotedColumns()
 	if err != nil {
 		return err
 	}
 
-	quotedColumns, err := w.quotedColumns()
+	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.columnNames, values)
 	if err != nil {
 		return err
 	}
