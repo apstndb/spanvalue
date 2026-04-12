@@ -175,11 +175,11 @@ func (w *CSVWriter) Flush() error {
 }
 
 func (w *CSVWriter) resolvedNames() ([]string, error) {
-	if w.UnnamedFieldNamer == nil {
-		return w.columnNames, nil
-	}
 	if len(w.resolvedColumnNames) != 0 || len(w.columnNames) == 0 {
 		return w.resolvedColumnNames, nil
+	}
+	if w.UnnamedFieldNamer == nil {
+		return w.columnNames, nil
 	}
 	resolvedNames, err := internal.ResolveColumnNames(w.columnNames, w.UnnamedFieldNamer)
 	if err != nil {
@@ -274,11 +274,11 @@ func (w *JSONLWriter) formatter() *spanvalue.FormatConfig {
 }
 
 func (w *JSONLWriter) resolvedNames() ([]string, error) {
-	if w.UnnamedFieldNamer == nil {
-		return w.columnNames, nil
-	}
 	if len(w.resolvedColumnNames) != 0 || len(w.columnNames) == 0 {
 		return w.resolvedColumnNames, nil
+	}
+	if w.UnnamedFieldNamer == nil {
+		return w.columnNames, nil
 	}
 	resolvedNames, err := internal.ResolveColumnNames(w.columnNames, w.UnnamedFieldNamer)
 	if err != nil {

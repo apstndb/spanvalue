@@ -347,6 +347,35 @@ func TestJSONLWriterWriteGCVsAfterWriteRow(t *testing.T) {
 	}
 }
 
+func TestJSONLWriterWriteGCVsKeepsResolvedNamesAfterNamerChange(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewJSONLWriter(&out)
+
+	row, err := spanner.NewRow([]string{"", ""}, []interface{}{int64(42), "hello"})
+	if err != nil {
+		t.Fatalf("spanner.NewRow() error = %v", err)
+	}
+
+	if err := w.WriteRow(row); err != nil {
+		t.Fatalf("WriteRow() error = %v", err)
+	}
+
+	w.UnnamedFieldNamer = nil
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.Int64Value(43),
+		gcvctor.StringValue("world"),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+
+	want := "{\"_0\":42,\"_1\":\"hello\"}\n{\"_0\":43,\"_1\":\"world\"}\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("JSONL output mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestSQLInsertWriterWriteValues(t *testing.T) {
 	t.Parallel()
 
