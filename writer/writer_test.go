@@ -376,6 +376,15 @@ func TestSQLInsertWriterWriteValues(t *testing.T) {
 			},
 			want: "INSERT INTO `users` (`payload`) VALUES (\"semi;\\nline\");\n",
 		},
+		{
+			name:        "qualified table name escaping",
+			table:       "my`db.users",
+			columnNames: []string{"id"},
+			values: []spanner.GenericColumnValue{
+				gcvctor.Int64Value(42),
+			},
+			want: "INSERT INTO `my``db`.`users` (`id`) VALUES (42);\n",
+		},
 	}
 
 	for _, tt := range tests {
@@ -401,7 +410,7 @@ func TestSQLInsertWriterWriteRow(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	w := NewSQLInsertWriter(&out, "user`table")
+	w := NewSQLInsertWriter(&out, "db.user`table")
 
 	row, err := spanner.NewRow([]string{"na`me", "payload"}, []interface{}{"Alice", "semi;\nline"})
 	if err != nil {
@@ -412,7 +421,7 @@ func TestSQLInsertWriterWriteRow(t *testing.T) {
 		t.Fatalf("WriteRow() error = %v", err)
 	}
 
-	want := "INSERT INTO `user``table` (`na``me`, `payload`) VALUES (\"Alice\", \"semi;\\nline\");\n"
+	want := "INSERT INTO `db`.`user``table` (`na``me`, `payload`) VALUES (\"Alice\", \"semi;\\nline\");\n"
 	if diff := cmp.Diff(want, out.String()); diff != "" {
 		t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
 	}

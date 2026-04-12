@@ -348,7 +348,7 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 	_, err = fmt.Fprintf(
 		w.out,
 		"INSERT INTO %s (%s) VALUES (%s);\n",
-		quoteIdentifier(w.Table),
+		quoteQualifiedIdentifier(w.Table),
 		quotedColumns,
 		strings.Join(formattedValues, ", "),
 	)
@@ -466,4 +466,13 @@ func quoteIdentifiers(names []string) ([]string, error) {
 // quoteIdentifier quotes a GoogleSQL identifier, escaping backticks by doubling them.
 func quoteIdentifier(name string) string {
 	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
+}
+
+// quoteQualifiedIdentifier quotes each identifier segment in a dotted path.
+func quoteQualifiedIdentifier(name string) string {
+	parts := strings.Split(name, ".")
+	for i, part := range parts {
+		parts[i] = quoteIdentifier(part)
+	}
+	return strings.Join(parts, ".")
 }
