@@ -295,6 +295,8 @@ type SQLInsertWriter struct {
 
 	columnNames       []string
 	quotedColumnNames string
+	quotedTable       string
+	quotedTableInput  string
 	out               io.Writer
 }
 
@@ -340,7 +342,7 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 	if w.Table == "" {
 		return ErrEmptyTableName
 	}
-	quotedTable, err := quoteQualifiedIdentifier(w.Table)
+	quotedTable, err := w.quotedQualifiedTable()
 	if err != nil {
 		return err
 	}
@@ -348,13 +350,20 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(
-		w.out,
-		"INSERT INTO %s (%s) VALUES (%s);\n",
-		quotedTable,
-		quotedColumns,
-		strings.Join(formattedValues, ", "),
-	)
+	if _, err := fmt.Fprintf(w.out, "INSERT INTO %s (%s) VALUES (", quotedTable, quotedColumns); err != nil {
+		return err
+	}
+	for i, val := range formattedValues {
+		if i > 0 {
+			if _, err := io.WriteString(w.out, ", "); err != nil {
+				return err
+			}
+		}
+		if _, err := io.WriteString(w.out, val); err != nil {
+			return err
+		}
+	}
+	_, err = io.WriteString(w.out, ");\n")
 	return err
 }
 
@@ -387,6 +396,19 @@ func (w *SQLInsertWriter) initOrValidateQuotedColumns(columnNames []string) (str
 	}
 	w.quotedColumnNames = strings.Join(quotedColumns, ", ")
 	return w.quotedColumnNames, nil
+}
+
+func (w *SQLInsertWriter) quotedQualifiedTable() (string, error) {
+	if w.quotedTable != "" && w.quotedTableInput == w.Table {
+		return w.quotedTable, nil
+	}
+	quotedTable, err := quoteQualifiedIdentifier(w.Table)
+	if err != nil {
+		return "", err
+	}
+	w.quotedTable = quotedTable
+	w.quotedTableInput = w.Table
+	return quotedTable, nil
 }
 
 // rowData extracts column names and GenericColumnValue cells from row.

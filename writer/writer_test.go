@@ -470,6 +470,34 @@ func TestSQLInsertWriterWriteValuesRecoverAfterEmptyColumnName(t *testing.T) {
 	}
 }
 
+func TestSQLInsertWriterWriteValuesTableChangeAfterCache(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewSQLInsertWriter(&out, "db.users")
+
+	err := w.WriteValues(
+		[]string{"id"},
+		[]spanner.GenericColumnValue{gcvctor.Int64Value(1)},
+	)
+	if err != nil {
+		t.Fatalf("first WriteValues() error = %v", err)
+	}
+
+	w.Table = "archive.users"
+	err = w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(2)})
+	if err != nil {
+		t.Fatalf("WriteGCVs() after table change error = %v", err)
+	}
+
+	want := "" +
+		"INSERT INTO `db`.`users` (`id`) VALUES (1);\n" +
+		"INSERT INTO `archive`.`users` (`id`) VALUES (2);\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestSQLInsertWriterWriteValuesEmptyTableName(t *testing.T) {
 	t.Parallel()
 
