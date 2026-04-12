@@ -345,10 +345,14 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 	if err != nil {
 		return err
 	}
+	quotedTable, err := quoteQualifiedIdentifier(w.Table)
+	if err != nil {
+		return err
+	}
 	_, err = fmt.Fprintf(
 		w.out,
 		"INSERT INTO %s (%s) VALUES (%s);\n",
-		quoteQualifiedIdentifier(w.Table),
+		quotedTable,
 		quotedColumns,
 		strings.Join(formattedValues, ", "),
 	)
@@ -469,10 +473,13 @@ func quoteIdentifier(name string) string {
 }
 
 // quoteQualifiedIdentifier quotes each identifier segment in a dotted path.
-func quoteQualifiedIdentifier(name string) string {
+func quoteQualifiedIdentifier(name string) (string, error) {
 	parts := strings.Split(name, ".")
 	for i, part := range parts {
+		if part == "" {
+			return "", fmt.Errorf("%w: qualified table name contains empty segment", ErrEmptyTableName)
+		}
 		parts[i] = quoteIdentifier(part)
 	}
-	return strings.Join(parts, ".")
+	return strings.Join(parts, "."), nil
 }

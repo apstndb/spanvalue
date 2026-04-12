@@ -485,6 +485,21 @@ func TestSQLInsertWriterWriteValuesEmptyTableName(t *testing.T) {
 	}
 }
 
+func TestSQLInsertWriterWriteValuesEmptyQualifiedTableSegment(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewSQLInsertWriter(&out, "db..users")
+
+	err := w.WriteValues(
+		[]string{"id"},
+		[]spanner.GenericColumnValue{gcvctor.Int64Value(42)},
+	)
+	if !errors.Is(err, ErrEmptyTableName) {
+		t.Fatalf("WriteValues() error = %v, want ErrEmptyTableName", err)
+	}
+}
+
 func TestSQLInsertWriterWriteGCVsWithoutMetadata(t *testing.T) {
 	t.Parallel()
 
