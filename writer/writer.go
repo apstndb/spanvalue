@@ -340,12 +340,11 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 	if w.Table == "" {
 		return ErrEmptyTableName
 	}
-
-	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.columnNames, values)
+	quotedTable, err := quoteQualifiedIdentifier(w.Table)
 	if err != nil {
 		return err
 	}
-	quotedTable, err := quoteQualifiedIdentifier(w.Table)
+	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.columnNames, values)
 	if err != nil {
 		return err
 	}
