@@ -73,6 +73,8 @@ func ResolveColumnNamesInPlace(names []string, namer func(int) string) ([]string
 // pre-formatted JSON value strings into a single JSON object string.
 func AssembleResolvedJSONObject(columnNames []string, values []string) (string, error) {
 	var b strings.Builder
+	// Grow uses a cheap lower bound only. Key/value sizes are content-dependent.
+	b.Grow(len(values))
 	b.WriteByte('{')
 	for i, val := range values {
 		if i > 0 {

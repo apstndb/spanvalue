@@ -175,10 +175,10 @@ func (w *CSVWriter) Flush() error {
 }
 
 func (w *CSVWriter) resolvedNames() ([]string, error) {
-	if len(w.resolvedColumnNames) != 0 || len(w.columnNames) == 0 || w.UnnamedFieldNamer == nil {
-		if w.UnnamedFieldNamer == nil {
-			return w.columnNames, nil
-		}
+	if w.UnnamedFieldNamer == nil {
+		return w.columnNames, nil
+	}
+	if len(w.resolvedColumnNames) != 0 || len(w.columnNames) == 0 {
 		return w.resolvedColumnNames, nil
 	}
 	resolvedNames, err := internal.ResolveColumnNames(w.columnNames, w.UnnamedFieldNamer)
@@ -274,10 +274,10 @@ func (w *JSONLWriter) formatter() *spanvalue.FormatConfig {
 }
 
 func (w *JSONLWriter) resolvedNames() ([]string, error) {
-	if len(w.resolvedColumnNames) != 0 || len(w.columnNames) == 0 || w.UnnamedFieldNamer == nil {
-		if w.UnnamedFieldNamer == nil {
-			return w.columnNames, nil
-		}
+	if w.UnnamedFieldNamer == nil {
+		return w.columnNames, nil
+	}
+	if len(w.resolvedColumnNames) != 0 || len(w.columnNames) == 0 {
 		return w.resolvedColumnNames, nil
 	}
 	resolvedNames, err := internal.ResolveColumnNames(w.columnNames, w.UnnamedFieldNamer)
@@ -318,31 +318,27 @@ func (w *SQLInsertWriter) WriteRow(row *spanner.Row) error {
 }
 
 func (w *SQLInsertWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
-	if len(w.columnNames) == 0 && len(columnNames) > 0 {
-		if _, err := quoteIdentifiers(columnNames); err != nil {
-			return err
-		}
-	}
-	if err := w.initOrValidateColumnNames(columnNames); err != nil {
+	quotedColumns, err := w.initOrValidateQuotedColumns(columnNames)
+	if err != nil {
 		return err
 	}
-	return w.WriteGCVs(values)
+	return w.writeGCVs(values, quotedColumns)
 }
 
 func (w *SQLInsertWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
+	quotedColumns, err := w.initOrValidateQuotedColumns(nil)
+	if err != nil {
+		return err
+	}
+	return w.writeGCVs(values, quotedColumns)
+}
+
+func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedColumns string) error {
 	if w.out == nil {
 		return ErrNilOutputWriter
 	}
 	if w.Table == "" {
 		return ErrEmptyTableName
-	}
-	if len(w.columnNames) == 0 {
-		return ErrMissingColumnNames
-	}
-
-	quotedColumns, err := w.quotedColumns()
-	if err != nil {
-		return err
 	}
 
 	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.columnNames, values)
@@ -364,17 +360,6 @@ func (w *SQLInsertWriter) setMetadata(metadata *sppb.ResultSetMetadata) {
 	w.quotedColumnNames = ""
 }
 
-func (w *SQLInsertWriter) initOrValidateColumnNames(columnNames []string) error {
-	initialized := len(w.columnNames) == 0
-	if err := initOrValidateColumnNames(&w.columnNames, columnNames); err != nil {
-		return err
-	}
-	if initialized && len(w.columnNames) > 0 {
-		w.quotedColumnNames = ""
-	}
-	return nil
-}
-
 func (w *SQLInsertWriter) formatter() *spanvalue.FormatConfig {
 	if w.Formatter != nil {
 		return w.Formatter
@@ -382,13 +367,20 @@ func (w *SQLInsertWriter) formatter() *spanvalue.FormatConfig {
 	return spanvalue.LiteralFormatConfig()
 }
 
-func (w *SQLInsertWriter) quotedColumns() (string, error) {
-	if w.quotedColumnNames != "" {
+func (w *SQLInsertWriter) initOrValidateQuotedColumns(columnNames []string) (string, error) {
+	if len(columnNames) == 0 && w.quotedColumnNames != "" {
 		return w.quotedColumnNames, nil
 	}
-	quotedColumns, err := quoteIdentifiers(w.columnNames)
+	names, err := validatedColumnNames(w.columnNames, columnNames)
 	if err != nil {
 		return "", err
+	}
+	quotedColumns, err := quoteIdentifiers(names)
+	if err != nil {
+		return "", err
+	}
+	if len(w.columnNames) == 0 {
+		w.columnNames = names
 	}
 	w.quotedColumnNames = strings.Join(quotedColumns, ", ")
 	return w.quotedColumnNames, nil
@@ -433,20 +425,30 @@ func metadataColumnNames(metadata *sppb.ResultSetMetadata) []string {
 // columnNames slice it sees. Once initialized, subsequent non-empty inputs must
 // match exactly; empty inputs are accepted only after initialization.
 func initOrValidateColumnNames(dst *[]string, columnNames []string) error {
+	validated, err := validatedColumnNames(*dst, columnNames)
+	if err != nil {
+		return err
+	}
 	if len(*dst) == 0 {
-		if len(columnNames) == 0 {
-			return ErrMissingColumnNames
-		}
-		*dst = slices.Clone(columnNames)
-		return nil
-	}
-	if len(columnNames) == 0 {
-		return nil
-	}
-	if !slices.Equal(*dst, columnNames) {
-		return fmt.Errorf("%w: got %v want %v", ErrColumnNamesMismatch, columnNames, *dst)
+		*dst = validated
 	}
 	return nil
+}
+
+func validatedColumnNames(existing []string, columnNames []string) ([]string, error) {
+	if len(existing) == 0 {
+		if len(columnNames) == 0 {
+			return nil, ErrMissingColumnNames
+		}
+		return slices.Clone(columnNames), nil
+	}
+	if len(columnNames) == 0 {
+		return existing, nil
+	}
+	if !slices.Equal(existing, columnNames) {
+		return nil, fmt.Errorf("%w: got %v want %v", ErrColumnNamesMismatch, columnNames, existing)
+	}
+	return existing, nil
 }
 
 // quoteIdentifiers quotes GoogleSQL identifiers and rejects empty names.
