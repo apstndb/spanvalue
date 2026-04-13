@@ -2,11 +2,12 @@ package spanvalue
 
 import (
 	"fmt"
-	"slices"
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/samber/lo"
+
+	"github.com/apstndb/spanvalue/internal"
 )
 
 // ColumnNames returns the names of the provided fields. Unnamed fields are kept
@@ -20,7 +21,7 @@ func ColumnNames(fields []*sppb.StructType_Field, namer UnnamedFieldNamer) ([]st
 	for i, field := range fields {
 		names[i] = field.GetName()
 	}
-	return resolveColumnNamesInPlace(names, namer)
+	return internal.ResolveColumnNamesInPlace(names, namer)
 }
 
 // FormatRowColumns formats a row represented as column names plus GCV values.
@@ -53,52 +54,5 @@ func (fc *FormatConfig) formatColumns(values []spanner.GenericColumnValue) ([]st
 }
 
 func resolveColumnNames(columnNames []string, namer UnnamedFieldNamer) ([]string, error) {
-	if namer == nil {
-		return columnNames, nil
-	}
-	return resolveColumnNamesInPlace(slices.Clone(columnNames), namer)
-}
-
-func resolveColumnNamesInPlace(names []string, namer UnnamedFieldNamer) ([]string, error) {
-	if namer == nil {
-		return names, nil
-	}
-
-	usedNames := make(map[string]bool, len(names))
-	for _, name := range names {
-		if name != "" {
-			usedNames[name] = true
-		}
-	}
-
-	autoIdx := 0
-	var attempted map[string]bool // lazily allocated, reused via clear()
-	for i, name := range names {
-		if name != "" {
-			continue
-		}
-		if attempted == nil {
-			attempted = make(map[string]bool)
-		} else {
-			clear(attempted)
-		}
-		for {
-			name = namer(autoIdx)
-			autoIdx++
-			if name == "" {
-				return nil, fmt.Errorf("unnamed field namer returned empty string (field index %d, generated index %d)", i, autoIdx-1)
-			}
-			if !usedNames[name] {
-				break
-			}
-			if attempted[name] {
-				return nil, fmt.Errorf("unnamed field namer returned repeated colliding name %q (field index %d, generated index %d)", name, i, autoIdx-1)
-			}
-			attempted[name] = true
-		}
-		names[i] = name
-		usedNames[name] = true
-	}
-
-	return names, nil
+	return internal.ResolveColumnNames(columnNames, namer)
 }

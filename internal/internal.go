@@ -1,15 +1,122 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"iter"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/samber/lo/it"
 )
+
+// ResolveColumnNames returns a copy of columnNames with every empty string
+// replaced by a name produced by namer. Already-named columns are preserved.
+// If namer is nil the input slice is returned unchanged without copying.
+func ResolveColumnNames(columnNames []string, namer func(int) string) ([]string, error) {
+	if namer == nil {
+		return columnNames, nil
+	}
+	return ResolveColumnNamesInPlace(slices.Clone(columnNames), namer)
+}
+
+// ResolveColumnNamesInPlace resolves unnamed columns in names directly.
+// If namer is nil the input slice is returned unchanged.
+func ResolveColumnNamesInPlace(names []string, namer func(int) string) ([]string, error) {
+	if namer == nil {
+		return names, nil
+	}
+
+	usedNames := make(map[string]bool, len(names))
+	for _, name := range names {
+		if name != "" {
+			usedNames[name] = true
+		}
+	}
+
+	autoIdx := 0
+	var attempted map[string]bool
+	for i, name := range names {
+		if name != "" {
+			continue
+		}
+		if attempted == nil {
+			attempted = make(map[string]bool)
+		} else {
+			clear(attempted)
+		}
+		for {
+			name = namer(autoIdx)
+			autoIdx++
+			if name == "" {
+				return nil, fmt.Errorf("unnamed field namer returned empty string (field index %d, generated index %d)", i, autoIdx-1)
+			}
+			if !usedNames[name] {
+				break
+			}
+			if attempted[name] {
+				return nil, fmt.Errorf("unnamed field namer returned repeated colliding name %q (field index %d, generated index %d)", name, i, autoIdx-1)
+			}
+			attempted[name] = true
+		}
+		names[i] = name
+		usedNames[name] = true
+	}
+
+	return names, nil
+}
+
+// AssembleResolvedJSONObject combines already-resolved JSON object keys and
+// pre-formatted JSON value strings into a single JSON object string.
+func AssembleResolvedJSONObject(columnNames []string, values []string) (string, error) {
+	marshaledKeys, err := MarshalJSONObjectKeys(columnNames)
+	if err != nil {
+		return "", err
+	}
+	return AssembleJSONObjectWithMarshaledKeys(marshaledKeys, values), nil
+}
+
+// MarshalJSONObjectKeys marshals JSON object keys once for reuse across rows.
+func MarshalJSONObjectKeys(columnNames []string) ([][]byte, error) {
+	keys := make([][]byte, len(columnNames))
+	for i, name := range columnNames {
+		// While json.Marshal on a Go string is technically infallible, we check the error for robustness.
+		// Note: strconv.Quote is not suitable here because it produces Go string
+		// literal escapes (e.g., \a, \v) that are not valid JSON escape sequences.
+		key, err := json.Marshal(name)
+		if err != nil {
+			return nil, err
+		}
+		keys[i] = key
+	}
+	return keys, nil
+}
+
+// AssembleJSONObjectWithMarshaledKeys combines pre-marshaled JSON object keys
+// and pre-formatted JSON value strings into a single JSON object string.
+func AssembleJSONObjectWithMarshaledKeys(keys [][]byte, values []string) string {
+	var b strings.Builder
+	// Grow uses a cheap lower bound only. Key/value sizes are content-dependent.
+	b.Grow(len(values))
+	b.WriteByte('{')
+	for i, val := range values {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		if i < len(keys) {
+			b.Write(keys[i])
+		} else {
+			b.WriteString(`""`)
+		}
+		b.WriteByte(':')
+		b.WriteString(val)
+	}
+	b.WriteByte('}')
+	return b.String()
+}
 
 // ByteToEscapeSequenceReadable formats a byte as a string without quote processing
 func ByteToEscapeSequenceReadable(b byte) string {
