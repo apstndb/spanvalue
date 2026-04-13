@@ -198,6 +198,7 @@ type JSONLWriter struct {
 
 	columnNames         []string
 	resolvedColumnNames []string
+	marshaledKeys       [][]byte
 	out                 io.Writer
 }
 
@@ -242,10 +243,11 @@ func (w *JSONLWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	if err != nil {
 		return err
 	}
-	s, err := internal.AssembleResolvedJSONObject(resolvedNames, formattedValues)
+	marshaledKeys, err := w.marshalResolvedNames(resolvedNames)
 	if err != nil {
 		return err
 	}
+	s := internal.AssembleJSONObjectWithMarshaledKeys(marshaledKeys, formattedValues)
 	_, err = fmt.Fprintln(w.out, s)
 	return err
 }
@@ -253,6 +255,7 @@ func (w *JSONLWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 func (w *JSONLWriter) setMetadata(metadata *sppb.ResultSetMetadata) {
 	w.columnNames = metadataColumnNames(metadata)
 	w.resolvedColumnNames = nil
+	w.marshaledKeys = nil
 }
 
 func (w *JSONLWriter) initOrValidateColumnNames(columnNames []string) error {
@@ -262,6 +265,7 @@ func (w *JSONLWriter) initOrValidateColumnNames(columnNames []string) error {
 	}
 	if initialized && len(w.columnNames) > 0 {
 		w.resolvedColumnNames = nil
+		w.marshaledKeys = nil
 	}
 	return nil
 }
@@ -286,6 +290,18 @@ func (w *JSONLWriter) resolvedNames() ([]string, error) {
 	}
 	w.resolvedColumnNames = resolvedNames
 	return resolvedNames, nil
+}
+
+func (w *JSONLWriter) marshalResolvedNames(resolvedNames []string) ([][]byte, error) {
+	if w.marshaledKeys != nil {
+		return w.marshaledKeys, nil
+	}
+	marshaledKeys, err := internal.MarshalJSONObjectKeys(resolvedNames)
+	if err != nil {
+		return nil, err
+	}
+	w.marshaledKeys = marshaledKeys
+	return marshaledKeys, nil
 }
 
 // SQLInsertWriter writes rows as GoogleSQL INSERT statements.

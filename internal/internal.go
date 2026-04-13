@@ -72,6 +72,32 @@ func ResolveColumnNamesInPlace(names []string, namer func(int) string) ([]string
 // AssembleResolvedJSONObject combines already-resolved JSON object keys and
 // pre-formatted JSON value strings into a single JSON object string.
 func AssembleResolvedJSONObject(columnNames []string, values []string) (string, error) {
+	marshaledKeys, err := MarshalJSONObjectKeys(columnNames)
+	if err != nil {
+		return "", err
+	}
+	return AssembleJSONObjectWithMarshaledKeys(marshaledKeys, values), nil
+}
+
+// MarshalJSONObjectKeys marshals JSON object keys once for reuse across rows.
+func MarshalJSONObjectKeys(columnNames []string) ([][]byte, error) {
+	keys := make([][]byte, len(columnNames))
+	for i, name := range columnNames {
+		// While json.Marshal on a Go string is technically infallible, we check the error for robustness.
+		// Note: strconv.Quote is not suitable here because it produces Go string
+		// literal escapes (e.g., \a, \v) that are not valid JSON escape sequences.
+		key, err := json.Marshal(name)
+		if err != nil {
+			return nil, err
+		}
+		keys[i] = key
+	}
+	return keys, nil
+}
+
+// AssembleJSONObjectWithMarshaledKeys combines pre-marshaled JSON object keys
+// and pre-formatted JSON value strings into a single JSON object string.
+func AssembleJSONObjectWithMarshaledKeys(keys [][]byte, values []string) string {
 	var b strings.Builder
 	// Grow uses a cheap lower bound only. Key/value sizes are content-dependent.
 	b.Grow(len(values))
@@ -80,23 +106,16 @@ func AssembleResolvedJSONObject(columnNames []string, values []string) (string, 
 		if i > 0 {
 			b.WriteByte(',')
 		}
-		var name string
-		if i < len(columnNames) {
-			name = columnNames[i]
+		if i < len(keys) {
+			b.Write(keys[i])
+		} else {
+			b.WriteString(`""`)
 		}
-		// While json.Marshal on a Go string is technically infallible, we check the error for robustness.
-		// Note: strconv.Quote is not suitable here because it produces Go string
-		// literal escapes (e.g., \a, \v) that are not valid JSON escape sequences.
-		key, err := json.Marshal(name)
-		if err != nil {
-			return "", err
-		}
-		b.Write(key)
 		b.WriteByte(':')
 		b.WriteString(val)
 	}
 	b.WriteByte('}')
-	return b.String(), nil
+	return b.String()
 }
 
 // ByteToEscapeSequenceReadable formats a byte as a string without quote processing
