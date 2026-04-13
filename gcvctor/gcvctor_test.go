@@ -372,20 +372,6 @@ func TestNullOf_STRUCT(t *testing.T) {
 	}
 }
 
-func TestDeprecated_ArrayCodeTypedNull_matchesNullArrayFromCode(t *testing.T) {
-	t.Parallel()
-	// Deprecated API: must stay equivalent to NullArrayFromCode until removed.
-	got := gcvctor.ArrayCodeTypedNull(sppb.TypeCode_INT64)
-	want := spanner.GenericColumnValue{
-		Type:  typector.ElemCodeToArrayType(sppb.TypeCode_INT64),
-		Value: structpb.NewNullValue(),
-	}
-
-	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
-		t.Errorf("diff (-want, +got) = %v", diff)
-	}
-}
-
 func TestNullRawValueFromType_STRUCT(t *testing.T) {
 	structType := must(typector.NameCodeSlicesToStructType(
 		[]string{"a", "b"},
@@ -399,22 +385,7 @@ func TestNullRawValueFromType_STRUCT(t *testing.T) {
 	}
 
 	if _, ok := got.Value.GetKind().(*structpb.Value_NullValue); !ok {
-		t.Errorf("Expected NullValue for STRUCT TypedNull, got %T", got.Value.GetKind())
-	}
-}
-
-func TestDeprecated_ArrayTypeTypedNull_matchesNullArrayOf(t *testing.T) {
-	t.Parallel()
-	// Deprecated API: must stay equivalent to NullArrayOf until removed.
-	structType := typector.NameCodeToStructType("n", sppb.TypeCode_INT64)
-	got := gcvctor.ArrayTypeTypedNull(structType)
-	want := spanner.GenericColumnValue{
-		Type:  typector.ElemTypeToArrayType(structType),
-		Value: structpb.NewNullValue(),
-	}
-
-	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
-		t.Errorf("diff (-want, +got) = %v", diff)
+		t.Errorf("Expected NullValue for STRUCT NullOf, got %T", got.Value.GetKind())
 	}
 }
 
