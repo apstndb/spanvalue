@@ -102,13 +102,6 @@ func BytesBasedValueOf(typ *sppb.Type, v []byte) spanner.GenericColumnValue {
 	}
 }
 
-// BytesBasedValue is an alias for [BytesBasedValueOf].
-//
-// Deprecated: use [BytesBasedValueOf].
-func BytesBasedValue(typ *sppb.Type, v []byte) spanner.GenericColumnValue {
-	return BytesBasedValueOf(typ, v)
-}
-
 // StringBasedValueFromCode constructs a GenericColumnValue for a simple scalar type code
 // with a string wire payload.
 func StringBasedValueFromCode(code sppb.TypeCode, v string) spanner.GenericColumnValue {
@@ -116,13 +109,6 @@ func StringBasedValueFromCode(code sppb.TypeCode, v string) spanner.GenericColum
 		Type:  typector.CodeToSimpleType(code),
 		Value: structpb.NewStringValue(v),
 	}
-}
-
-// StringBasedValue is an alias for [StringBasedValueFromCode].
-//
-// Deprecated: use [StringBasedValueFromCode].
-func StringBasedValue(code sppb.TypeCode, v string) spanner.GenericColumnValue {
-	return StringBasedValueFromCode(code, v)
 }
 
 // DateValue returns a non-null DATE GenericColumnValue.
@@ -238,13 +224,6 @@ func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spa
 	}, nil
 }
 
-// ArrayValueWithType is an alias for [ArrayValueOf].
-//
-// Deprecated: use [ArrayValueOf].
-func ArrayValueWithType(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
-	return ArrayValueOf(elemType, elems...)
-}
-
 // StructValueOf constructs STRUCT GenericColumnValue.
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
 func StructValueOf(names []string, gcvs []spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
@@ -270,13 +249,6 @@ func StructValueOf(names []string, gcvs []spanner.GenericColumnValue) (spanner.G
 	}, nil
 }
 
-// StructValue is an alias for [StructValueOf].
-//
-// Deprecated: use [StructValueOf].
-func StructValue(names []string, gcvs []spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
-	return StructValueOf(names, gcvs)
-}
-
 // NullFromCode returns a typed SQL NULL for a simple scalar type code.
 // The [cloud.google.com/go/spanner.GenericColumnValue] Value field is always a protobuf
 // NullValue; see [NullOf] for STRUCT and ARRAY semantics.
@@ -285,13 +257,6 @@ func NullFromCode(code sppb.TypeCode) spanner.GenericColumnValue {
 		Type:  typector.CodeToSimpleType(code),
 		Value: structpb.NewNullValue(),
 	}
-}
-
-// SimpleTypedNull is an alias for [NullFromCode].
-//
-// Deprecated: use [NullFromCode].
-func SimpleTypedNull(code sppb.TypeCode) spanner.GenericColumnValue {
-	return NullFromCode(code)
 }
 
 // NullOf returns a typed SQL NULL for typ.
@@ -306,35 +271,14 @@ func NullOf(typ *sppb.Type) spanner.GenericColumnValue {
 	}
 }
 
-// TypedNull is an alias for [NullOf].
-//
-// Deprecated: use [NullOf].
-func TypedNull(typ *sppb.Type) spanner.GenericColumnValue {
-	return NullOf(typ)
-}
-
 // NullArrayOf returns a typed SQL NULL for ARRAY<elemType>.
 func NullArrayOf(elemType *sppb.Type) spanner.GenericColumnValue {
 	return NullOf(typector.ElemTypeToArrayType(elemType))
 }
 
-// ArrayTypeTypedNull is an alias for [NullArrayOf].
-//
-// Deprecated: use [NullArrayOf].
-func ArrayTypeTypedNull(elemType *sppb.Type) spanner.GenericColumnValue {
-	return NullArrayOf(elemType)
-}
-
 // NullArrayFromCode returns a typed SQL NULL for ARRAY<T> where T is a simple scalar type code.
 func NullArrayFromCode(elemCode sppb.TypeCode) spanner.GenericColumnValue {
 	return NullOf(typector.ElemCodeToArrayType(elemCode))
-}
-
-// ArrayCodeTypedNull is an alias for [NullArrayFromCode].
-//
-// Deprecated: use [NullArrayFromCode].
-func ArrayCodeTypedNull(elemCode sppb.TypeCode) spanner.GenericColumnValue {
-	return NullArrayFromCode(elemCode)
 }
 
 // EmptyArrayOf returns a non-null empty ARRAY<elemType> (length zero).
@@ -345,21 +289,7 @@ func EmptyArrayOf(elemType *sppb.Type) spanner.GenericColumnValue {
 	}
 }
 
-// ElemTypeToEmptyArray is an alias for [EmptyArrayOf].
-//
-// Deprecated: use [EmptyArrayOf].
-func ElemTypeToEmptyArray(typ *sppb.Type) spanner.GenericColumnValue {
-	return EmptyArrayOf(typ)
-}
-
 // EmptyArrayFromCode returns a non-null empty ARRAY<T> for a simple scalar element type code.
 func EmptyArrayFromCode(code sppb.TypeCode) spanner.GenericColumnValue {
 	return EmptyArrayOf(typector.CodeToSimpleType(code))
-}
-
-// ElemTypeCodeToEmptyArray is an alias for [EmptyArrayFromCode].
-//
-// Deprecated: use [EmptyArrayFromCode].
-func ElemTypeCodeToEmptyArray(code sppb.TypeCode) spanner.GenericColumnValue {
-	return EmptyArrayFromCode(code)
 }
