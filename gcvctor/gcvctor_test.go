@@ -372,7 +372,7 @@ func TestNullOf_STRUCT(t *testing.T) {
 	}
 }
 
-func TestNullRawValueFromType_STRUCT(t *testing.T) {
+func TestNullOf_STRUCT_MultipleFields(t *testing.T) {
 	structType := must(typector.NameCodeSlicesToStructType(
 		[]string{"a", "b"},
 		[]sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_STRING},
