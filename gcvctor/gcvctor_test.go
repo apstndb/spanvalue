@@ -336,6 +336,85 @@ func TestParseExpr(t *testing.T) {
 	}
 }
 
+func TestValidatedStringValueHelpers(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		input   string
+		call    func(string) (spanner.GenericColumnValue, error)
+		want    spanner.GenericColumnValue
+		wantErr bool
+	}{
+		{
+			name:  "DATE valid",
+			input: "2024-01-15",
+			call:  gcvctor.DateStringValue,
+			want: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_DATE),
+				Value: structpb.NewStringValue("2024-01-15"),
+			},
+		},
+		{
+			name:    "DATE invalid",
+			input:   "2024-02-30",
+			call:    gcvctor.DateStringValue,
+			wantErr: true,
+		},
+		{
+			name:  "TIMESTAMP valid",
+			input: "2024-01-15T12:34:56.789Z",
+			call:  gcvctor.TimestampStringValue,
+			want: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_TIMESTAMP),
+				Value: structpb.NewStringValue("2024-01-15T12:34:56.789Z"),
+			},
+		},
+		{
+			name:    "TIMESTAMP invalid",
+			input:   "2024-01-15 12:34:56",
+			call:    gcvctor.TimestampStringValue,
+			wantErr: true,
+		},
+		{
+			name:  "INTERVAL valid",
+			input: "P1Y2M3DT4H5M6S",
+			call:  gcvctor.IntervalStringValue,
+			want: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_INTERVAL),
+				Value: structpb.NewStringValue("P1Y2M3DT4H5M6S"),
+			},
+		},
+		{
+			name:    "INTERVAL invalid",
+			input:   "not-an-interval",
+			call:    gcvctor.IntervalStringValue,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := tt.call(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(tt.want, got, protocmp.Transform()); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestNullRawValueFromType_EnumerateSimpleTypes(t *testing.T) {
 	for rawcode, typename := range sppb.TypeCode_name {
 		if typename == "STRUCT" || typename == "ARRAY" {
