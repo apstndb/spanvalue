@@ -116,7 +116,8 @@ func DateValue(v civil.Date) spanner.GenericColumnValue {
 	return StringBasedValueFromCode(sppb.TypeCode_DATE, v.String())
 }
 
-// DateStringValue validates an RFC3339 full-date string and returns a non-null DATE GenericColumnValue.
+// DateStringValue validates an RFC3339 full-date string and returns a non-null DATE
+// GenericColumnValue using the canonical DATE wire string.
 func DateStringValue(v string) (spanner.GenericColumnValue, error) {
 	d, err := civil.ParseDate(v)
 	if err != nil {
@@ -130,13 +131,14 @@ func TimestampValue(v time.Time) spanner.GenericColumnValue {
 	return StringBasedValueFromCode(sppb.TypeCode_TIMESTAMP, v.Format(time.RFC3339Nano))
 }
 
-// TimestampStringValue validates an RFC3339Nano timestamp string and returns a non-null TIMESTAMP GenericColumnValue.
+// TimestampStringValue validates an RFC3339Nano timestamp string and returns a non-null
+// TIMESTAMP GenericColumnValue using the canonical UTC wire string.
 func TimestampStringValue(v string) (spanner.GenericColumnValue, error) {
 	ts, err := time.Parse(time.RFC3339Nano, v)
 	if err != nil {
 		return spanner.GenericColumnValue{}, err
 	}
-	return TimestampValue(ts), nil
+	return TimestampValue(ts.UTC()), nil
 }
 
 // NumericValue returns a non-null NUMERIC GenericColumnValue.
@@ -149,7 +151,8 @@ func IntervalValue(v spanner.Interval) spanner.GenericColumnValue {
 	return StringBasedValueFromCode(sppb.TypeCode_INTERVAL, v.String())
 }
 
-// IntervalStringValue validates an ISO8601 duration string and returns a non-null INTERVAL GenericColumnValue.
+// IntervalStringValue validates an ISO8601 duration string and returns a non-null
+// INTERVAL GenericColumnValue using spanner.Interval's canonical wire string.
 func IntervalStringValue(v string) (spanner.GenericColumnValue, error) {
 	iv, err := spanner.ParseInterval(v)
 	if err != nil {

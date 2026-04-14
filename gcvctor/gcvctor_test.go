@@ -371,6 +371,15 @@ func TestValidatedStringValueHelpers(t *testing.T) {
 			},
 		},
 		{
+			name:  "TIMESTAMP canonical UTC",
+			input: "2024-01-15T21:34:56.789+09:00",
+			call:  gcvctor.TimestampStringValue,
+			want: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_TIMESTAMP),
+				Value: structpb.NewStringValue("2024-01-15T12:34:56.789Z"),
+			},
+		},
+		{
 			name:    "TIMESTAMP invalid",
 			input:   "2024-01-15 12:34:56",
 			call:    gcvctor.TimestampStringValue,
