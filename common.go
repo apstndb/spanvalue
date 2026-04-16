@@ -144,31 +144,43 @@ func IsNull(gcv spanner.GenericColumnValue) bool {
 }
 
 func FormatProtoAsCast(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
-	if value.Type.GetCode() != sppb.TypeCode_PROTO {
-		return "", ErrFallthrough
-	}
+	return formatProtoAsCastWithDialect(SQLDialectGoogleSQL)(formatter, value, toplevel)
+}
 
-	if IsNull(value) {
-		return formatter.GetNullString(), nil
-	}
+func formatProtoAsCastWithDialect(dialect SQLDialect) FormatComplexFunc {
+	return func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
+		if value.Type.GetCode() != sppb.TypeCode_PROTO {
+			return "", ErrFallthrough
+		}
 
-	b, err := base64.StdEncoding.DecodeString(value.Value.GetStringValue())
-	if err != nil {
-		return "", err
+		if IsNull(value) {
+			return formatter.GetNullString(), nil
+		}
+
+		b, err := base64.StdEncoding.DecodeString(value.Value.GetStringValue())
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("CAST(%v AS %s)", internal.ToReadableBytesLiteral(b), QuoteIdentifier(dialect, value.Type.ProtoTypeFqn)), nil
 	}
-	return fmt.Sprintf("CAST(%v AS `%v`)", internal.ToReadableBytesLiteral(b), value.Type.ProtoTypeFqn), nil
 }
 
 func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
-	if value.Type.GetCode() != sppb.TypeCode_ENUM {
-		return "", ErrFallthrough
-	}
+	return formatEnumAsCastWithDialect(SQLDialectGoogleSQL)(formatter, value, toplevel)
+}
 
-	if IsNull(value) {
-		return formatter.GetNullString(), nil
-	}
+func formatEnumAsCastWithDialect(dialect SQLDialect) FormatComplexFunc {
+	return func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
+		if value.Type.GetCode() != sppb.TypeCode_ENUM {
+			return "", ErrFallthrough
+		}
 
-	return fmt.Sprintf("CAST(%v AS `%v`)", value.Value.GetStringValue(), value.Type.ProtoTypeFqn), nil
+		if IsNull(value) {
+			return formatter.GetNullString(), nil
+		}
+
+		return fmt.Sprintf("CAST(%v AS %s)", value.Value.GetStringValue(), QuoteIdentifier(dialect, value.Type.ProtoTypeFqn)), nil
+	}
 }
 
 type Formatter interface {

@@ -4,10 +4,11 @@
 // Spanner CLI–compatible text, and related styles.
 //
 // Configure output with [FormatConfig]. Use the constructors [LiteralFormatConfig],
-// [SimpleFormatConfig], [SpannerCLICompatibleFormatConfig], and [JSONFormatConfig] to pick
-// a preset. [FormatConfig.FormatColumn] runs [FormatComplexFunc] plugins first, then
-// built-in ARRAY, STRUCT, and scalar formatting. Convenience entry points include
-// [FormatRowLiteral], [FormatColumnLiteral], [FormatRowJSONObject], and
+// [PostgreSQLLiteralFormatConfig], [SimpleFormatConfig], [SpannerCLICompatibleFormatConfig],
+// and [JSONFormatConfig] to pick a preset. [FormatConfig.FormatColumn] runs
+// [FormatComplexFunc] plugins first, then built-in ARRAY, STRUCT, and scalar formatting.
+// Convenience entry points include [FormatRowLiteral], [FormatColumnLiteral],
+// [FormatRowPostgreSQLLiteral], [FormatColumnPostgreSQLLiteral], [FormatRowJSONObject], and
 // [FormatRowSpannerCLICompatible].
 //
 // To build [cloud.google.com/go/spanner.GenericColumnValue] values from Go types, see the sibling package
