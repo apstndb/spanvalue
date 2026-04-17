@@ -499,24 +499,18 @@ func quoteIdentifiers(names []string) ([]string, error) {
 		if name == "" {
 			return nil, ErrEmptyColumnName
 		}
-		quoted[i] = quoteIdentifier(name)
+		quoted[i] = spanvalue.QuoteIdentifier(spanvalue.SQLDialectGoogleSQL, name)
 	}
 	return quoted, nil
-}
-
-// quoteIdentifier quotes a GoogleSQL identifier, escaping backticks by doubling them.
-func quoteIdentifier(name string) string {
-	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
 }
 
 // quoteQualifiedIdentifier quotes each identifier segment in a dotted path.
 func quoteQualifiedIdentifier(name string) (string, error) {
 	parts := strings.Split(name, ".")
-	for i, part := range parts {
+	for _, part := range parts {
 		if part == "" {
 			return "", fmt.Errorf("%w: qualified table name contains empty segment", ErrEmptyTableName)
 		}
-		parts[i] = quoteIdentifier(part)
 	}
-	return strings.Join(parts, "."), nil
+	return spanvalue.QuoteQualifiedIdentifier(spanvalue.SQLDialectGoogleSQL, name), nil
 }
