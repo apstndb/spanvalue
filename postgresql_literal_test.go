@@ -1,6 +1,8 @@
 package spanvalue
 
 import (
+	"errors"
+	"math"
 	"math/big"
 	"testing"
 	"time"
@@ -72,17 +74,6 @@ func TestFormatColumnPostgreSQLLiteral(t *testing.T) {
 			value: lo.Must(gcvctor.ArrayValue(gcvctor.Int64Value(1), gcvctor.Int64Value(2))),
 			want:  `ARRAY[1, 2]`,
 		},
-		{
-			name: "struct",
-			value: lo.Must(gcvctor.StructValueOf(
-				[]string{"a", "b"},
-				[]spanner.GenericColumnValue{
-					gcvctor.Int64Value(1),
-					gcvctor.DateValue(civil.Date{Year: 2024, Month: 1, Day: 15}),
-				},
-			)),
-			want: `ROW(1, CAST('2024-01-15' AS date))`,
-		},
 	}
 
 	for _, tt := range tests {
@@ -95,6 +86,85 @@ func TestFormatColumnPostgreSQLLiteral(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Fatalf("FormatColumnPostgreSQLLiteral() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFormatColumnPostgreSQLLiteral_Floats(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		value spanner.GenericColumnValue
+		want  string
+	}{
+		{"float32 finite", gcvctor.Float32Value(1.5), `CAST(1.5 AS float4)`},
+		{"float32 NaN", gcvctor.Float32Value(float32(math.NaN())), `CAST('NaN' AS float4)`},
+		{"float32 Infinity", gcvctor.Float32Value(float32(math.Inf(1))), `CAST('Infinity' AS float4)`},
+		{"float64 finite", gcvctor.Float64Value(2.5), `CAST(2.5 AS float8)`},
+		{"float64 -Infinity", gcvctor.Float64Value(math.Inf(-1)), `CAST('-Infinity' AS float8)`},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := FormatColumnPostgreSQLLiteral(tt.value)
+			if err != nil {
+				t.Fatalf("FormatColumnPostgreSQLLiteral() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("FormatColumnPostgreSQLLiteral() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFormatColumnPostgreSQLLiteral_UnsupportedTypes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		value spanner.GenericColumnValue
+	}{
+		{
+			name: "struct",
+			value: lo.Must(gcvctor.StructValueOf(
+				[]string{"a", "b"},
+				[]spanner.GenericColumnValue{
+					gcvctor.Int64Value(1),
+					gcvctor.DateValue(civil.Date{Year: 2024, Month: 1, Day: 15}),
+				},
+			)),
+		},
+		{
+			name:  "proto",
+			value: gcvctor.ProtoValue("examples.spanner.music.SingerInfo", []byte("abc")),
+		},
+		{
+			name:  "enum",
+			value: gcvctor.EnumValue("examples.spanner.music.Genre", 1),
+		},
+		{
+			name: "array of struct",
+			value: lo.Must(gcvctor.ArrayValueOf(
+				typector.NameCodeToStructType("a", sppb.TypeCode_INT64),
+				lo.Must(gcvctor.StructValueOf(
+					[]string{"a"},
+					[]spanner.GenericColumnValue{gcvctor.Int64Value(1)},
+				)),
+			)),
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := FormatColumnPostgreSQLLiteral(tt.value)
+			if !errors.Is(err, ErrUnsupportedPostgreSQLType) {
+				t.Fatalf("FormatColumnPostgreSQLLiteral() error = %v, want ErrUnsupportedPostgreSQLType", err)
 			}
 		})
 	}
@@ -134,13 +204,15 @@ func TestFormatPostgreSQLType(t *testing.T) {
 		{"json", typector.CodeToSimpleType(sppb.TypeCode_JSON), "json"},
 		{"jsonb", typector.PGJSONB(), "jsonb"},
 		{"array", typector.ElemCodeToArrayType(sppb.TypeCode_DATE), "date[]"},
+		{"proto", typector.FQNToProtoType("examples.spanner.music.SingerInfo"), `"examples"."spanner"."music"."SingerInfo"`},
+		{"enum", typector.FQNToEnumType("examples.spanner.music.Genre"), `"examples"."spanner"."music"."Genre"`},
 		{
 			"struct",
 			typector.StructTypeFieldsToStructType([]*sppb.StructType_Field{
 				{Name: "a", Type: typector.CodeToSimpleType(sppb.TypeCode_INT64)},
 				{Type: typector.CodeToSimpleType(sppb.TypeCode_STRING)},
 			}),
-			"STRUCT<a bigint, text>",
+			"record",
 		},
 	}
 

@@ -2,6 +2,7 @@ package spanvalue
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
@@ -161,7 +162,15 @@ func formatProtoAsCastWithDialect(dialect SQLDialect) FormatComplexFunc {
 		if err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("CAST(%v AS %s)", internal.ToReadableBytesLiteral(b), QuoteIdentifier(dialect, value.Type.ProtoTypeFqn)), nil
+		literal := internal.ToReadableBytesLiteral(b)
+		if dialect == SQLDialectPostgreSQL {
+			literal = postgreSQLCast(postgreSQLStringLiteral(`\x`+hex.EncodeToString(b)), "bytea")
+		}
+		typeName := QuoteIdentifier(dialect, value.Type.ProtoTypeFqn)
+		if dialect == SQLDialectPostgreSQL {
+			typeName = QuoteQualifiedIdentifier(dialect, value.Type.ProtoTypeFqn)
+		}
+		return fmt.Sprintf("CAST(%v AS %s)", literal, typeName), nil
 	}
 }
 
@@ -179,7 +188,11 @@ func formatEnumAsCastWithDialect(dialect SQLDialect) FormatComplexFunc {
 			return formatter.GetNullString(), nil
 		}
 
-		return fmt.Sprintf("CAST(%v AS %s)", value.Value.GetStringValue(), QuoteIdentifier(dialect, value.Type.ProtoTypeFqn)), nil
+		val := value.Value.GetStringValue()
+		if dialect == SQLDialectPostgreSQL {
+			return fmt.Sprintf("CAST(%s AS %s)", postgreSQLStringLiteral(val), QuoteQualifiedIdentifier(dialect, value.Type.ProtoTypeFqn)), nil
+		}
+		return fmt.Sprintf("CAST(%v AS %s)", val, QuoteIdentifier(dialect, value.Type.ProtoTypeFqn)), nil
 	}
 }
 

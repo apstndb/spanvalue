@@ -1,7 +1,6 @@
 package spanvalue
 
 import (
-	"fmt"
 	"strings"
 
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
@@ -68,23 +67,23 @@ func formatPostgreSQLType(typ *sppb.Type) string {
 	case sppb.TypeCode_UUID:
 		return "uuid"
 	case sppb.TypeCode_ENUM:
+		if typeName := typ.GetProtoTypeFqn(); typeName != "" {
+			return QuoteQualifiedIdentifier(SQLDialectPostgreSQL, typeName)
+		}
 		return "enum"
 	case sppb.TypeCode_PROTO:
+		if typeName := typ.GetProtoTypeFqn(); typeName != "" {
+			return QuoteQualifiedIdentifier(SQLDialectPostgreSQL, typeName)
+		}
 		return "proto"
 	case sppb.TypeCode_ARRAY:
 		return formatPostgreSQLType(typ.GetArrayElementType()) + "[]"
 	case sppb.TypeCode_STRUCT:
-		fields := typ.GetStructType().GetFields()
-		parts := make([]string, len(fields))
-		for i, field := range fields {
-			fieldType := formatPostgreSQLType(field.GetType())
-			if field.GetName() == "" {
-				parts[i] = fieldType
-				continue
-			}
-			parts[i] = fmt.Sprintf("%s %s", field.GetName(), fieldType)
-		}
-		return fmt.Sprintf("STRUCT<%s>", strings.Join(parts, ", "))
+		// PostgreSQL dialect does not expose Spanner STRUCT/PROTO/ENUM as first-class
+		// SQL types. PostgreSQLLiteralFormatConfig rejects such values before generating
+		// literals; this fallback keeps the helper usable for diagnostics without
+		// pretending STRUCT<...> is valid PostgreSQL syntax.
+		return "record"
 	default:
 		return ""
 	}
