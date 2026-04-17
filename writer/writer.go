@@ -508,10 +508,12 @@ func quoteIdentifiers(names []string) ([]string, error) {
 // quoteQualifiedIdentifier quotes each identifier segment in a dotted path.
 func quoteQualifiedIdentifier(name string) (string, error) {
 	parts := strings.Split(name, ".")
-	for _, part := range parts {
+	quoted := make([]string, len(parts))
+	for i, part := range parts {
 		if part == "" {
 			return "", fmt.Errorf("%w: qualified table name contains empty segment", ErrEmptyTableName)
 		}
+		quoted[i] = spanvalue.QuoteIdentifier(databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, part)
 	}
-	return spanvalue.QuoteQualifiedIdentifier(databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, name), nil
+	return strings.Join(quoted, "."), nil
 }

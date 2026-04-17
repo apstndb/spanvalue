@@ -27,7 +27,7 @@ func TestQuoteIdentifier(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			if got := QuoteIdentifier(tt.dialect, tt.input); got != tt.want {
-				t.Fatalf("QuoteIdentifier(%q, %q) = %q, want %q", tt.dialect, tt.input, got, tt.want)
+				t.Fatalf("QuoteIdentifier(%v, %q) = %q, want %q", tt.dialect, tt.input, got, tt.want)
 			}
 		})
 	}
@@ -52,7 +52,7 @@ func TestQuoteQualifiedIdentifier(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			if got := QuoteQualifiedIdentifier(tt.dialect, tt.input); got != tt.want {
-				t.Fatalf("QuoteQualifiedIdentifier(%q, %q) = %q, want %q", tt.dialect, tt.input, got, tt.want)
+				t.Fatalf("QuoteQualifiedIdentifier(%v, %q) = %q, want %q", tt.dialect, tt.input, got, tt.want)
 			}
 		})
 	}
