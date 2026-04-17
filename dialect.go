@@ -1,19 +1,16 @@
 package spanvalue
 
-import "strings"
+import (
+	"strings"
 
-// SQLDialect selects SQL-surface details such as identifier quoting rules.
-type SQLDialect string
-
-const (
-	SQLDialectGoogleSQL  SQLDialect = "googlesql"
-	SQLDialectPostgreSQL SQLDialect = "postgresql"
+	databasepb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
 )
 
 // QuoteIdentifier quotes a single identifier for dialect.
-func QuoteIdentifier(dialect SQLDialect, name string) string {
+// DATABASE_DIALECT_UNSPECIFIED follows the Spanner default and uses GoogleSQL quoting.
+func QuoteIdentifier(dialect databasepb.DatabaseDialect, name string) string {
 	switch dialect {
-	case SQLDialectPostgreSQL:
+	case databasepb.DatabaseDialect_POSTGRESQL:
 		return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 	default:
 		return "`" + strings.ReplaceAll(name, "`", "``") + "`"
@@ -21,7 +18,7 @@ func QuoteIdentifier(dialect SQLDialect, name string) string {
 }
 
 // QuoteQualifiedIdentifier quotes each segment of a dotted identifier path for dialect.
-func QuoteQualifiedIdentifier(dialect SQLDialect, name string) string {
+func QuoteQualifiedIdentifier(dialect databasepb.DatabaseDialect, name string) string {
 	parts := strings.Split(name, ".")
 	for i, part := range parts {
 		parts[i] = QuoteIdentifier(dialect, part)

@@ -1,20 +1,25 @@
 package spanvalue
 
-import "testing"
+import (
+	"testing"
+
+	databasepb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
+)
 
 func TestQuoteIdentifier(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name    string
-		dialect SQLDialect
+		dialect databasepb.DatabaseDialect
 		input   string
 		want    string
 	}{
-		{"GoogleSQL simple", SQLDialectGoogleSQL, "table", "`table`"},
-		{"GoogleSQL escapes backtick", SQLDialectGoogleSQL, "a`b", "`a``b`"},
-		{"PostgreSQL simple", SQLDialectPostgreSQL, "table", `"table"`},
-		{"PostgreSQL escapes quote", SQLDialectPostgreSQL, `a"b`, `"a""b"`},
+		{"GoogleSQL simple", databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, "table", "`table`"},
+		{"GoogleSQL escapes backtick", databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, "a`b", "`a``b`"},
+		{"PostgreSQL simple", databasepb.DatabaseDialect_POSTGRESQL, "table", `"table"`},
+		{"PostgreSQL escapes quote", databasepb.DatabaseDialect_POSTGRESQL, `a"b`, `"a""b"`},
+		{"Unspecified defaults to GoogleSQL", databasepb.DatabaseDialect_DATABASE_DIALECT_UNSPECIFIED, "table", "`table`"},
 	}
 
 	for _, tt := range tests {
@@ -33,13 +38,13 @@ func TestQuoteQualifiedIdentifier(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		dialect SQLDialect
+		dialect databasepb.DatabaseDialect
 		input   string
 		want    string
 	}{
-		{"GoogleSQL qualified", SQLDialectGoogleSQL, "schema.table", "`schema`.`table`"},
-		{"PostgreSQL qualified", SQLDialectPostgreSQL, "schema.table", `"schema"."table"`},
-		{"GoogleSQL preserves empty segment shape", SQLDialectGoogleSQL, "schema..table", "`schema`.``.`table`"},
+		{"GoogleSQL qualified", databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, "schema.table", "`schema`.`table`"},
+		{"PostgreSQL qualified", databasepb.DatabaseDialect_POSTGRESQL, "schema.table", `"schema"."table"`},
+		{"GoogleSQL preserves empty segment shape", databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, "schema..table", "`schema`.``.`table`"},
 	}
 
 	for _, tt := range tests {

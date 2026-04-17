@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"cloud.google.com/go/spanner"
+	databasepb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 
 	"github.com/apstndb/spanvalue"
@@ -499,7 +500,7 @@ func quoteIdentifiers(names []string) ([]string, error) {
 		if name == "" {
 			return nil, ErrEmptyColumnName
 		}
-		quoted[i] = spanvalue.QuoteIdentifier(spanvalue.SQLDialectGoogleSQL, name)
+		quoted[i] = spanvalue.QuoteIdentifier(databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, name)
 	}
 	return quoted, nil
 }
@@ -512,5 +513,5 @@ func quoteQualifiedIdentifier(name string) (string, error) {
 			return "", fmt.Errorf("%w: qualified table name contains empty segment", ErrEmptyTableName)
 		}
 	}
-	return spanvalue.QuoteQualifiedIdentifier(spanvalue.SQLDialectGoogleSQL, name), nil
+	return spanvalue.QuoteQualifiedIdentifier(databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, name), nil
 }
