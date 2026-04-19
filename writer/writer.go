@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"cloud.google.com/go/spanner"
+	databasepb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 
 	"github.com/apstndb/spanvalue"
@@ -499,14 +500,9 @@ func quoteIdentifiers(names []string) ([]string, error) {
 		if name == "" {
 			return nil, ErrEmptyColumnName
 		}
-		quoted[i] = quoteIdentifier(name)
+		quoted[i] = spanvalue.QuoteIdentifier(databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, name)
 	}
 	return quoted, nil
-}
-
-// quoteIdentifier quotes a GoogleSQL identifier, escaping backticks by doubling them.
-func quoteIdentifier(name string) string {
-	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
 }
 
 // quoteQualifiedIdentifier quotes each identifier segment in a dotted path.
@@ -516,7 +512,7 @@ func quoteQualifiedIdentifier(name string) (string, error) {
 		if part == "" {
 			return "", fmt.Errorf("%w: qualified table name contains empty segment", ErrEmptyTableName)
 		}
-		parts[i] = quoteIdentifier(part)
+		parts[i] = spanvalue.QuoteIdentifier(databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, part)
 	}
 	return strings.Join(parts, "."), nil
 }
