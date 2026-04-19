@@ -21,6 +21,9 @@ func QuoteIdentifier(dialect databasepb.DatabaseDialect, name string) string {
 // QuoteQualifiedIdentifier quotes each segment of a dotted identifier path for dialect.
 // It does not validate the path; callers that reject empty segments must do so before calling it.
 func QuoteQualifiedIdentifier(dialect databasepb.DatabaseDialect, name string) string {
+	if !strings.Contains(name, ".") {
+		return QuoteIdentifier(dialect, name)
+	}
 	parts := strings.Split(name, ".")
 	for i, part := range parts {
 		parts[i] = QuoteIdentifier(dialect, part)
