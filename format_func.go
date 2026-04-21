@@ -19,16 +19,30 @@ func FormatTupleStruct(typ *sppb.Type, toplevel bool, fieldStrings []string) (st
 }
 
 func formatSimpleStructField(fc *FormatConfig, field *sppb.StructType_Field, value *structpb.Value) (string, error) {
-	return fc.FormatColumn(typeValueToGCV(field.GetType(), value), false)
+	return FormatSimpleStructField(fc, field, value)
 }
 
 func FormatTypelessStructField(fc *FormatConfig, field *sppb.StructType_Field, value *structpb.Value) (string, error) {
-	exprStr, err := fc.FormatColumn(typeValueToGCV(field.GetType(), value), false)
-	return exprStr + lo.Ternary(field.GetName() != "", " AS "+field.GetName(), ""), err
+	exprStr, err := FormatSimpleStructField(fc, field, value)
+	if err != nil {
+		return "", err
+	}
+	return exprStr + lo.Ternary(field.GetName() != "", " AS "+field.GetName(), ""), nil
 }
 
 func FormatSimpleStructField(fc *FormatConfig, field *sppb.StructType_Field, value *structpb.Value) (string, error) {
-	return fc.FormatColumn(typeValueToGCV(field.Type, value), false)
+	fieldType, err := structFieldType(field)
+	if err != nil {
+		return "", err
+	}
+	return fc.FormatColumn(typeValueToGCV(fieldType, value), false)
+}
+
+func structFieldType(field *sppb.StructType_Field) (*sppb.Type, error) {
+	if field == nil {
+		return nil, ErrNilStructField
+	}
+	return field.GetType(), nil
 }
 
 func FormatUntypedArray(_ *sppb.Type, _ bool, elemStrings []string) (string, error) {
