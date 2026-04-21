@@ -163,7 +163,11 @@ func validateRawJSONValue(code sppb.TypeCode, value *structpb.Value) (string, er
 
 	switch code {
 	case sppb.TypeCode_INT64, sppb.TypeCode_ENUM:
-		if _, err := strconv.ParseInt(stringValue.StringValue, 10, 64); err != nil {
+		trimmed := strings.TrimSpace(stringValue.StringValue)
+		if !json.Valid([]byte(stringValue.StringValue)) {
+			return "", fmt.Errorf("invalid %s JSON payload %q", code, stringValue.StringValue)
+		}
+		if _, err := strconv.ParseInt(trimmed, 10, 64); err != nil {
 			return "", fmt.Errorf("invalid %s JSON payload %q: %w", code, stringValue.StringValue, err)
 		}
 	case sppb.TypeCode_JSON:

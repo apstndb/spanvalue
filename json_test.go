@@ -99,12 +99,28 @@ func TestJSONFormatConfig_InvalidRawPayload(t *testing.T) {
 			wantErr: `invalid INT64 JSON payload "12.5"`,
 		},
 		{
+			name: "INT64 invalid JSON number lexical form",
+			gcv: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_INT64),
+				Value: structpb.NewStringValue("0001"),
+			},
+			wantErr: `invalid INT64 JSON payload "0001"`,
+		},
+		{
 			name: "ENUM invalid lexical form",
 			gcv: spanner.GenericColumnValue{
 				Type:  typector.FQNToEnumType("example.Enum"),
 				Value: structpb.NewStringValue("abc"),
 			},
 			wantErr: `invalid ENUM JSON payload "abc"`,
+		},
+		{
+			name: "ENUM invalid JSON number lexical form",
+			gcv: spanner.GenericColumnValue{
+				Type:  typector.FQNToEnumType("example.Enum"),
+				Value: structpb.NewStringValue("+1"),
+			},
+			wantErr: `invalid ENUM JSON payload "+1"`,
 		},
 		{
 			name: "JSON invalid text",
