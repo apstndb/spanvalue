@@ -129,7 +129,7 @@ func TestFormatColumn_PostgreSQLAnnotatedTypes(t *testing.T) {
 	t.Parallel()
 
 	rat := big.NewRat(314, 100)
-	numGCV := lo.Must(gcvctor.PGNumericValue(rat))
+	numGCV := gcvctor.PGNumericValue(rat)
 	wantSimple := spanner.NumericString(rat)
 	gotSimple, err := SimpleFormatConfig().FormatToplevelColumn(numGCV)
 	if err != nil {
@@ -138,7 +138,7 @@ func TestFormatColumn_PostgreSQLAnnotatedTypes(t *testing.T) {
 	if gotSimple != wantSimple {
 		t.Errorf("simple PGNumeric: got %q want %q", gotSimple, wantSimple)
 	}
-	wantLiteral, err := FormatColumnLiteral(lo.Must(gcvctor.NumericValue(rat)))
+	wantLiteral, err := FormatColumnLiteral(gcvctor.NumericValue(rat))
 	if err != nil {
 		t.Fatalf("want literal: %v", err)
 	}

@@ -26,7 +26,9 @@
 // Neither encodes a non-null STRUCT whose fields are all null; use [StructValueOf] with
 // per-field nulls when you need that shape.
 //
-// [NumericValue] and [PGNumericValue] return errors on nil [*big.Rat] input instead of panicking.
+// [NumericValueChecked] and [PGNumericValueChecked] return errors on nil [*big.Rat] input
+// instead of panicking. The legacy [NumericValue] and [PGNumericValue] helpers keep their
+// original signatures and return typed SQL NULL values on nil input.
 //
 // [PGNumericValue] and [PGJSONBValue] build PostgreSQL-dialect annotated NUMERIC/JSON values
 // ([cloud.google.com/go/spanner/apiv1/spannerpb.TypeAnnotationCode_PG_NUMERIC],

@@ -208,7 +208,7 @@ func TestDecodeColumnLiteral(t *testing.T) {
 		},
 		{
 			desc:  "pg numeric (PG_NUMERIC annotation)",
-			value: lo.Must(gcvctor.PGNumericValue(big.NewRat(1234123456789, 1e9))),
+			value: gcvctor.PGNumericValue(big.NewRat(1234123456789, 1e9)),
 			want:  `NUMERIC "1234.123456789"`,
 		},
 		{
