@@ -11,6 +11,7 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -627,6 +628,89 @@ func TestArrayValueOf(t *testing.T) {
 				}
 				if tt.errIs != nil && !errors.Is(err, tt.errIs) {
 					t.Fatalf("errors.Is(err, %v) = false; err = %v", tt.errIs, err)
+				}
+				var zero spanner.GenericColumnValue
+				if diff := cmp.Diff(zero, got, protocmp.Transform()); diff != "" {
+					t.Errorf("expected zero value on error (-want +got):\n%s", diff)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(tt.want, got, protocmp.Transform()); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestStructValueOf(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		desc      string
+		names     []string
+		gcvs      []spanner.GenericColumnValue
+		want      spanner.GenericColumnValue
+		expectErr bool
+		errIs     error
+		errSubstr string
+	}{
+		{
+			desc:  "single field",
+			names: []string{"a"},
+			gcvs:  []spanner.GenericColumnValue{gcvctor.Int64Value(1)},
+			want: spanner.GenericColumnValue{
+				Type: must(typector.NameCodeSlicesToStructType(
+					[]string{"a"},
+					[]sppb.TypeCode{sppb.TypeCode_INT64},
+				)),
+				Value: structpb.NewListValue(&structpb.ListValue{
+					Values: []*structpb.Value{structpb.NewStringValue("1")},
+				}),
+			},
+		},
+		{
+			desc:      "mismatched counts",
+			names:     []string{"a"},
+			gcvs:      nil,
+			expectErr: true,
+			errIs:     gcvctor.ErrMismatchedCounts,
+		},
+		{
+			desc:      "nil field type named",
+			names:     []string{"broken"},
+			gcvs:      []spanner.GenericColumnValue{{}},
+			expectErr: true,
+			errIs:     gcvctor.ErrNilFieldType,
+			errSubstr: `field 0 ("broken")`,
+		},
+		{
+			desc:      "nil field type unnamed",
+			names:     []string{""},
+			gcvs:      []spanner.GenericColumnValue{{}},
+			expectErr: true,
+			errIs:     gcvctor.ErrNilFieldType,
+			errSubstr: "field 0",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.desc, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := gcvctor.StructValueOf(tt.names, tt.gcvs)
+			if tt.expectErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				if tt.errIs != nil && !errors.Is(err, tt.errIs) {
+					t.Fatalf("errors.Is(err, %v) = false; err = %v", tt.errIs, err)
+				}
+				if tt.errSubstr != "" && !strings.Contains(err.Error(), tt.errSubstr) {
+					t.Fatalf("error %q does not contain %q", err, tt.errSubstr)
 				}
 				var zero spanner.GenericColumnValue
 				if diff := cmp.Diff(zero, got, protocmp.Transform()); diff != "" {
