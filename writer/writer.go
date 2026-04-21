@@ -31,6 +31,8 @@ var (
 	ErrMissingColumnNames = errors.New("missing column names")
 	// ErrColumnNamesMismatch reports that provided column names differ from initialized schema.
 	ErrColumnNamesMismatch = errors.New("column names mismatch")
+	// ErrHeaderAfterData reports that CSVWriter.WriteHeader was called after data rows were emitted.
+	ErrHeaderAfterData = errors.New("header after data")
 )
 
 // Writer writes rows to an output stream.
@@ -51,6 +53,7 @@ type CSVWriter struct {
 	out                 io.Writer
 	writer              *csv.Writer
 	wroteHeader         bool
+	wroteData           bool
 }
 
 // NewCSVWriter returns a CSV writer optionally initialized from result-set metadata.
@@ -78,6 +81,9 @@ func (w *CSVWriter) WriteRow(row *spanner.Row) error {
 func (w *CSVWriter) WriteHeader() error {
 	if w.wroteHeader {
 		return nil
+	}
+	if w.wroteData {
+		return ErrHeaderAfterData
 	}
 
 	csvWriter, err := w.csvWriter()
@@ -129,6 +135,7 @@ func (w *CSVWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	if err := csvWriter.Write(formattedValues); err != nil {
 		return err
 	}
+	w.wroteData = true
 	return nil
 }
 

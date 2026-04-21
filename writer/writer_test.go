@@ -164,6 +164,26 @@ func TestCSVWriterWriteHeaderWithoutMetadata(t *testing.T) {
 	}
 }
 
+func TestCSVWriterWriteHeaderAfterData(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewCSVWriter(&out, metadataWithColumnNames("name", "age"))
+	w.Header = false
+
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.StringValue("Alice"),
+		gcvctor.Int64Value(42),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+
+	err := w.WriteHeader()
+	if !errors.Is(err, ErrHeaderAfterData) {
+		t.Fatalf("WriteHeader() error = %v, want ErrHeaderAfterData", err)
+	}
+}
+
 func TestCSVWriterWriteGCVsWithoutMetadata(t *testing.T) {
 	t.Parallel()
 
