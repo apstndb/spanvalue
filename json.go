@@ -1,11 +1,14 @@
 package spanvalue
 
 import (
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/apstndb/spanvalue/internal"
 )
@@ -140,10 +143,7 @@ func FormatJSONSimpleValue(formatter Formatter, value spanner.GenericColumnValue
 
 	switch value.Type.GetCode() {
 	case sppb.TypeCode_INT64, sppb.TypeCode_ENUM, sppb.TypeCode_JSON:
-		// INT64: StringValue is already a valid JSON number
-		// ENUM: Spanner stores proto enum values as INT64; StringValue is a valid JSON number
-		// JSON column: StringValue is already valid JSON
-		return val.GetStringValue(), nil
+		return validateRawJSONValue(value.Type.GetCode(), val)
 
 	default:
 		// For all other types, structpb.Value's JSON marshaling matches our needs
@@ -153,4 +153,24 @@ func FormatJSONSimpleValue(formatter Formatter, value spanner.GenericColumnValue
 		}
 		return string(b), nil
 	}
+}
+
+func validateRawJSONValue(code sppb.TypeCode, value *structpb.Value) (string, error) {
+	stringValue, ok := value.GetKind().(*structpb.Value_StringValue)
+	if !ok {
+		return "", fmt.Errorf("invalid %s JSON payload kind %T: want string value", code, value.GetKind())
+	}
+
+	switch code {
+	case sppb.TypeCode_INT64, sppb.TypeCode_ENUM:
+		if _, err := strconv.ParseInt(stringValue.StringValue, 10, 64); err != nil {
+			return "", fmt.Errorf("invalid %s JSON payload %q: %w", code, stringValue.StringValue, err)
+		}
+	case sppb.TypeCode_JSON:
+		if !json.Valid([]byte(stringValue.StringValue)) {
+			return "", fmt.Errorf("invalid %s JSON payload %q", code, stringValue.StringValue)
+		}
+	}
+
+	return stringValue.StringValue, nil
 }
