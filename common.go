@@ -16,9 +16,10 @@ import (
 )
 
 var (
-	ErrNilRow           = errors.New("nil row")
-	ErrUnknownType      = errors.New("unknown type")
-	ErrMismatchedFields = errors.New("mismatched struct value/field count")
+	ErrNilRow                     = errors.New("nil row")
+	ErrUnknownType                = errors.New("unknown type")
+	ErrMismatchedFields           = errors.New("mismatched struct value/field count")
+	ErrUnexpectedComplexValueKind = errors.New("unexpected complex value kind")
 )
 
 const (
@@ -216,8 +217,11 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 		if IsNull(value) {
 			return fc.GetNullString(), nil
 		}
-
-		elemStrings, err := lo.MapErr(value.Value.GetListValue().GetValues(), func(v *structpb.Value, _ int) (string, error) {
+		listValue, err := getComplexListValue(valType.GetCode(), value.Value)
+		if err != nil {
+			return "", err
+		}
+		elemStrings, err := lo.MapErr(listValue.GetValues(), func(v *structpb.Value, _ int) (string, error) {
 			return fc.FormatColumn(typeValueToGCV(valType.GetArrayElementType(), v), false)
 		})
 		if err != nil {
@@ -229,8 +233,12 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 		if IsNull(value) {
 			return fc.GetNullString(), nil
 		}
+		listValue, err := getComplexListValue(valType.GetCode(), value.Value)
+		if err != nil {
+			return "", err
+		}
 		fields := valType.GetStructType().GetFields()
-		fieldValues := value.Value.GetListValue().GetValues()
+		fieldValues := listValue.GetValues()
 		if len(fieldValues) != len(fields) {
 			return "", fmt.Errorf("%w: got %d values, want %d", ErrMismatchedFields, len(fieldValues), len(fields))
 		}
@@ -245,6 +253,14 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 	default:
 		return fc.formatSimpleColumn(value)
 	}
+}
+
+func getComplexListValue(code sppb.TypeCode, value *structpb.Value) (*structpb.ListValue, error) {
+	listValue, ok := value.GetKind().(*structpb.Value_ListValue)
+	if !ok {
+		return nil, fmt.Errorf("%w for %s: got %T, want list value", ErrUnexpectedComplexValueKind, code, value.GetKind())
+	}
+	return listValue.ListValue, nil
 }
 
 func (fc *FormatConfig) FormatRow(row *spanner.Row) ([]string, error) {

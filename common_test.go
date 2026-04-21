@@ -218,3 +218,41 @@ func TestFormatRowNilRow(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatColumnRejectsNonListComplexKinds(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		gcv  spanner.GenericColumnValue
+	}{
+		{
+			name: "array string payload",
+			gcv: spanner.GenericColumnValue{
+				Type:  typector.ElemCodeToArrayType(sppb.TypeCode_INT64),
+				Value: structpb.NewStringValue("not-a-list"),
+			},
+		},
+		{
+			name: "struct number payload",
+			gcv: spanner.GenericColumnValue{
+				Type: typector.MustNameCodeSlicesToStructType(
+					[]string{"a"},
+					[]sppb.TypeCode{sppb.TypeCode_INT64},
+				),
+				Value: structpb.NewNumberValue(1),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := SimpleFormatConfig().FormatToplevelColumn(tt.gcv)
+			if !errors.Is(err, ErrUnexpectedComplexValueKind) {
+				t.Fatalf("error = %v, want ErrUnexpectedComplexValueKind", err)
+			}
+		})
+	}
+}
