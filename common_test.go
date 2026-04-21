@@ -256,3 +256,38 @@ func TestFormatColumnRejectsNonListComplexKinds(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatColumnRejectsEmptyTypeFQN(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		gcv  spanner.GenericColumnValue
+	}{
+		{
+			name: "proto",
+			gcv: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_PROTO},
+				Value: structpb.NewStringValue("ZGVhZGJlZWY="),
+			},
+		},
+		{
+			name: "enum",
+			gcv: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_ENUM},
+				Value: structpb.NewStringValue("42"),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := LiteralFormatConfig().FormatToplevelColumn(tt.gcv)
+			if !errors.Is(err, ErrEmptyTypeFQN) {
+				t.Fatalf("error = %v, want ErrEmptyTypeFQN", err)
+			}
+		})
+	}
+}

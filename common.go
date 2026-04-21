@@ -20,6 +20,7 @@ var (
 	ErrUnknownType                = errors.New("unknown type")
 	ErrMismatchedFields           = errors.New("mismatched struct value/field count")
 	ErrUnexpectedComplexValueKind = errors.New("unexpected complex value kind")
+	ErrEmptyTypeFQN               = errors.New("empty type FQN")
 )
 
 const (
@@ -158,7 +159,11 @@ func FormatProtoAsCast(formatter Formatter, value spanner.GenericColumnValue, to
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("CAST(%v AS `%v`)", internal.ToReadableBytesLiteral(b), value.Type.ProtoTypeFqn), nil
+	typeFQN, err := requireTypeFQN(value.Type)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("CAST(%v AS `%v`)", internal.ToReadableBytesLiteral(b), typeFQN), nil
 }
 
 func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
@@ -170,7 +175,11 @@ func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, top
 		return formatter.GetNullString(), nil
 	}
 
-	return fmt.Sprintf("CAST(%v AS `%v`)", value.Value.GetStringValue(), value.Type.ProtoTypeFqn), nil
+	typeFQN, err := requireTypeFQN(value.Type)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("CAST(%v AS `%v`)", value.Value.GetStringValue(), typeFQN), nil
 }
 
 type Formatter interface {
@@ -261,6 +270,13 @@ func getComplexListValue(code sppb.TypeCode, value *structpb.Value) (*structpb.L
 		return nil, fmt.Errorf("%w for %s: got %T, want list value", ErrUnexpectedComplexValueKind, code, value.GetKind())
 	}
 	return listValue.ListValue, nil
+}
+
+func requireTypeFQN(typ *sppb.Type) (string, error) {
+	if fqn := typ.GetProtoTypeFqn(); fqn != "" {
+		return fqn, nil
+	}
+	return "", fmt.Errorf("%w for %s", ErrEmptyTypeFQN, typ.GetCode())
 }
 
 func (fc *FormatConfig) FormatRow(row *spanner.Row) ([]string, error) {
