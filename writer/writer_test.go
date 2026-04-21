@@ -9,6 +9,7 @@ import (
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/spanvalue/gcvctor"
+	"github.com/apstndb/spanvalue/internal"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -373,6 +374,22 @@ func TestJSONLWriterWriteGCVsKeepsResolvedNamesAfterNamerChange(t *testing.T) {
 	want := "{\"_0\":42,\"_1\":\"hello\"}\n{\"_0\":43,\"_1\":\"world\"}\n"
 	if diff := cmp.Diff(want, out.String()); diff != "" {
 		t.Fatalf("JSONL output mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestJSONLWriterWriteGCVs_MismatchedCachedKeys(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewJSONLWriter(&out, metadataWithColumnNames("name", "age"))
+	w.marshaledKeys = [][]byte{[]byte(`"name"`)}
+
+	err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.StringValue("Alice"),
+		gcvctor.Int64Value(42),
+	})
+	if !errors.Is(err, internal.ErrMismatchedJSONObjectFields) {
+		t.Fatalf("WriteGCVs() error = %v, want ErrMismatchedJSONObjectFields", err)
 	}
 }
 
