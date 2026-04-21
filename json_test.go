@@ -3,6 +3,7 @@ package spanvalue
 import (
 	"math"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestJSONFormatConfig(t *testing.T) {
@@ -75,6 +77,80 @@ func TestJSONFormatConfig(t *testing.T) {
 			}
 			if diff := cmp.Diff(tt.wantJSON, got); diff != "" {
 				t.Errorf("JSON output mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestJSONFormatConfig_InvalidRawPayload(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		gcv     spanner.GenericColumnValue
+		wantErr string
+	}{
+		{
+			name: "INT64 invalid lexical form",
+			gcv: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_INT64),
+				Value: structpb.NewStringValue("12.5"),
+			},
+			wantErr: `invalid INT64 JSON payload "12.5"`,
+		},
+		{
+			name: "INT64 invalid JSON number lexical form",
+			gcv: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_INT64),
+				Value: structpb.NewStringValue("0001"),
+			},
+			wantErr: `invalid INT64 JSON payload "0001"`,
+		},
+		{
+			name: "ENUM invalid lexical form",
+			gcv: spanner.GenericColumnValue{
+				Type:  typector.FQNToEnumType("example.Enum"),
+				Value: structpb.NewStringValue("abc"),
+			},
+			wantErr: `invalid ENUM JSON payload "abc"`,
+		},
+		{
+			name: "ENUM invalid JSON number lexical form",
+			gcv: spanner.GenericColumnValue{
+				Type:  typector.FQNToEnumType("example.Enum"),
+				Value: structpb.NewStringValue("+1"),
+			},
+			wantErr: `invalid ENUM JSON payload "+1"`,
+		},
+		{
+			name: "JSON invalid text",
+			gcv: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_JSON),
+				Value: structpb.NewStringValue(`{"unterminated":`),
+			},
+			wantErr: `invalid JSON JSON payload "{\"unterminated\":"`,
+		},
+		{
+			name: "JSON wrong wire kind",
+			gcv: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_JSON),
+				Value: structpb.NewNumberValue(1),
+			},
+			wantErr: `invalid JSON JSON payload kind *structpb.Value_NumberValue`,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := JSONFormatConfig().FormatToplevelColumn(tt.gcv)
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %q, want substring %q", err, tt.wantErr)
 			}
 		})
 	}
