@@ -32,6 +32,17 @@ var (
 	ErrNilFieldType = errors.New("gcvctor: nil struct field type")
 )
 
+func normalizeNilType(typ *sppb.Type) *sppb.Type {
+	if typ != nil {
+		return typ
+	}
+	return typector.CodeToSimpleType(sppb.TypeCode_TYPE_CODE_UNSPECIFIED)
+}
+
+func normalizeNilArrayType(elemType *sppb.Type) *sppb.Type {
+	return typector.ElemTypeToArrayType(normalizeNilType(elemType))
+}
+
 // BoolValue returns a non-null BOOL GenericColumnValue.
 func BoolValue(v bool) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
@@ -303,16 +314,19 @@ func NullFromCode(code sppb.TypeCode) spanner.GenericColumnValue {
 // NullValue, including when typ is STRUCT or ARRAY.
 // It does not represent a non-null STRUCT whose fields are all null—use [StructValueOf] with
 // per-field nulls (using [NullOf] or [NullFromCode] for each field) when you need that shape.
+// A nil typ is normalized to TYPE_CODE_UNSPECIFIED to avoid a malformed nil Type pointer.
 func NullOf(typ *sppb.Type) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
-		Type:  typ,
+		Type:  normalizeNilType(typ),
 		Value: structpb.NewNullValue(),
 	}
 }
 
 // NullArrayOf returns a typed SQL NULL for ARRAY<elemType>.
+// A nil elemType is normalized to TYPE_CODE_UNSPECIFIED, so NullArrayOf(nil)
+// returns a NULL ARRAY<TYPE_CODE_UNSPECIFIED> rather than an invalid ARRAY shape.
 func NullArrayOf(elemType *sppb.Type) spanner.GenericColumnValue {
-	return NullOf(typector.ElemTypeToArrayType(elemType))
+	return NullOf(normalizeNilArrayType(elemType))
 }
 
 // NullArrayFromCode returns a typed SQL NULL for ARRAY<T> where T is a simple scalar type code.
@@ -321,9 +335,11 @@ func NullArrayFromCode(elemCode sppb.TypeCode) spanner.GenericColumnValue {
 }
 
 // EmptyArrayOf returns a non-null empty ARRAY<elemType> (length zero).
+// A nil elemType is normalized to TYPE_CODE_UNSPECIFIED, so EmptyArrayOf(nil)
+// returns an empty ARRAY<TYPE_CODE_UNSPECIFIED> rather than an invalid ARRAY shape.
 func EmptyArrayOf(elemType *sppb.Type) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
-		Type:  typector.ElemTypeToArrayType(elemType),
+		Type:  normalizeNilArrayType(elemType),
 		Value: structpb.NewListValue(&structpb.ListValue{}),
 	}
 }
