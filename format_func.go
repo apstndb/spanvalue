@@ -19,20 +19,15 @@ func FormatTupleStruct(typ *sppb.Type, toplevel bool, fieldStrings []string) (st
 }
 
 func formatSimpleStructField(fc *FormatConfig, field *sppb.StructType_Field, value *structpb.Value) (string, error) {
-	fieldType, err := structFieldType(field)
-	if err != nil {
-		return "", err
-	}
-	return fc.FormatColumn(typeValueToGCV(fieldType, value), false)
+	return FormatSimpleStructField(fc, field, value)
 }
 
 func FormatTypelessStructField(fc *FormatConfig, field *sppb.StructType_Field, value *structpb.Value) (string, error) {
-	fieldType, err := structFieldType(field)
+	exprStr, err := FormatSimpleStructField(fc, field, value)
 	if err != nil {
 		return "", err
 	}
-	exprStr, err := fc.FormatColumn(typeValueToGCV(fieldType, value), false)
-	return exprStr + lo.Ternary(field.GetName() != "", " AS "+field.GetName(), ""), err
+	return exprStr + lo.Ternary(field.GetName() != "", " AS "+field.GetName(), ""), nil
 }
 
 func FormatSimpleStructField(fc *FormatConfig, field *sppb.StructType_Field, value *structpb.Value) (string, error) {
