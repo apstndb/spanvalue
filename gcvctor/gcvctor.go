@@ -264,8 +264,8 @@ func StructValueOf(names []string, gcvs []spanner.GenericColumnValue) (spanner.G
 		return spanner.GenericColumnValue{}, fmt.Errorf("%w: len(names)=%v != len(gcvs)=%v", ErrMismatchedCounts, len(names), len(gcvs))
 	}
 
-	var types []*sppb.Type
-	var values []*structpb.Value
+	types := make([]*sppb.Type, len(gcvs))
+	values := make([]*structpb.Value, len(gcvs))
 	for i, gcv := range gcvs {
 		if gcv.Type == nil {
 			if names[i] == "" {
@@ -273,8 +273,8 @@ func StructValueOf(names []string, gcvs []spanner.GenericColumnValue) (spanner.G
 			}
 			return spanner.GenericColumnValue{}, fmt.Errorf("%w: field %d (%q)", ErrNilFieldType, i, names[i])
 		}
-		types = append(types, gcv.Type)
-		values = append(values, gcv.Value)
+		types[i] = gcv.Type
+		values[i] = gcv.Value
 	}
 
 	typ, err := typector.NameTypeSlicesToStructType(names, types)
