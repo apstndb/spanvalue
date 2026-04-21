@@ -40,11 +40,7 @@ func normalizeNilType(typ *sppb.Type) *sppb.Type {
 }
 
 func normalizeNilArrayType(elemType *sppb.Type) *sppb.Type {
-	arrayType := typector.ElemTypeToArrayType(normalizeNilType(elemType))
-	if arrayType != nil {
-		return arrayType
-	}
-	return typector.ElemCodeToArrayType(sppb.TypeCode_TYPE_CODE_UNSPECIFIED)
+	return typector.ElemTypeToArrayType(normalizeNilType(elemType))
 }
 
 // BoolValue returns a non-null BOOL GenericColumnValue.
