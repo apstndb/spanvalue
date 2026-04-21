@@ -30,6 +30,8 @@ var (
 	ErrNilElementType = errors.New("gcvctor: nil array element type")
 	// ErrNilFieldType is returned by [StructValueOf] when a field's Type is nil.
 	ErrNilFieldType = errors.New("gcvctor: nil struct field type")
+	// ErrNilNumeric is returned by [NumericValueChecked] and [PGNumericValueChecked] when v is nil.
+	ErrNilNumeric = errors.New("gcvctor: nil numeric input")
 )
 
 func normalizeNilType(typ *sppb.Type) *sppb.Type {
@@ -154,9 +156,23 @@ func TimestampStringValue(v string) (spanner.GenericColumnValue, error) {
 	return TimestampValue(ts.UTC()), nil
 }
 
-// NumericValue returns a non-null NUMERIC GenericColumnValue.
+// NumericValue returns a NUMERIC GenericColumnValue.
+// A nil v returns a typed SQL NULL NUMERIC for backward compatibility; use
+// [NumericValueChecked] to reject nil input with [ErrNilNumeric].
 func NumericValue(v *big.Rat) spanner.GenericColumnValue {
+	if v == nil {
+		return NullFromCode(sppb.TypeCode_NUMERIC)
+	}
 	return StringBasedValueFromCode(sppb.TypeCode_NUMERIC, spanner.NumericString(v))
+}
+
+// NumericValueChecked returns a non-null NUMERIC GenericColumnValue.
+// A nil v returns [ErrNilNumeric].
+func NumericValueChecked(v *big.Rat) (spanner.GenericColumnValue, error) {
+	if v == nil {
+		return spanner.GenericColumnValue{}, ErrNilNumeric
+	}
+	return NumericValue(v), nil
 }
 
 // IntervalValue returns a non-null INTERVAL GenericColumnValue.
@@ -188,13 +204,28 @@ func JSONValue(v any) (spanner.GenericColumnValue, error) {
 	return StringBasedValueFromCode(sppb.TypeCode_JSON, string(b)), nil
 }
 
-// PGNumericValue returns a non-null PostgreSQL-dialect NUMERIC GenericColumnValue
+// PGNumericValue returns a PostgreSQL-dialect NUMERIC GenericColumnValue
 // ([sppb.TypeAnnotationCode_PG_NUMERIC]).
+// A nil v returns a typed SQL NULL PG NUMERIC for backward compatibility; use
+// [PGNumericValueChecked] to reject nil input with [ErrNilNumeric].
 func PGNumericValue(v *big.Rat) spanner.GenericColumnValue {
+	if v == nil {
+		return NullOf(typector.PGNumeric())
+	}
 	return spanner.GenericColumnValue{
 		Type:  typector.PGNumeric(),
 		Value: structpb.NewStringValue(spanner.NumericString(v)),
 	}
+}
+
+// PGNumericValueChecked returns a non-null PostgreSQL-dialect NUMERIC GenericColumnValue
+// ([sppb.TypeAnnotationCode_PG_NUMERIC]).
+// A nil v returns [ErrNilNumeric].
+func PGNumericValueChecked(v *big.Rat) (spanner.GenericColumnValue, error) {
+	if v == nil {
+		return spanner.GenericColumnValue{}, ErrNilNumeric
+	}
+	return PGNumericValue(v), nil
 }
 
 // PGJSONBValue marshals v to JSON and returns a non-null PostgreSQL-dialect JSON GenericColumnValue

@@ -35,6 +35,74 @@ func must[T any](v T, err error) T {
 	return v
 }
 
+func TestNumericValueCheckedNil(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		call func() (spanner.GenericColumnValue, error)
+	}{
+		{
+			name: "google sql numeric",
+			call: func() (spanner.GenericColumnValue, error) {
+				return gcvctor.NumericValueChecked(nil)
+			},
+		},
+		{
+			name: "pg numeric",
+			call: func() (spanner.GenericColumnValue, error) {
+				return gcvctor.PGNumericValueChecked(nil)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := tt.call()
+			if !errors.Is(err, gcvctor.ErrNilNumeric) {
+				t.Fatalf("error = %v, want ErrNilNumeric", err)
+			}
+			if diff := cmp.Diff(spanner.GenericColumnValue{}, got, protocmp.Transform()); diff != "" {
+				t.Fatalf("got non-zero value (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestNumericValueAndPGNumericValueNilReturnTypedNull(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		got  spanner.GenericColumnValue
+		want spanner.GenericColumnValue
+	}{
+		{
+			name: "google sql numeric",
+			got:  gcvctor.NumericValue(nil),
+			want: spanner.GenericColumnValue{Type: typector.CodeToSimpleType(sppb.TypeCode_NUMERIC), Value: structpb.NewNullValue()},
+		},
+		{
+			name: "pg numeric",
+			got:  gcvctor.PGNumericValue(nil),
+			want: spanner.GenericColumnValue{Type: typector.PGNumeric(), Value: structpb.NewNullValue()},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if diff := cmp.Diff(tt.want, tt.got, protocmp.Transform()); diff != "" {
+				t.Fatalf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestParseExpr(t *testing.T) {
 	tests := []struct {
 		desc  string
