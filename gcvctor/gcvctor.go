@@ -39,6 +39,14 @@ func normalizeNilType(typ *sppb.Type) *sppb.Type {
 	return typector.CodeToSimpleType(sppb.TypeCode_TYPE_CODE_UNSPECIFIED)
 }
 
+func normalizeNilArrayType(elemType *sppb.Type) *sppb.Type {
+	arrayType := typector.ElemTypeToArrayType(normalizeNilType(elemType))
+	if arrayType != nil {
+		return arrayType
+	}
+	return typector.ElemCodeToArrayType(sppb.TypeCode_TYPE_CODE_UNSPECIFIED)
+}
+
 // BoolValue returns a non-null BOOL GenericColumnValue.
 func BoolValue(v bool) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
@@ -319,8 +327,10 @@ func NullOf(typ *sppb.Type) spanner.GenericColumnValue {
 }
 
 // NullArrayOf returns a typed SQL NULL for ARRAY<elemType>.
+// A nil elemType is normalized to TYPE_CODE_UNSPECIFIED, so NullArrayOf(nil)
+// returns a NULL ARRAY<TYPE_CODE_UNSPECIFIED> rather than an invalid ARRAY shape.
 func NullArrayOf(elemType *sppb.Type) spanner.GenericColumnValue {
-	return NullOf(typector.ElemTypeToArrayType(normalizeNilType(elemType)))
+	return NullOf(normalizeNilArrayType(elemType))
 }
 
 // NullArrayFromCode returns a typed SQL NULL for ARRAY<T> where T is a simple scalar type code.
@@ -329,9 +339,11 @@ func NullArrayFromCode(elemCode sppb.TypeCode) spanner.GenericColumnValue {
 }
 
 // EmptyArrayOf returns a non-null empty ARRAY<elemType> (length zero).
+// A nil elemType is normalized to TYPE_CODE_UNSPECIFIED, so EmptyArrayOf(nil)
+// returns an empty ARRAY<TYPE_CODE_UNSPECIFIED> rather than an invalid ARRAY shape.
 func EmptyArrayOf(elemType *sppb.Type) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
-		Type:  typector.ElemTypeToArrayType(normalizeNilType(elemType)),
+		Type:  normalizeNilArrayType(elemType),
 		Value: structpb.NewListValue(&structpb.ListValue{}),
 	}
 }
