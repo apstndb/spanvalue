@@ -30,6 +30,8 @@ var (
 	ErrNilElementType = errors.New("gcvctor: nil array element type")
 	// ErrNilFieldType is returned by [StructValueOf] when a field's Type is nil.
 	ErrNilFieldType = errors.New("gcvctor: nil struct field type")
+	// ErrNilNumeric is returned by [NumericValue] and [PGNumericValue] when v is nil.
+	ErrNilNumeric = errors.New("gcvctor: nil numeric input")
 )
 
 func normalizeNilType(typ *sppb.Type) *sppb.Type {
@@ -155,8 +157,12 @@ func TimestampStringValue(v string) (spanner.GenericColumnValue, error) {
 }
 
 // NumericValue returns a non-null NUMERIC GenericColumnValue.
-func NumericValue(v *big.Rat) spanner.GenericColumnValue {
-	return StringBasedValueFromCode(sppb.TypeCode_NUMERIC, spanner.NumericString(v))
+// A nil v returns [ErrNilNumeric].
+func NumericValue(v *big.Rat) (spanner.GenericColumnValue, error) {
+	if v == nil {
+		return spanner.GenericColumnValue{}, ErrNilNumeric
+	}
+	return StringBasedValueFromCode(sppb.TypeCode_NUMERIC, spanner.NumericString(v)), nil
 }
 
 // IntervalValue returns a non-null INTERVAL GenericColumnValue.
@@ -190,11 +196,15 @@ func JSONValue(v any) (spanner.GenericColumnValue, error) {
 
 // PGNumericValue returns a non-null PostgreSQL-dialect NUMERIC GenericColumnValue
 // ([sppb.TypeAnnotationCode_PG_NUMERIC]).
-func PGNumericValue(v *big.Rat) spanner.GenericColumnValue {
+// A nil v returns [ErrNilNumeric].
+func PGNumericValue(v *big.Rat) (spanner.GenericColumnValue, error) {
+	if v == nil {
+		return spanner.GenericColumnValue{}, ErrNilNumeric
+	}
 	return spanner.GenericColumnValue{
 		Type:  typector.PGNumeric(),
 		Value: structpb.NewStringValue(spanner.NumericString(v)),
-	}
+	}, nil
 }
 
 // PGJSONBValue marshals v to JSON and returns a non-null PostgreSQL-dialect JSON GenericColumnValue

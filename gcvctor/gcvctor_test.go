@@ -35,6 +35,43 @@ func must[T any](v T, err error) T {
 	return v
 }
 
+func TestNumericValueNil(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		call func() (spanner.GenericColumnValue, error)
+	}{
+		{
+			name: "google sql numeric",
+			call: func() (spanner.GenericColumnValue, error) {
+				return gcvctor.NumericValue(nil)
+			},
+		},
+		{
+			name: "pg numeric",
+			call: func() (spanner.GenericColumnValue, error) {
+				return gcvctor.PGNumericValue(nil)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := tt.call()
+			if !errors.Is(err, gcvctor.ErrNilNumeric) {
+				t.Fatalf("error = %v, want ErrNilNumeric", err)
+			}
+			if diff := cmp.Diff(spanner.GenericColumnValue{}, got, protocmp.Transform()); diff != "" {
+				t.Fatalf("got non-zero value (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestParseExpr(t *testing.T) {
 	tests := []struct {
 		desc  string
@@ -182,7 +219,7 @@ func TestParseExpr(t *testing.T) {
 		},
 		{
 			`PG NUMERIC 3.14`,
-			gcvctor.PGNumericValue(big.NewRat(314, 100)),
+			must(gcvctor.PGNumericValue(big.NewRat(314, 100))),
 			spanner.GenericColumnValue{
 				Type:  typector.PGNumeric(),
 				Value: structpb.NewStringValue(spanner.NumericString(big.NewRat(314, 100))),

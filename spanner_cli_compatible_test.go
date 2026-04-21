@@ -148,7 +148,7 @@ func TestDecodeColumn(t *testing.T) {
 		},
 		{
 			desc:  "pg numeric",
-			value: gcvctor.PGNumericValue(big.NewRat(123, 100)),
+			value: lo.Must(gcvctor.PGNumericValue(big.NewRat(123, 100))),
 			want:  "1.23",
 		},
 		{
