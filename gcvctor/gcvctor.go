@@ -28,6 +28,8 @@ var (
 	ErrMismatchedCounts = errors.New("gcvctor: mismatched name/value count")
 	// ErrNilElementType is returned by [ArrayValueOf] when elemType is nil.
 	ErrNilElementType = errors.New("gcvctor: nil array element type")
+	// ErrNilFieldType is returned by [StructValueOf] when a field's Type is nil.
+	ErrNilFieldType = errors.New("gcvctor: nil struct field type")
 )
 
 // BoolValue returns a non-null BOOL GenericColumnValue.
@@ -255,17 +257,24 @@ func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spa
 }
 
 // StructValueOf constructs STRUCT GenericColumnValue.
+// A nil field Type returns [ErrNilFieldType].
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
 func StructValueOf(names []string, gcvs []spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if len(names) != len(gcvs) {
 		return spanner.GenericColumnValue{}, fmt.Errorf("%w: len(names)=%v != len(gcvs)=%v", ErrMismatchedCounts, len(names), len(gcvs))
 	}
 
-	var types []*sppb.Type
-	var values []*structpb.Value
-	for _, gcv := range gcvs {
-		types = append(types, gcv.Type)
-		values = append(values, gcv.Value)
+	types := make([]*sppb.Type, len(gcvs))
+	values := make([]*structpb.Value, len(gcvs))
+	for i, gcv := range gcvs {
+		if gcv.Type == nil {
+			if names[i] == "" {
+				return spanner.GenericColumnValue{}, fmt.Errorf("%w: field %d", ErrNilFieldType, i)
+			}
+			return spanner.GenericColumnValue{}, fmt.Errorf("%w: field %d (%q)", ErrNilFieldType, i, names[i])
+		}
+		types[i] = gcv.Type
+		values[i] = gcv.Value
 	}
 
 	typ, err := typector.NameTypeSlicesToStructType(names, types)
