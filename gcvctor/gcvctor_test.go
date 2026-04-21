@@ -72,7 +72,7 @@ func TestNumericValueCheckedNil(t *testing.T) {
 	}
 }
 
-func TestNumericValueNilReturnsTypedNull(t *testing.T) {
+func TestNumericValueAndPGNumericValueNilReturnTypedNull(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {

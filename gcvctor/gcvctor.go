@@ -204,7 +204,7 @@ func JSONValue(v any) (spanner.GenericColumnValue, error) {
 	return StringBasedValueFromCode(sppb.TypeCode_JSON, string(b)), nil
 }
 
-// PGNumericValue returns a non-null PostgreSQL-dialect NUMERIC GenericColumnValue
+// PGNumericValue returns a PostgreSQL-dialect NUMERIC GenericColumnValue
 // ([sppb.TypeAnnotationCode_PG_NUMERIC]).
 // A nil v returns a typed SQL NULL PG NUMERIC for backward compatibility; use
 // [PGNumericValueChecked] to reject nil input with [ErrNilNumeric].
