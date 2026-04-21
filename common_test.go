@@ -1,6 +1,7 @@
 package spanvalue
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 
@@ -167,5 +168,53 @@ func TestFormatColumn_PostgreSQLAnnotatedTypes(t *testing.T) {
 	}
 	if got, want := spantype.FormatTypeVerbose(typector.PGJSONB()), "JSON(PG_JSONB)"; got != want {
 		t.Errorf("FormatTypeVerbose(PGJSONB): got %q want %q", got, want)
+	}
+}
+
+func TestFormatRowNilRow(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{
+			name: "FormatConfig.FormatRow",
+			call: func() error {
+				_, err := SimpleFormatConfig().FormatRow(nil)
+				return err
+			},
+		},
+		{
+			name: "FormatRowLiteral",
+			call: func() error {
+				_, err := FormatRowLiteral(nil)
+				return err
+			},
+		},
+		{
+			name: "FormatRowSpannerCLICompatible",
+			call: func() error {
+				_, err := FormatRowSpannerCLICompatible(nil)
+				return err
+			},
+		},
+		{
+			name: "FormatRowJSONObject",
+			call: func() error {
+				_, err := FormatRowJSONObject(JSONFormatConfig(), nil, IndexedUnnamedFieldNamer)
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if err := tt.call(); !errors.Is(err, ErrNilRow) {
+				t.Fatalf("error = %v, want ErrNilRow", err)
+			}
+		})
 	}
 }

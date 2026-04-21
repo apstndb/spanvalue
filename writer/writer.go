@@ -26,7 +26,7 @@ var (
 	// ErrNilOutputWriter reports that a writer was constructed without an output.
 	ErrNilOutputWriter = errors.New("nil output writer")
 	// ErrNilRow reports that WriteRow was called with a nil row.
-	ErrNilRow = errors.New("nil row")
+	ErrNilRow = spanvalue.ErrNilRow
 	// ErrMissingColumnNames reports that writing values requires initialized column names.
 	ErrMissingColumnNames = errors.New("missing column names")
 	// ErrColumnNamesMismatch reports that provided column names differ from initialized schema.
