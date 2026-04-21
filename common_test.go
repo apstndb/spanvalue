@@ -291,3 +291,38 @@ func TestFormatColumnRejectsEmptyTypeFQN(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatColumnRejectsNilStructFieldDescriptor(t *testing.T) {
+	t.Parallel()
+
+	gcv := spanner.GenericColumnValue{
+		Type: &sppb.Type{
+			Code:       sppb.TypeCode_STRUCT,
+			StructType: &sppb.StructType{Fields: []*sppb.StructType_Field{nil}},
+		},
+		Value: structpb.NewListValue(&structpb.ListValue{
+			Values: []*structpb.Value{structpb.NewStringValue("1")},
+		}),
+	}
+
+	tests := []struct {
+		name string
+		fc   *FormatConfig
+	}{
+		{name: "simple", fc: SimpleFormatConfig()},
+		{name: "literal", fc: LiteralFormatConfig()},
+		{name: "json", fc: JSONFormatConfig()},
+		{name: "spanner cli compatible", fc: SpannerCLICompatibleFormatConfig()},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := tt.fc.FormatToplevelColumn(gcv)
+			if !errors.Is(err, ErrNilStructField) {
+				t.Fatalf("error = %v, want ErrNilStructField", err)
+			}
+		})
+	}
+}

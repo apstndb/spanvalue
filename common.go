@@ -17,6 +17,7 @@ import (
 
 var (
 	ErrNilRow                     = errors.New("nil row")
+	ErrNilStructField             = errors.New("nil struct field descriptor")
 	ErrUnknownType                = errors.New("unknown type")
 	ErrMismatchedFields           = errors.New("mismatched struct value/field count")
 	ErrUnexpectedComplexValueKind = errors.New("unexpected complex value kind")
