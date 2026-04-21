@@ -248,7 +248,10 @@ func (w *JSONLWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	if err != nil {
 		return err
 	}
-	s := internal.AssembleJSONObjectWithMarshaledKeys(marshaledKeys, formattedValues)
+	s, err := internal.AssembleJSONObjectWithMarshaledKeys(marshaledKeys, formattedValues)
+	if err != nil {
+		return err
+	}
 	_, err = fmt.Fprintln(w.out, s)
 	return err
 }

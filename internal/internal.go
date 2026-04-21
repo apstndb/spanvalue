@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"iter"
 	"math"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/samber/lo/it"
 )
+
+var ErrMismatchedJSONObjectFields = errors.New("mismatched JSON object key/value count")
 
 // ResolveColumnNames returns a copy of columnNames with every empty string
 // replaced by a name produced by namer. Already-named columns are preserved.
@@ -76,7 +79,7 @@ func AssembleResolvedJSONObject(columnNames []string, values []string) (string, 
 	if err != nil {
 		return "", err
 	}
-	return AssembleJSONObjectWithMarshaledKeys(marshaledKeys, values), nil
+	return AssembleJSONObjectWithMarshaledKeys(marshaledKeys, values)
 }
 
 // MarshalJSONObjectKeys marshals JSON object keys once for reuse across rows.
@@ -97,7 +100,11 @@ func MarshalJSONObjectKeys(columnNames []string) ([][]byte, error) {
 
 // AssembleJSONObjectWithMarshaledKeys combines pre-marshaled JSON object keys
 // and pre-formatted JSON value strings into a single JSON object string.
-func AssembleJSONObjectWithMarshaledKeys(keys [][]byte, values []string) string {
+func AssembleJSONObjectWithMarshaledKeys(keys [][]byte, values []string) (string, error) {
+	if len(keys) != len(values) {
+		return "", fmt.Errorf("%w: %d keys, %d values", ErrMismatchedJSONObjectFields, len(keys), len(values))
+	}
+
 	var b strings.Builder
 	// Grow uses a cheap lower bound only. Key/value sizes are content-dependent.
 	b.Grow(len(values))
@@ -106,16 +113,12 @@ func AssembleJSONObjectWithMarshaledKeys(keys [][]byte, values []string) string 
 		if i > 0 {
 			b.WriteByte(',')
 		}
-		if i < len(keys) {
-			b.Write(keys[i])
-		} else {
-			b.WriteString(`""`)
-		}
+		b.Write(keys[i])
 		b.WriteByte(':')
 		b.WriteString(val)
 	}
 	b.WriteByte('}')
-	return b.String()
+	return b.String(), nil
 }
 
 // ByteToEscapeSequenceReadable formats a byte as a string without quote processing
