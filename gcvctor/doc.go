@@ -21,6 +21,7 @@
 // [NullOf] returns a typed NULL for any [cloud.google.com/go/spanner/apiv1/spannerpb.Type], including STRUCT and ARRAY; the
 // [cloud.google.com/go/spanner.GenericColumnValue] Value field is always a scalar protobuf null at the top level. [NullFromCode] does the same for simple
 // scalar type codes only—it cannot express STRUCT field layouts or ARRAY element types.
+// A nil type pointer is normalized to TYPE_CODE_UNSPECIFIED so these helpers never fabricate malformed nil Type pointers.
 // Neither encodes a non-null STRUCT whose fields are all null; use [StructValueOf] with
 // per-field nulls when you need that shape.
 //

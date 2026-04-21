@@ -478,6 +478,19 @@ func TestNullOf_STRUCT_MultipleFields(t *testing.T) {
 	}
 }
 
+func TestNullOf_nilTypeNormalizesToUnspecified(t *testing.T) {
+	t.Parallel()
+
+	got := gcvctor.NullOf(nil)
+	want := spanner.GenericColumnValue{
+		Type:  typector.CodeToSimpleType(sppb.TypeCode_TYPE_CODE_UNSPECIFIED),
+		Value: structpb.NewNullValue(),
+	}
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Errorf("diff (-want, +got) = %v", diff)
+	}
+}
+
 func TestNullArrayFromCode_matchesNullOf(t *testing.T) {
 	t.Parallel()
 	got := gcvctor.NullArrayFromCode(sppb.TypeCode_INT64)
@@ -497,6 +510,32 @@ func TestNullArrayOf_matchesNullOf(t *testing.T) {
 	want := spanner.GenericColumnValue{
 		Type:  typector.ElemTypeToArrayType(elem),
 		Value: structpb.NewNullValue(),
+	}
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Errorf("diff (-want, +got) = %v", diff)
+	}
+}
+
+func TestNullArrayOf_nilElementTypeNormalizesToUnspecified(t *testing.T) {
+	t.Parallel()
+
+	got := gcvctor.NullArrayOf(nil)
+	want := spanner.GenericColumnValue{
+		Type:  typector.ElemCodeToArrayType(sppb.TypeCode_TYPE_CODE_UNSPECIFIED),
+		Value: structpb.NewNullValue(),
+	}
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Errorf("diff (-want, +got) = %v", diff)
+	}
+}
+
+func TestEmptyArrayOf_nilElementTypeNormalizesToUnspecified(t *testing.T) {
+	t.Parallel()
+
+	got := gcvctor.EmptyArrayOf(nil)
+	want := spanner.GenericColumnValue{
+		Type:  typector.ElemCodeToArrayType(sppb.TypeCode_TYPE_CODE_UNSPECIFIED),
+		Value: structpb.NewListValue(&structpb.ListValue{}),
 	}
 	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
 		t.Errorf("diff (-want, +got) = %v", diff)
