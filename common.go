@@ -16,6 +16,7 @@ import (
 )
 
 var (
+	ErrNilRow           = errors.New("nil row")
 	ErrUnknownType      = errors.New("unknown type")
 	ErrMismatchedFields = errors.New("mismatched struct value/field count")
 )
@@ -247,6 +248,9 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 }
 
 func (fc *FormatConfig) FormatRow(row *spanner.Row) ([]string, error) {
+	if row == nil {
+		return nil, ErrNilRow
+	}
 	gcvs := make([]spanner.GenericColumnValue, row.Size())
 	if err := row.Columns(slices.Collect(internal.ToAny(internal.Pointers(gcvs)))...); err != nil {
 		return nil, err
