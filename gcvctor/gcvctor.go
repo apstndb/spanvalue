@@ -341,6 +341,9 @@ func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spa
 	}
 	values := make([]*structpb.Value, len(elems))
 	for i, v := range elems {
+		if v.Type == nil {
+			return spanner.GenericColumnValue{}, wrapArrayElementError(i, ErrNilElementType)
+		}
 		if !proto.Equal(elemType, v.Type) {
 			return spanner.GenericColumnValue{}, wrapArrayElementError(i, fmt.Errorf("%w: %v is not %v", ErrTypeMismatch, spantype.FormatTypeMoreVerbose(v.Type), spantype.FormatTypeMoreVerbose(elemType)))
 		}

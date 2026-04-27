@@ -7,7 +7,6 @@ import (
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/spantype/typector"
 	"github.com/google/uuid"
-	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/apstndb/spanvalue"
 	"github.com/apstndb/spanvalue/gcvctor"
@@ -17,8 +16,8 @@ func ExampleNullOf() {
 	scalar := gcvctor.NullOf(typector.CodeToSimpleType(sppb.TypeCode_INT64))
 	array := gcvctor.NullOf(typector.ElemCodeToArrayType(sppb.TypeCode_DATE))
 
-	fmt.Println(scalar.Type.Code.String(), scalar.Value.GetNullValue() == structpb.NullValue_NULL_VALUE)
-	fmt.Println(array.Type.Code.String(), array.Type.ArrayElementType.Code.String(), array.Value.GetNullValue() == structpb.NullValue_NULL_VALUE)
+	fmt.Println(scalar.Type.Code.String(), spanvalue.IsNull(scalar))
+	fmt.Println(array.Type.Code.String(), array.Type.ArrayElementType.Code.String(), spanvalue.IsNull(array))
 	// Output:
 	// INT64 true
 	// ARRAY DATE true
@@ -46,7 +45,7 @@ func ExampleArrayValueOf_typedNullNormalization() {
 
 	fmt.Println(array.Type.Code.String(), array.Type.ArrayElementType.Code.String(), len(values))
 	fmt.Println(values[0].GetStringValue())
-	fmt.Println(values[1].GetNullValue() == structpb.NullValue_NULL_VALUE)
+	fmt.Println(spanvalue.IsNull(spanner.GenericColumnValue{Type: elemType, Value: values[1]}))
 	fmt.Println(values[2].GetStringValue())
 	// Output:
 	// ARRAY DATE 3
