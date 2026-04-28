@@ -5,7 +5,7 @@
 // when len==0, whether the variadic slice is nil or empty). [ArrayValueOf] takes the element type
 // explicitly; len==0 yields an empty ARRAY<elemType>. For a SQL NULL ARRAY, use [NullOf] with
 // [github.com/apstndb/spantype/typector.ElemTypeToArrayType] or [github.com/apstndb/spantype/typector.ElemCodeToArrayType] instead of relying
-// on variadic nil. [NormalizeArrayElements] rewrites SQL NULL elements to [NullOf](elemType) before
+// on variadic nil. [NormalizeArrayElements] rewrites SQL NULL elements to [NullOf] with elemType before
 // a strict [ArrayValueOf] call when callers already know the final array element type. [StructValueOf] pairs field
 // names with values; counts must match.
 //

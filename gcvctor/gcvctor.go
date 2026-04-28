@@ -326,7 +326,7 @@ func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, e
 	return ArrayValueOf(vs[0].Type, vs...)
 }
 
-// NormalizeArrayElements rewrites SQL NULL elements to [NullOf](elemType) while preserving
+// NormalizeArrayElements rewrites SQL NULL elements to [NullOf] with elemType while preserving
 // strict type checks for non-NULL elements. A nil elemType returns [ErrNilElementType].
 // Per-element failures are wrapped in [ArrayElementError].
 func NormalizeArrayElements(elemType *sppb.Type, elems ...spanner.GenericColumnValue) ([]spanner.GenericColumnValue, error) {
