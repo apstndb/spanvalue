@@ -10,6 +10,51 @@ Helpers for working with Cloud Spanner’s [`spanner.GenericColumnValue`](https:
 | [`github.com/apstndb/spanvalue/gcvctor`](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor) | Build `spanner.GenericColumnValue` (scalars, `ARRAY`, `STRUCT`, typed nulls). Types are often composed with [`github.com/apstndb/spantype/typector`](https://pkg.go.dev/github.com/apstndb/spantype/typector). |
 | [`github.com/apstndb/spanvalue/writer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer) | Stream Spanner rows to CSV, JSONL, or SQL INSERT statements using spanvalue formatters. |
 
+## Identifier quoting helpers
+
+`QuoteIdentifier` and `QuoteQualifiedIdentifier` are conservative quoting
+helpers. They always quote for the selected dialect, escape embedded quote
+characters, and do **not** attempt a minimal "quote only when necessary"
+strategy.
+
+- `DATABASE_DIALECT_UNSPECIFIED` follows the Spanner default and uses GoogleSQL
+  quoting.
+- `QuoteQualifiedIdentifier` quotes each dotted path segment independently.
+- The helpers do not validate empty identifiers or empty path segments; callers
+  that reject those shapes must do so before calling them.
+
+```go
+quotedTable := spanvalue.QuoteQualifiedIdentifier(
+    databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL,
+    "analytics.daily_metrics",
+)
+quotedColumn := spanvalue.QuoteIdentifier(
+    databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL,
+    "select",
+)
+// quotedTable == "`analytics`.`daily_metrics`"
+// quotedColumn == "`select`"
+```
+
+## Adoption snippets
+
+Use the small helper APIs directly when replacing ad hoc downstream formatting
+code:
+
+```go
+jsonLine, err := spanvalue.FormatRowJSONObjectFromColumns(
+    spanvalue.JSONFormatConfig(),
+    columnNames,
+    gcvs,
+    spanvalue.IndexedUnnamedFieldNamer,
+)
+```
+
+```go
+w := writer.NewSQLInsertWriter(out, "analytics.daily_metrics")
+err := w.WriteValues(columnNames, gcvs)
+```
+
 ## Related: PostgreSQL dialect probes
 
 Integration tests that exercise the Spanner **client** with PostgreSQL dialect (`TypeAnnotation` on query params and row metadata) are maintained in [`github.com/apstndb/spanpg`](https://github.com/apstndb/spanpg) (`integration/pgtypeannotation`), not in this repository.
