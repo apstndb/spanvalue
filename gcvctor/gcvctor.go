@@ -18,6 +18,7 @@ import (
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/spantype/typector"
+	"github.com/apstndb/spanvalue/internal"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -325,13 +326,38 @@ func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, e
 	return ArrayValueOf(vs[0].Type, vs...)
 }
 
+// NormalizeArrayElements rewrites SQL NULL elements to [NullOf](elemType) while preserving
+// strict type checks for non-NULL elements. A nil elemType returns [ErrNilElementType].
+// Per-element failures are wrapped in [ArrayElementError].
+func NormalizeArrayElements(elemType *sppb.Type, elems ...spanner.GenericColumnValue) ([]spanner.GenericColumnValue, error) {
+	if elemType == nil {
+		return nil, ErrNilElementType
+	}
+	normalized := make([]spanner.GenericColumnValue, len(elems))
+	for i, elem := range elems {
+		if internal.IsNullGenericColumnValue(elem) {
+			normalized[i] = NullOf(elemType)
+			continue
+		}
+		if elem.Type == nil {
+			return nil, wrapArrayElementError(i, ErrNilElementType)
+		}
+		if !proto.Equal(elemType, elem.Type) {
+			return nil, wrapArrayElementError(i, fmt.Errorf("%w: %v is not %v", ErrTypeMismatch, spantype.FormatTypeMoreVerbose(elem.Type), spantype.FormatTypeMoreVerbose(elemType)))
+		}
+		normalized[i] = elem
+	}
+	return normalized, nil
+}
+
 // ArrayValueOf constructs ARRAY GenericColumnValue using elemType as the element type
 // instead of inferring it from the first element. When elems is empty (nil or length zero), it
 // returns an empty ARRAY<elemType> (SQL length zero, not SQL NULL). For a typed NULL ARRAY<elemType>,
 // use [NullOf] with [github.com/apstndb/spantype/typector.ElemTypeToArrayType] or [github.com/apstndb/spantype/typector.ElemCodeToArrayType].
 //
 // Each element's Type must match elemType (no coercion). A nil elemType returns [ErrNilElementType].
-// Per-element failures are wrapped in [ArrayElementError].
+// Per-element failures are wrapped in [ArrayElementError]. To accept SQL NULL elements regardless of
+// their current Type metadata, normalize them first with [NormalizeArrayElements].
 func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if elemType == nil {
 		return spanner.GenericColumnValue{}, ErrNilElementType

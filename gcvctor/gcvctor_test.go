@@ -658,6 +658,112 @@ func TestArrayValueNilFirstElementTypeReturnsArrayElementError(t *testing.T) {
 	}
 }
 
+func TestNormalizeArrayElements(t *testing.T) {
+	t.Parallel()
+
+	dateElem := typector.CodeToSimpleType(sppb.TypeCode_DATE)
+	stringElem := typector.CodeToSimpleType(sppb.TypeCode_STRING)
+
+	tests := []struct {
+		desc      string
+		elemType  *sppb.Type
+		elems     []spanner.GenericColumnValue
+		want      []spanner.GenericColumnValue
+		expectErr bool
+		errIs     error
+		errIndex  int
+	}{
+		{
+			desc:     "empty elems",
+			elemType: dateElem,
+			elems:    nil,
+			want:     []spanner.GenericColumnValue{},
+		},
+		{
+			desc:     "normalize null element with nil type",
+			elemType: dateElem,
+			elems: []spanner.GenericColumnValue{
+				must(gcvctor.DateStringValue("2026-04-01")),
+				gcvctor.NullOf(nil),
+			},
+			want: []spanner.GenericColumnValue{
+				{Type: dateElem, Value: structpb.NewStringValue("2026-04-01")},
+				{Type: dateElem, Value: structpb.NewNullValue()},
+			},
+		},
+		{
+			desc:     "normalize null element with mismatched type",
+			elemType: dateElem,
+			elems: []spanner.GenericColumnValue{
+				gcvctor.NullFromCode(sppb.TypeCode_STRING),
+			},
+			want: []spanner.GenericColumnValue{
+				{Type: dateElem, Value: structpb.NewNullValue()},
+			},
+		},
+		{
+			desc:      "nil element type",
+			elemType:  nil,
+			elems:     []spanner.GenericColumnValue{gcvctor.Int64Value(1)},
+			expectErr: true,
+			errIs:     gcvctor.ErrNilElementType,
+			errIndex:  -1,
+		},
+		{
+			desc:      "non-null element with nil type",
+			elemType:  dateElem,
+			elems:     []spanner.GenericColumnValue{{Value: structpb.NewStringValue("2026-04-01")}},
+			expectErr: true,
+			errIs:     gcvctor.ErrNilElementType,
+			errIndex:  0,
+		},
+		{
+			desc:      "type mismatch",
+			elemType:  stringElem,
+			elems:     []spanner.GenericColumnValue{gcvctor.Int64Value(1)},
+			expectErr: true,
+			errIs:     gcvctor.ErrTypeMismatch,
+			errIndex:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.desc, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := gcvctor.NormalizeArrayElements(tt.elemType, tt.elems...)
+			if tt.expectErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				if !errors.Is(err, tt.errIs) {
+					t.Fatalf("errors.Is(err, %v) = false; err = %v", tt.errIs, err)
+				}
+				if tt.errIndex >= 0 {
+					var ctx *gcvctor.ArrayElementError
+					if !errors.As(err, &ctx) {
+						t.Fatalf("errors.As(err, *ArrayElementError) = false; err = %v", err)
+					}
+					if ctx.Index != tt.errIndex {
+						t.Fatalf("ctx.Index = %d, want %d", ctx.Index, tt.errIndex)
+					}
+				}
+				if got != nil {
+					t.Fatalf("got = %#v, want nil on error", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(tt.want, got, protocmp.Transform()); diff != "" {
+				t.Fatalf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestArrayValueOf(t *testing.T) {
 	t.Parallel()
 	int64Elem := typector.CodeToSimpleType(sppb.TypeCode_INT64)

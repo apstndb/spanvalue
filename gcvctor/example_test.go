@@ -23,7 +23,7 @@ func ExampleNullOf() {
 	// ARRAY DATE true
 }
 
-func ExampleArrayValueOf_typedNullNormalization() {
+func ExampleNormalizeArrayElements() {
 	elemType := typector.CodeToSimpleType(sppb.TypeCode_DATE)
 	elems := []spanner.GenericColumnValue{
 		must(gcvctor.DateStringValue("2026-04-01")),
@@ -31,15 +31,7 @@ func ExampleArrayValueOf_typedNullNormalization() {
 		must(gcvctor.DateStringValue("2026-04-03")),
 	}
 
-	normalized := make([]spanner.GenericColumnValue, len(elems))
-	for i, elem := range elems {
-		if spanvalue.IsNull(elem) {
-			normalized[i] = gcvctor.NullOf(elemType)
-			continue
-		}
-		normalized[i] = elem
-	}
-
+	normalized := must(gcvctor.NormalizeArrayElements(elemType, elems...))
 	array := must(gcvctor.ArrayValueOf(elemType, normalized...))
 	values := array.Value.GetListValue().Values
 
