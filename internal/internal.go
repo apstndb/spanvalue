@@ -11,10 +11,22 @@ import (
 	"strings"
 	"unicode"
 
+	"cloud.google.com/go/spanner"
 	"github.com/samber/lo/it"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 var ErrMismatchedJSONObjectFields = errors.New("mismatched JSON object key/value count")
+
+// IsNullGenericColumnValue reports whether gcv represents SQL NULL.
+// A nil gcv.Value is treated as NULL.
+func IsNullGenericColumnValue(gcv spanner.GenericColumnValue) bool {
+	if gcv.Value == nil {
+		return true
+	}
+	_, ok := gcv.Value.GetKind().(*structpb.Value_NullValue)
+	return ok
+}
 
 // ResolveColumnNames returns a copy of columnNames with every empty string
 // replaced by a name produced by namer. Already-named columns are preserved.

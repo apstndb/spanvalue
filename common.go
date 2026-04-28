@@ -140,11 +140,7 @@ var (
 // IsNull reports whether gcv represents a NULL value.
 // A nil gcv.Value is treated as NULL.
 func IsNull(gcv spanner.GenericColumnValue) bool {
-	if gcv.Value == nil {
-		return true
-	}
-	_, ok := gcv.Value.GetKind().(*structpb.Value_NullValue)
-	return ok
+	return internal.IsNullGenericColumnValue(gcv)
 }
 
 func FormatProtoAsCast(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
