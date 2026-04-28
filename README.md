@@ -10,30 +10,6 @@ Helpers for working with Cloud Spanner’s [`spanner.GenericColumnValue`](https:
 | [`github.com/apstndb/spanvalue/gcvctor`](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor) | Build `spanner.GenericColumnValue` (scalars, `ARRAY`, `STRUCT`, typed nulls). Types are often composed with [`github.com/apstndb/spantype/typector`](https://pkg.go.dev/github.com/apstndb/spantype/typector). |
 | [`github.com/apstndb/spanvalue/writer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer) | Stream Spanner rows to CSV, JSONL, or SQL INSERT statements using spanvalue formatters. |
 
-## Upgrade notes for `v0.2.x` -> `v0.3.x`
-
-The main upgrade work in the `v0.3.x` line is the removal of deprecated `gcvctor`
-aliases. The formatter APIs are largely additive; most downstream breakage comes
-from alias cleanup.
-
-| Removed alias | Replacement |
-| --- | --- |
-| `BytesBasedValue` | `BytesBasedValueOf` |
-| `StringBasedValue` | `StringBasedValueFromCode` |
-| `ArrayValueWithType` | `ArrayValueOf` |
-| `StructValue` | `StructValueOf` |
-| `SimpleTypedNull` | `NullFromCode` |
-| `TypedNull` | `NullOf` |
-| `ArrayTypeTypedNull` | `NullArrayOf` |
-| `ArrayCodeTypedNull` | `NullArrayFromCode` |
-| `ElemTypeToEmptyArray` | `EmptyArrayOf` |
-| `ElemTypeCodeToEmptyArray` | `EmptyArrayFromCode` |
-
-If you build arrays with nullable elements, `v0.3.0-beta.2` also adds
-`gcvctor.NormalizeArrayElements` so callers can rewrite SQL NULL elements to
-typed `NullOf(elemType)` values before passing them to the strict `ArrayValueOf`
-constructor.
-
 ## Identifier quoting helpers
 
 `QuoteIdentifier` and `QuoteQualifiedIdentifier` are conservative quoting
