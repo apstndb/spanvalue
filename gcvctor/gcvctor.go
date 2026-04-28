@@ -34,6 +34,54 @@ var (
 	ErrNilNumeric = errors.New("gcvctor: nil numeric input")
 )
 
+// ArrayElementError adds an element index to an ARRAY construction error while preserving
+// the wrapped cause for [errors.Is] and [errors.As].
+type ArrayElementError struct {
+	Index int
+	Err   error
+}
+
+func (e *ArrayElementError) Error() string {
+	return fmt.Sprintf("array element %d: %v", e.Index, e.Err)
+}
+
+func (e *ArrayElementError) Unwrap() error {
+	return e.Err
+}
+
+// StructFieldError adds a field index (and optional field name) to a STRUCT construction
+// error while preserving the wrapped cause for [errors.Is] and [errors.As].
+type StructFieldError struct {
+	Index int
+	Name  string
+	Err   error
+}
+
+func (e *StructFieldError) Error() string {
+	if e.Name == "" {
+		return fmt.Sprintf("struct field %d: %v", e.Index, e.Err)
+	}
+	return fmt.Sprintf("struct field %d (%q): %v", e.Index, e.Name, e.Err)
+}
+
+func (e *StructFieldError) Unwrap() error {
+	return e.Err
+}
+
+func wrapArrayElementError(index int, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &ArrayElementError{Index: index, Err: err}
+}
+
+func wrapStructFieldError(index int, name string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &StructFieldError{Index: index, Name: name, Err: err}
+}
+
 func normalizeNilType(typ *sppb.Type) *sppb.Type {
 	if typ != nil {
 		return typ
@@ -265,9 +313,14 @@ func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 // For other element types or explicit typing policy, use [ArrayValueOf] or [EmptyArrayOf].
 //
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
+// If the inferred element type from vs[0] is invalid, the error is wrapped in [ArrayElementError]
+// with Index 0.
 func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if len(vs) == 0 {
 		return EmptyArrayFromCode(sppb.TypeCode_INT64), nil
+	}
+	if vs[0].Type == nil {
+		return spanner.GenericColumnValue{}, wrapArrayElementError(0, ErrNilElementType)
 	}
 	return ArrayValueOf(vs[0].Type, vs...)
 }
@@ -278,6 +331,7 @@ func ArrayValue(vs ...spanner.GenericColumnValue) (spanner.GenericColumnValue, e
 // use [NullOf] with [github.com/apstndb/spantype/typector.ElemTypeToArrayType] or [github.com/apstndb/spantype/typector.ElemCodeToArrayType].
 //
 // Each element's Type must match elemType (no coercion). A nil elemType returns [ErrNilElementType].
+// Per-element failures are wrapped in [ArrayElementError].
 func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if elemType == nil {
 		return spanner.GenericColumnValue{}, ErrNilElementType
@@ -287,8 +341,11 @@ func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spa
 	}
 	values := make([]*structpb.Value, len(elems))
 	for i, v := range elems {
+		if v.Type == nil {
+			return spanner.GenericColumnValue{}, wrapArrayElementError(i, ErrNilElementType)
+		}
 		if !proto.Equal(elemType, v.Type) {
-			return spanner.GenericColumnValue{}, fmt.Errorf("%w: element %d: %v is not %v", ErrTypeMismatch, i, spantype.FormatTypeMoreVerbose(v.Type), spantype.FormatTypeMoreVerbose(elemType))
+			return spanner.GenericColumnValue{}, wrapArrayElementError(i, fmt.Errorf("%w: %v is not %v", ErrTypeMismatch, spantype.FormatTypeMoreVerbose(v.Type), spantype.FormatTypeMoreVerbose(elemType)))
 		}
 		values[i] = v.Value
 	}
@@ -299,7 +356,7 @@ func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spa
 }
 
 // StructValueOf constructs STRUCT GenericColumnValue.
-// A nil field Type returns [ErrNilFieldType].
+// A nil field Type returns [ErrNilFieldType] wrapped in [StructFieldError].
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
 func StructValueOf(names []string, gcvs []spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if len(names) != len(gcvs) {
@@ -310,10 +367,7 @@ func StructValueOf(names []string, gcvs []spanner.GenericColumnValue) (spanner.G
 	values := make([]*structpb.Value, len(gcvs))
 	for i, gcv := range gcvs {
 		if gcv.Type == nil {
-			if names[i] == "" {
-				return spanner.GenericColumnValue{}, fmt.Errorf("%w: field %d", ErrNilFieldType, i)
-			}
-			return spanner.GenericColumnValue{}, fmt.Errorf("%w: field %d (%q)", ErrNilFieldType, i, names[i])
+			return spanner.GenericColumnValue{}, wrapStructFieldError(i, names[i], ErrNilFieldType)
 		}
 		types[i] = gcv.Type
 		values[i] = gcv.Value
@@ -321,7 +375,7 @@ func StructValueOf(names []string, gcvs []spanner.GenericColumnValue) (spanner.G
 
 	typ, err := typector.NameTypeSlicesToStructType(names, types)
 	if err != nil {
-		return spanner.GenericColumnValue{}, err
+		return spanner.GenericColumnValue{}, fmt.Errorf("gcvctor: build struct type: %w", err)
 	}
 
 	return spanner.GenericColumnValue{

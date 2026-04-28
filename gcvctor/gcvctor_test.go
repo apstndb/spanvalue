@@ -641,6 +641,23 @@ func TestArrayValue_zeroLengthIsEmptyInt64Array(t *testing.T) {
 	}
 }
 
+func TestArrayValueNilFirstElementTypeReturnsArrayElementError(t *testing.T) {
+	t.Parallel()
+
+	_, err := gcvctor.ArrayValue(spanner.GenericColumnValue{})
+	if !errors.Is(err, gcvctor.ErrNilElementType) {
+		t.Fatalf("errors.Is(err, ErrNilElementType) = false; err = %v", err)
+	}
+
+	var ctx *gcvctor.ArrayElementError
+	if !errors.As(err, &ctx) {
+		t.Fatalf("errors.As(err, *ArrayElementError) = false; err = %v", err)
+	}
+	if ctx.Index != 0 {
+		t.Fatalf("ctx.Index = %d, want 0", ctx.Index)
+	}
+}
+
 func TestArrayValueOf(t *testing.T) {
 	t.Parallel()
 	int64Elem := typector.CodeToSimpleType(sppb.TypeCode_INT64)
@@ -752,6 +769,23 @@ func TestArrayValueOf(t *testing.T) {
 	}
 }
 
+func TestArrayValueOfTypeMismatchReturnsArrayElementError(t *testing.T) {
+	t.Parallel()
+
+	_, err := gcvctor.ArrayValueOf(typector.CodeToSimpleType(sppb.TypeCode_STRING), gcvctor.Int64Value(1))
+	if !errors.Is(err, gcvctor.ErrTypeMismatch) {
+		t.Fatalf("errors.Is(err, ErrTypeMismatch) = false; err = %v", err)
+	}
+
+	var ctx *gcvctor.ArrayElementError
+	if !errors.As(err, &ctx) {
+		t.Fatalf("errors.As(err, *ArrayElementError) = false; err = %v", err)
+	}
+	if ctx.Index != 0 {
+		t.Fatalf("ctx.Index = %d, want 0", ctx.Index)
+	}
+}
+
 func TestStructValueOf(t *testing.T) {
 	t.Parallel()
 
@@ -830,6 +864,41 @@ func TestStructValueOf(t *testing.T) {
 			}
 			if diff := cmp.Diff(tt.want, got, protocmp.Transform()); diff != "" {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestStructValueOfNilFieldTypeReturnsStructFieldError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		fieldName string
+	}{
+		{name: "named", fieldName: "broken"},
+		{name: "unnamed", fieldName: ""},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := gcvctor.StructValueOf([]string{tt.fieldName}, []spanner.GenericColumnValue{{}})
+			if !errors.Is(err, gcvctor.ErrNilFieldType) {
+				t.Fatalf("errors.Is(err, ErrNilFieldType) = false; err = %v", err)
+			}
+
+			var ctx *gcvctor.StructFieldError
+			if !errors.As(err, &ctx) {
+				t.Fatalf("errors.As(err, *StructFieldError) = false; err = %v", err)
+			}
+			if ctx.Index != 0 {
+				t.Fatalf("ctx.Index = %d, want 0", ctx.Index)
+			}
+			if ctx.Name != tt.fieldName {
+				t.Fatalf("ctx.Name = %q, want %q", ctx.Name, tt.fieldName)
 			}
 		})
 	}
