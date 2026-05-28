@@ -1,5 +1,14 @@
 // Package writer provides small streaming helpers for exporting Spanner rows
 // using spanvalue formatters.
+//
+// CSVWriter and JSONLWriter preserve explicit duplicate column names. Their
+// UnnamedFieldNamer only fills empty column names, and generated names avoid
+// collisions with existing names. CSVWriter buffers through encoding/csv, so
+// callers must call Flush after the final write.
+//
+// CSVWriter, JSONLWriter, and SQLInsertWriter implement Flusher. If an adapter
+// exposes a Close method, that Close method should call Flush; Flush does not
+// close the underlying io.Writer.
 package writer
 
 import (
@@ -9,6 +18,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"cloud.google.com/go/spanner"
 	databasepb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
@@ -33,17 +43,39 @@ var (
 	ErrColumnNamesMismatch = errors.New("column names mismatch")
 	// ErrHeaderAfterData reports that CSVWriter.WriteHeader was called after data rows were emitted.
 	ErrHeaderAfterData = errors.New("header after data")
+	// ErrInvalidDelimiter reports that CSVWriter.Comma is not a valid delimiter.
+	ErrInvalidDelimiter = errors.New("invalid delimiter")
+	// ErrDelimiterAfterWrite reports that CSVWriter.Comma changed after the underlying CSV writer was initialized.
+	ErrDelimiterAfterWrite = errors.New("delimiter changed after writer initialization")
 )
 
-// Writer writes rows to an output stream.
+// Writer writes Spanner rows to an output stream.
+//
+// Writer intentionally models row streaming only. Some concrete writers also
+// implement [Flusher]; callers that own the full write lifecycle must call
+// Flush after the final row when it is available. Factories that may return a
+// buffered writer should return a concrete type or a local composite interface
+// such as interface { Writer; Flusher }, not Writer alone.
 type Writer interface {
 	WriteRow(row *spanner.Row) error
 }
 
-// CSVWriter writes rows as CSV. Call Flush after the final write.
+// Flusher finalizes any buffered output. Flush does not close the underlying
+// io.Writer. CSVWriter uses Flush to forward buffered CSV or TSV data; JSONLWriter
+// and SQLInsertWriter implement it as a no-op so adapters can use one finalize
+// path for all writer implementations.
+type Flusher interface {
+	Flush() error
+}
+
+// CSVWriter writes rows as CSV-style delimited text. Call Flush after the final write.
 type CSVWriter struct {
 	Formatter *spanvalue.FormatConfig
 	Header    bool
+	// Comma is the field delimiter. The zero value uses ','. Set it before the
+	// first write; use '\t' for TSV output. It must be a valid encoding/csv
+	// delimiter: not 0, '"', '\r', '\n', or utf8.RuneError.
+	Comma rune
 	// Set before the first write. Once names have been resolved for the current
 	// schema, later changes do not retroactively rewrite cached header names.
 	UnnamedFieldNamer spanvalue.UnnamedFieldNamer
@@ -52,6 +84,7 @@ type CSVWriter struct {
 	resolvedColumnNames []string
 	out                 io.Writer
 	writer              *csv.Writer
+	delimiter           rune
 	wroteHeader         bool
 	wroteData           bool
 }
@@ -65,6 +98,14 @@ func NewCSVWriter(out io.Writer, metadata ...*sppb.ResultSetMetadata) *CSVWriter
 		out:               out,
 	}
 	w.setMetadata(firstMetadata(metadata))
+	return w
+}
+
+// NewDelimitedWriter returns a CSV-style writer using delimiter as the field delimiter.
+// Pass '\t' for TSV output.
+func NewDelimitedWriter(out io.Writer, delimiter rune, metadata ...*sppb.ResultSetMetadata) *CSVWriter {
+	w := NewCSVWriter(out, metadata...)
+	w.Comma = delimiter
 	return w
 }
 
@@ -163,17 +204,43 @@ func (w *CSVWriter) formatter() *spanvalue.FormatConfig {
 }
 
 func (w *CSVWriter) csvWriter() (*csv.Writer, error) {
+	delimiter := w.effectiveDelimiter()
+	if !validDelimiter(delimiter) {
+		return nil, fmt.Errorf("%w: %q", ErrInvalidDelimiter, delimiter)
+	}
 	if w.writer != nil {
+		if w.delimiter != delimiter {
+			return nil, ErrDelimiterAfterWrite
+		}
 		return w.writer, nil
 	}
 	if w.out == nil {
 		return nil, ErrNilOutputWriter
 	}
 	w.writer = csv.NewWriter(w.out)
+	w.writer.Comma = delimiter
+	w.delimiter = delimiter
 	return w.writer, nil
 }
 
-// Flush flushes buffered CSV data to the underlying writer.
+func (w *CSVWriter) effectiveDelimiter() rune {
+	if w.Comma == 0 {
+		return ','
+	}
+	return w.Comma
+}
+
+func validDelimiter(delimiter rune) bool {
+	return delimiter != 0 &&
+		delimiter != '"' &&
+		delimiter != '\r' &&
+		delimiter != '\n' &&
+		utf8.ValidRune(delimiter) &&
+		delimiter != utf8.RuneError
+}
+
+// Flush flushes buffered CSV or TSV data to the underlying writer. It does not
+// close the underlying writer.
 func (w *CSVWriter) Flush() error {
 	if w.writer == nil {
 		return nil
@@ -261,6 +328,11 @@ func (w *JSONLWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	}
 	_, err = fmt.Fprintln(w.out, s)
 	return err
+}
+
+// Flush finalizes JSONL output. JSONLWriter is unbuffered, so this is a no-op.
+func (w *JSONLWriter) Flush() error {
+	return nil
 }
 
 func (w *JSONLWriter) setMetadata(metadata *sppb.ResultSetMetadata) {
@@ -360,6 +432,12 @@ func (w *SQLInsertWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 		return err
 	}
 	return w.writeGCVs(values, quotedColumns)
+}
+
+// Flush finalizes SQL INSERT output. SQLInsertWriter is unbuffered, so this is
+// a no-op.
+func (w *SQLInsertWriter) Flush() error {
+	return nil
 }
 
 func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedColumns string) error {

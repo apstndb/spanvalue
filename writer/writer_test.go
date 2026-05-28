@@ -13,6 +13,15 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+var (
+	_ Writer  = (*CSVWriter)(nil)
+	_ Writer  = (*JSONLWriter)(nil)
+	_ Writer  = (*SQLInsertWriter)(nil)
+	_ Flusher = (*CSVWriter)(nil)
+	_ Flusher = (*JSONLWriter)(nil)
+	_ Flusher = (*SQLInsertWriter)(nil)
+)
+
 func metadataWithColumnNames(names ...string) *sppb.ResultSetMetadata {
 	fields := make([]*sppb.StructType_Field, len(names))
 	for i, name := range names {
@@ -65,6 +74,96 @@ func TestCSVWriterWriteValues(t *testing.T) {
 	want := "name,_0\nAlice,<null>\nBob,7\n"
 	if diff := cmp.Diff(want, out.String()); diff != "" {
 		t.Fatalf("CSV output mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCSVWriterWriteValuesWithCustomComma(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		new  func(out *bytes.Buffer) *CSVWriter
+	}{
+		{
+			name: "constructor",
+			new: func(out *bytes.Buffer) *CSVWriter {
+				return NewDelimitedWriter(out, '\t')
+			},
+		},
+		{
+			name: "field",
+			new: func(out *bytes.Buffer) *CSVWriter {
+				w := NewCSVWriter(out)
+				w.Comma = '\t'
+				return w
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var out bytes.Buffer
+			w := tt.new(&out)
+
+			err := w.WriteValues(
+				[]string{"name", "note", "with_tab"},
+				[]spanner.GenericColumnValue{
+					gcvctor.StringValue("Alice"),
+					gcvctor.StringValue("comma, ok"),
+					gcvctor.StringValue("tab\tok"),
+				},
+			)
+			if err != nil {
+				t.Fatalf("WriteValues() error = %v", err)
+			}
+			flushCSVWriter(t, w)
+
+			want := "name\tnote\twith_tab\nAlice\tcomma, ok\t\"tab\tok\"\n"
+			if diff := cmp.Diff(want, out.String()); diff != "" {
+				t.Fatalf("delimited output mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestCSVWriterWriteValuesInvalidComma(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewDelimitedWriter(&out, '\n')
+
+	err := w.WriteValues(
+		[]string{"name"},
+		[]spanner.GenericColumnValue{gcvctor.StringValue("Alice")},
+	)
+	if !errors.Is(err, ErrInvalidDelimiter) {
+		t.Fatalf("WriteValues() error = %v, want ErrInvalidDelimiter", err)
+	}
+}
+
+func TestCSVWriterWriteValuesCommaChangeAfterWrite(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewDelimitedWriter(&out, '\t')
+
+	err := w.WriteValues(
+		[]string{"name"},
+		[]spanner.GenericColumnValue{gcvctor.StringValue("Alice")},
+	)
+	if err != nil {
+		t.Fatalf("WriteValues() error = %v", err)
+	}
+
+	w.Comma = ','
+	err = w.WriteValues(
+		[]string{"name"},
+		[]spanner.GenericColumnValue{gcvctor.StringValue("Bob")},
+	)
+	if !errors.Is(err, ErrDelimiterAfterWrite) {
+		t.Fatalf("WriteValues() after Comma change error = %v, want ErrDelimiterAfterWrite", err)
 	}
 }
 
@@ -125,6 +224,34 @@ func TestCSVWriterWriteHeaderWithMetadata(t *testing.T) {
 	want := "name,age\n"
 	if diff := cmp.Diff(want, out.String()); diff != "" {
 		t.Fatalf("CSV header mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestUnbufferedWritersFlushIsNoop(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		writer Flusher
+	}{
+		{
+			name:   "jsonl",
+			writer: NewJSONLWriter(&bytes.Buffer{}),
+		},
+		{
+			name:   "sql",
+			writer: NewSQLInsertWriter(&bytes.Buffer{}, "users"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if err := tt.writer.Flush(); err != nil {
+				t.Fatalf("Flush() error = %v", err)
+			}
+		})
 	}
 }
 
