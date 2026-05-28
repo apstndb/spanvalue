@@ -205,14 +205,14 @@ func (w *CSVWriter) formatter() *spanvalue.FormatConfig {
 
 func (w *CSVWriter) csvWriter() (*csv.Writer, error) {
 	delimiter := w.effectiveDelimiter()
-	if !validDelimiter(delimiter) {
-		return nil, fmt.Errorf("%w: %q", ErrInvalidDelimiter, delimiter)
-	}
 	if w.writer != nil {
 		if w.delimiter != delimiter {
 			return nil, ErrDelimiterAfterWrite
 		}
 		return w.writer, nil
+	}
+	if !validDelimiter(delimiter) {
+		return nil, fmt.Errorf("%w: %q", ErrInvalidDelimiter, delimiter)
 	}
 	if w.out == nil {
 		return nil, ErrNilOutputWriter
