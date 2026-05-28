@@ -191,9 +191,11 @@ type Formatter interface {
 // branch runs unless a [FormatComplexFunc] plugin handles the value first.
 //
 // Nil field behavior:
-//   - FormatArray: required for ARRAY values.
+//   - FormatArray: required for non-NULL ARRAY values. NULL ARRAY values use
+//     [FormatConfig.GetNullString] before FormatArray is called.
 //   - FormatStruct.FormatStructField and FormatStruct.FormatStructParen: required
-//     for STRUCT values.
+//     for non-NULL STRUCT values. NULL STRUCT values use [FormatConfig.GetNullString]
+//     before struct callbacks run.
 //   - FormatComplexPlugins: nil or empty means no plugins run.
 //   - FormatNullable: required for non-NULL scalars reached through
 //     [FormatConfig.FormatColumn]. NULL scalars use [FormatConfig.GetNullString]
