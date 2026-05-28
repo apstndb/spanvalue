@@ -132,7 +132,7 @@ func TestCSVWriterWriteValuesWithCustomComma(t *testing.T) {
 	}
 }
 
-func TestCSVWriterWithOptions(t *testing.T) {
+func TestDelimitedWriterWithOptions(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
@@ -979,12 +979,12 @@ func TestRowDataAndOneRowFormatHelpers(t *testing.T) {
 		t.Fatalf("RowData() column names mismatch (-want +got):\n%s", diff)
 	}
 
-	csvRow, err := FormatCSVValues(nil, columnNames, values)
+	csvRow, err := FormatDelimitedValues(nil, columnNames, values, 0)
 	if err != nil {
-		t.Fatalf("FormatCSVValues() error = %v", err)
+		t.Fatalf("FormatDelimitedValues() error = %v", err)
 	}
 	if want := `42,"comma, ok"`; csvRow != want {
-		t.Fatalf("FormatCSVValues() = %q, want %q", csvRow, want)
+		t.Fatalf("FormatDelimitedValues() = %q, want %q", csvRow, want)
 	}
 
 	tsvRow, err := FormatDelimitedRow(nil, row, '\t')

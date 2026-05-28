@@ -94,8 +94,7 @@ type NameOption interface {
 	JSONLOption
 }
 
-// CSVOption configures a CSVWriter created by NewCSVWriterWithOptions or
-// NewDelimitedWriterWithOptions.
+// CSVOption configures a CSVWriter created by NewDelimitedWriterWithOptions.
 type CSVOption interface {
 	applyCSVOption(*CSVWriter)
 }
@@ -208,17 +207,6 @@ type CSVWriter struct {
 func NewCSVWriter(out io.Writer, metadata ...*sppb.ResultSetMetadata) *CSVWriter {
 	w := newCSVWriter(out)
 	w.setMetadata(firstMetadata(metadata))
-	return w
-}
-
-// NewCSVWriterWithOptions returns a CSV writer configured by options.
-func NewCSVWriterWithOptions(out io.Writer, options ...CSVOption) *CSVWriter {
-	w := newCSVWriter(out)
-	for _, opt := range options {
-		if opt != nil {
-			opt.applyCSVOption(w)
-		}
-	}
 	return w
 }
 
@@ -725,17 +713,6 @@ func (w *SQLInsertWriter) quotedQualifiedTable() (string, error) {
 	w.quotedTable = quotedTable
 	w.quotedTableInput = w.Table
 	return quotedTable, nil
-}
-
-// FormatCSVRow formats one row as a CSV record without a trailing newline.
-func FormatCSVRow(fc *spanvalue.FormatConfig, row *spanner.Row) (string, error) {
-	return FormatDelimitedRow(fc, row, 0)
-}
-
-// FormatCSVValues formats one row represented as column names plus GCV values
-// as a CSV record without a trailing newline.
-func FormatCSVValues(fc *spanvalue.FormatConfig, columnNames []string, values []spanner.GenericColumnValue) (string, error) {
-	return FormatDelimitedValues(fc, columnNames, values, 0)
 }
 
 // FormatDelimitedRow formats one row as a CSV-style delimited record without a
