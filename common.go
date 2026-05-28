@@ -195,7 +195,9 @@ type Formatter interface {
 //   - FormatStruct.FormatStructField and FormatStruct.FormatStructParen: required
 //     for STRUCT values; presets set both.
 //   - FormatComplexPlugins: no plugins run.
-//   - FormatNullable: scalar NULL values use NullString.
+//   - FormatNullable: required for non-NULL scalar values in [FormatConfig.formatSimpleColumn].
+//     NULL scalars use [FormatConfig.GetNullString] before FormatNullable is called.
+//     A nil FormatNullable panics when formatting a non-NULL scalar; presets always set one.
 //
 // Use [FormatConfig.Clone] to customize a preset without mutating shared instances.
 type FormatConfig struct {

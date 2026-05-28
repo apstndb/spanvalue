@@ -11,7 +11,7 @@ func (fc *FormatConfig) Clone() *FormatConfig {
 		return nil
 	}
 	clone := *fc
-	if len(fc.FormatComplexPlugins) > 0 {
+	if fc.FormatComplexPlugins != nil {
 		clone.FormatComplexPlugins = slices.Clone(fc.FormatComplexPlugins)
 	}
 	return &clone
