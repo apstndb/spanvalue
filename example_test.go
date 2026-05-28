@@ -7,20 +7,22 @@ import (
 
 	"github.com/apstndb/spanvalue"
 	"github.com/apstndb/spanvalue/gcvctor"
+	"github.com/samber/lo"
 )
 
 func ExampleSpannerCLICompatibleFormatConfig_tupleStruct() {
 	fc := spanvalue.SpannerCLICompatibleFormatConfig().Clone()
 	fc.FormatStruct.FormatStructParen = spanvalue.FormatTupleStruct
 
-	value := must(gcvctor.StructValueOf(
+	structElem := lo.Must(gcvctor.StructValueOf(
 		[]string{"id", "region"},
 		[]spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.StringValue("east")},
 	))
+	arrayOfStruct := lo.Must(gcvctor.ArrayValue(structElem))
 
-	fmt.Println(must(fc.FormatToplevelColumn(value)))
+	fmt.Println(must(fc.FormatToplevelColumn(arrayOfStruct)))
 	// Output:
-	// (1, east)
+	// [(1, east)]
 }
 
 func must[T any](v T, err error) T {

@@ -19,7 +19,9 @@
 // [FormatArrayFunc], [FormatStructFieldFunc], [FormatStructParenFunc], [FormatComplexFunc],
 // [ErrFallthrough], [FormatStruct], [FormatTupleStruct], [FormatTypedStruct], and
 // [FormatJSONObjectStruct]. Copy a preset with [FormatConfig.Clone] before changing
-// callbacks; do not mutate shared instances returned by convenience formatters.
+// callbacks. Convenience formatters such as [FormatRowSpannerCLICompatible] use
+// internal singleton configs; clone a preset constructor result instead of mutating
+// package-level formatter variables.
 //
 // # Related packages
 //

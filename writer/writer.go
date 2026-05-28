@@ -20,7 +20,8 @@
 // [NewJSONLWriter], [SQLInsertWriter], and [NewSQLInsertWriter] stream rows.
 // [NewDelimitedWriterWithOptions], [NewJSONLWriterWithOptions], and
 // [NewSQLInsertWriterWithOptions] accept explicit options such as [WithMetadata]
-// and [WithFormatter]. [Prepare] initializes schema from result-set metadata.
+// and [WithFormatter]. Each writer's Prepare method initializes schema from
+// result-set metadata (for example [DelimitedWriter.Prepare]).
 // [RowData], [FormatDelimitedRow], and [FormatJSONLRow] support one-row paths.
 //
 // # Compatibility API
