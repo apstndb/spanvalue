@@ -1,10 +1,13 @@
 // Package writer provides small streaming helpers for exporting Spanner rows
 // using spanvalue formatters.
 //
-// DelimitedWriter and JSONLWriter preserve explicit duplicate column names. Their
-// UnnamedFieldNamer only fills empty column names, and generated names avoid
-// collisions with existing names. DelimitedWriter buffers through encoding/csv, so
-// callers must call Flush after the final write.
+// DelimitedWriter is the primary writer for CSV-style delimited text.
+// NewCSVWriter is a thin helper for the common comma-delimited CSV case, while
+// NewDelimitedWriter accepts an explicit delimiter for TSV and other delimited
+// output. DelimitedWriter and JSONLWriter preserve explicit duplicate column
+// names. Their UnnamedFieldNamer only fills empty column names, and generated
+// names avoid collisions with existing names. DelimitedWriter buffers through
+// encoding/csv, so callers must call Flush after the final write.
 //
 // Use Writer when an adapter only needs row streaming, and FlushWriter when it
 // owns the full write lifecycle. DelimitedWriter, JSONLWriter, and SQLInsertWriter
