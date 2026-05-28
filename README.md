@@ -72,10 +72,10 @@ Call `Flush` after the final row when using `writer.FlushWriter`; see the
 `Writer`, `FlushWriter`, and `Flusher` godoc for the interface lifecycle
 contract.
 
-Options-style constructors are available when setup should be explicit:
+Constructors accept options when setup should be explicit:
 
 ```go
-w := writer.NewDelimitedWriterWithOptions(
+w := writer.NewDelimitedWriter(
 	out,
 	'\t',
 	writer.WithMetadata(meta),
@@ -114,11 +114,9 @@ func writeCSV(out io.Writer, rows []*spanner.Row) error {
 
 TSV output uses the same CSV-style writer with a tab delimiter. `NewCSVWriter`
 is a thin helper for `NewDelimitedWriter(out, writer.Comma)`. Pass
-`writer.Comma` when using the generic delimited constructor for CSV output. A
-zero delimiter is accepted for compatibility and selects comma, but new code
-should be explicit. Non-zero delimiters must be valid runes other than `"`,
-`\r`, `\n`, or `utf8.RuneError`. `CSVWriter` and `DelimitedWriter.Comma` remain
-as deprecated compatibility APIs.
+`writer.Comma` when using the generic delimited constructor for CSV output.
+Delimiters must be non-zero valid runes other than `"`, `\r`, `\n`, or
+`utf8.RuneError`.
 
 ```go
 func writeTSV(out io.Writer, rows []*spanner.Row) error {

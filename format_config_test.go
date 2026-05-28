@@ -15,7 +15,7 @@ func TestFormatConfigClone(t *testing.T) {
 	original := &FormatConfig{
 		NullString:           "null",
 		FormatArray:          FormatCompactArray,
-		FormatStruct:         FormatTypedStruct,
+		FormatStruct:         TypedStructFormat(),
 		FormatComplexPlugins: []FormatComplexFunc{plugin},
 		FormatNullable:       FormatNullableSpannerCLICompatible,
 	}

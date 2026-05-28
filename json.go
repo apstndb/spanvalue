@@ -33,7 +33,7 @@ func JSONFormatConfig() *FormatConfig {
 		FormatArray: FormatCompactArray,
 		FormatStruct: FormatStruct{
 			FormatStructField: FormatSimpleStructField,
-			FormatStructParen: FormatJSONObjectStruct,
+			FormatStructParen: JSONObjectStructFormat(nil),
 		},
 		FormatComplexPlugins: []FormatComplexFunc{
 			FormatJSONSimpleValue,
@@ -95,9 +95,12 @@ func IndexedUnnamedFieldNamer(index int) string {
 	return "_" + strconv.Itoa(index)
 }
 
-// FormatJSONObjectStruct formats struct fields as a JSON object with nil namer.
-// Unnamed struct fields produce empty-string keys, matching Spanner's own representation.
-var FormatJSONObjectStruct = NewJSONObjectStructFormatter(nil)
+// JSONObjectStructFormat returns a FormatStructParenFunc that formats struct fields
+// as a JSON object. When namer is nil, unnamed struct fields produce empty-string keys,
+// matching Spanner's own representation.
+func JSONObjectStructFormat(namer UnnamedFieldNamer) FormatStructParenFunc {
+	return NewJSONObjectStructFormatter(namer)
+}
 
 // NewJSONObjectStructFormatter creates a FormatStructParenFunc that formats struct fields
 // as a JSON object with field names as keys. Unnamed fields are assigned names by the

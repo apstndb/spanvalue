@@ -30,7 +30,7 @@ func LiteralFormatConfig() *FormatConfig {
 	return &FormatConfig{
 		NullString:     nullStringUpperCase,
 		FormatArray:    FormatOptionallyTypedArray,
-		FormatStruct:   FormatTypedStruct,
+		FormatStruct:   TypedStructFormat(),
 		FormatNullable: formatNullableValueLiteral,
 		FormatComplexPlugins: []FormatComplexFunc{
 			FormatProtoAsCast,
