@@ -140,7 +140,7 @@ const (
 	SQLInsertOrUpdate
 )
 
-func (k SQLInsertKind) insertPrefix() string {
+func (k SQLInsertKind) String() string {
 	switch k {
 	case SQLInsert:
 		return "INSERT"
@@ -697,7 +697,7 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 	if err != nil {
 		return err
 	}
-	prefix := w.insertKind.insertPrefix()
+	prefix := w.insertKind.String()
 	if _, err := fmt.Fprintf(w.out, "%s INTO %s (%s) VALUES (", prefix, quotedTable, quotedColumns); err != nil {
 		return err
 	}
