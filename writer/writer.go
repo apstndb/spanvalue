@@ -1,17 +1,27 @@
 // Package writer provides small streaming helpers for exporting Spanner rows
 // using spanvalue formatters.
 //
-// CSVWriter and JSONLWriter preserve explicit duplicate column names. Their
-// UnnamedFieldNamer only fills empty column names, and generated names avoid
-// collisions with existing names. CSVWriter buffers through encoding/csv, so
-// callers must call Flush after the final write.
+// DelimitedWriter is the primary writer for CSV-style delimited text.
+// NewCSVWriter is a thin helper for the common comma-delimited CSV case, while
+// NewDelimitedWriter accepts an explicit delimiter for TSV and other delimited
+// output. DelimitedWriter and JSONLWriter preserve explicit duplicate column
+// names. Their UnnamedFieldNamer only fills empty column names, and generated
+// names avoid collisions with existing names. DelimitedWriter buffers through
+// encoding/csv, so callers must call Flush after the final write.
 //
-// CSVWriter, JSONLWriter, and SQLInsertWriter implement Flusher. If an adapter
-// exposes a Close method, that Close method should call Flush; Flush does not
-// close the underlying io.Writer.
+// Use Writer when an adapter only needs row streaming, and FlushWriter when it
+// owns the full write lifecycle. DelimitedWriter, JSONLWriter, and SQLInsertWriter
+// implement FlushWriter. If an adapter exposes a Close method, that Close
+// method should call Flush; Flush does not close the underlying io.Writer.
+//
+// WithOptions constructors collect setup such as FormatConfig, metadata, and
+// unnamed-field naming policy before the first write. Prepare initializes a
+// concrete writer from result-set metadata after construction. RowData and the
+// Format* helpers support one-row non-streaming paths.
 package writer
 
 import (
+	"bytes"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -28,6 +38,12 @@ import (
 	"github.com/apstndb/spanvalue/internal"
 )
 
+const (
+	// Comma is the standard CSV field delimiter. Pass Comma to
+	// NewDelimitedWriter for CSV output.
+	Comma rune = ','
+)
+
 var (
 	// ErrEmptyTableName reports that SQLInsertWriter.Table is empty.
 	ErrEmptyTableName = errors.New("empty table name")
@@ -41,11 +57,11 @@ var (
 	ErrMissingColumnNames = errors.New("missing column names")
 	// ErrColumnNamesMismatch reports that provided column names differ from initialized schema.
 	ErrColumnNamesMismatch = errors.New("column names mismatch")
-	// ErrHeaderAfterData reports that CSVWriter.WriteHeader was called after data rows were emitted.
+	// ErrHeaderAfterData reports that DelimitedWriter.WriteHeader was called after data rows were emitted.
 	ErrHeaderAfterData = errors.New("header after data")
-	// ErrInvalidDelimiter reports that CSVWriter.Comma is not a valid delimiter.
+	// ErrInvalidDelimiter reports that DelimitedWriter received an invalid delimiter.
 	ErrInvalidDelimiter = errors.New("invalid delimiter")
-	// ErrDelimiterAfterWrite reports that CSVWriter.Comma changed after the underlying CSV writer was initialized.
+	// ErrDelimiterAfterWrite reports that DelimitedWriter delimiter changed after the underlying CSV writer was initialized.
 	ErrDelimiterAfterWrite = errors.New("delimiter changed after writer initialization")
 )
 
@@ -54,28 +70,137 @@ var (
 // Writer intentionally models row streaming only. Some concrete writers also
 // implement [Flusher]; callers that own the full write lifecycle must call
 // Flush after the final row when it is available. Factories that may return a
-// buffered writer should return a concrete type or a local composite interface
-// such as interface { Writer; Flusher }, not Writer alone.
+// buffered writer should return a concrete type or [FlushWriter], not Writer
+// alone.
 type Writer interface {
 	WriteRow(row *spanner.Row) error
 }
 
 // Flusher finalizes any buffered output. Flush does not close the underlying
-// io.Writer. CSVWriter uses Flush to forward buffered CSV or TSV data; JSONLWriter
-// and SQLInsertWriter implement it as a no-op so adapters can use one finalize
-// path for all writer implementations.
+// io.Writer. DelimitedWriter uses Flush to forward buffered CSV-style data;
+// JSONLWriter and SQLInsertWriter implement it as a no-op so adapters can use
+// one finalize path for all writer implementations.
 type Flusher interface {
 	Flush() error
 }
 
-// CSVWriter writes rows as CSV-style delimited text. Call Flush after the final write.
-type CSVWriter struct {
+// FlushWriter streams Spanner rows and finalizes any buffered output.
+type FlushWriter interface {
+	Writer
+	Flusher
+}
+
+// Option configures any writer type created by a WithOptions constructor.
+type Option interface {
+	DelimitedOption
+	JSONLOption
+	SQLInsertOption
+}
+
+// NameOption configures field-name handling for delimited and JSONL writers.
+type NameOption interface {
+	DelimitedOption
+	JSONLOption
+}
+
+// DelimitedOption configures a DelimitedWriter created by NewDelimitedWriterWithOptions.
+type DelimitedOption interface {
+	applyDelimitedOption(*DelimitedWriter)
+}
+
+// JSONLOption configures a JSONLWriter created by NewJSONLWriterWithOptions.
+type JSONLOption interface {
+	applyJSONLOption(*JSONLWriter)
+}
+
+// SQLInsertOption configures a SQLInsertWriter created by NewSQLInsertWriterWithOptions.
+type SQLInsertOption interface {
+	applySQLInsertOption(*SQLInsertWriter)
+}
+
+type delimitedOptionFunc func(*DelimitedWriter)
+
+func (f delimitedOptionFunc) applyDelimitedOption(w *DelimitedWriter) {
+	f(w)
+}
+
+type metadataOption struct {
+	metadata *sppb.ResultSetMetadata
+}
+
+// WithMetadata initializes a writer schema from result-set metadata.
+func WithMetadata(metadata *sppb.ResultSetMetadata) Option {
+	return metadataOption{metadata: metadata}
+}
+
+func (o metadataOption) applyDelimitedOption(w *DelimitedWriter) {
+	w.setMetadata(o.metadata)
+}
+
+func (o metadataOption) applyJSONLOption(w *JSONLWriter) {
+	w.setMetadata(o.metadata)
+}
+
+func (o metadataOption) applySQLInsertOption(w *SQLInsertWriter) {
+	w.setMetadata(o.metadata)
+}
+
+type formatterOption struct {
+	formatter *spanvalue.FormatConfig
+}
+
+// WithFormatter sets the FormatConfig used by a writer.
+func WithFormatter(formatter *spanvalue.FormatConfig) Option {
+	return formatterOption{formatter: formatter}
+}
+
+func (o formatterOption) applyDelimitedOption(w *DelimitedWriter) {
+	w.Formatter = o.formatter
+}
+
+func (o formatterOption) applyJSONLOption(w *JSONLWriter) {
+	w.Formatter = o.formatter
+}
+
+func (o formatterOption) applySQLInsertOption(w *SQLInsertWriter) {
+	w.Formatter = o.formatter
+}
+
+type unnamedFieldNamerOption struct {
+	namer spanvalue.UnnamedFieldNamer
+}
+
+// WithUnnamedFieldNamer sets the unnamed-field naming policy for delimited and JSONL writers.
+func WithUnnamedFieldNamer(namer spanvalue.UnnamedFieldNamer) NameOption {
+	return unnamedFieldNamerOption{namer: namer}
+}
+
+func (o unnamedFieldNamerOption) applyDelimitedOption(w *DelimitedWriter) {
+	w.UnnamedFieldNamer = o.namer
+}
+
+func (o unnamedFieldNamerOption) applyJSONLOption(w *JSONLWriter) {
+	w.UnnamedFieldNamer = o.namer
+}
+
+// WithHeader sets whether DelimitedWriter writes a header before data rows.
+func WithHeader(header bool) DelimitedOption {
+	return delimitedOptionFunc(func(w *DelimitedWriter) {
+		w.Header = header
+	})
+}
+
+// DelimitedWriter writes rows as CSV-style delimited text. Call Flush after the final write.
+type DelimitedWriter struct {
 	Formatter *spanvalue.FormatConfig
 	Header    bool
-	// Comma is the field delimiter. The zero value selects ','. Set it before
-	// the first write; use '\t' for TSV output. Any non-zero delimiter must be
-	// a valid encoding/csv delimiter: a valid rune other than '"', '\r', '\n',
-	// or utf8.RuneError.
+	// Comma is the field delimiter. The zero value selects Comma for
+	// compatibility. Set it before the first write; use '\t' for TSV output.
+	// Any non-zero delimiter must be a valid encoding/csv delimiter: a valid
+	// rune other than '"', '\r', '\n', or utf8.RuneError.
+	//
+	// Deprecated: prefer the delimiter argument to NewDelimitedWriter or
+	// NewDelimitedWriterWithOptions.
 	Comma rune
 	// Set before the first write. Once names have been resolved for the current
 	// schema, later changes do not retroactively rewrite cached header names.
@@ -90,28 +215,53 @@ type CSVWriter struct {
 	wroteData           bool
 }
 
+// CSVWriter is a compatibility alias for DelimitedWriter.
+//
+// Deprecated: use DelimitedWriter.
+type CSVWriter = DelimitedWriter
+
 // NewCSVWriter returns a CSV writer optionally initialized from result-set metadata.
-func NewCSVWriter(out io.Writer, metadata ...*sppb.ResultSetMetadata) *CSVWriter {
-	w := &CSVWriter{
+// It is a thin helper for NewDelimitedWriter(out, Comma, metadata...).
+func NewCSVWriter(out io.Writer, metadata ...*sppb.ResultSetMetadata) *DelimitedWriter {
+	return NewDelimitedWriter(out, Comma, metadata...)
+}
+
+func newDelimitedWriter(out io.Writer) *DelimitedWriter {
+	return &DelimitedWriter{
 		Formatter:         spanvalue.SimpleFormatConfig(),
 		Header:            true,
 		UnnamedFieldNamer: spanvalue.IndexedUnnamedFieldNamer,
 		out:               out,
 	}
+}
+
+// NewDelimitedWriter returns a CSV-style writer using delimiter as the field
+// delimiter. Pass Comma for CSV output or '\t' for TSV output. A zero delimiter
+// is accepted for compatibility and is treated as Comma.
+func NewDelimitedWriter(out io.Writer, delimiter rune, metadata ...*sppb.ResultSetMetadata) *DelimitedWriter {
+	w := newDelimitedWriter(out)
+	w.Comma = delimiter
 	w.setMetadata(firstMetadata(metadata))
 	return w
 }
 
-// NewDelimitedWriter returns a CSV-style writer using delimiter as the field delimiter.
-// Pass '\t' for TSV output.
-func NewDelimitedWriter(out io.Writer, delimiter rune, metadata ...*sppb.ResultSetMetadata) *CSVWriter {
-	w := NewCSVWriter(out, metadata...)
+// NewDelimitedWriterWithOptions returns a CSV-style writer using delimiter as
+// the field delimiter and configured by options. Pass Comma for CSV output or
+// '\t' for TSV output. A zero delimiter is accepted for compatibility and is
+// treated as Comma.
+func NewDelimitedWriterWithOptions(out io.Writer, delimiter rune, options ...DelimitedOption) *DelimitedWriter {
+	w := newDelimitedWriter(out)
 	w.Comma = delimiter
+	for _, opt := range options {
+		if opt != nil {
+			opt.applyDelimitedOption(w)
+		}
+	}
 	return w
 }
 
-// WriteRow writes one CSV row, initializing the schema from row metadata if needed.
-func (w *CSVWriter) WriteRow(row *spanner.Row) error {
+// WriteRow writes one delimited row, initializing the schema from row metadata if needed.
+func (w *DelimitedWriter) WriteRow(row *spanner.Row) error {
 	columnNames, values, err := rowData(row)
 	if err != nil {
 		return err
@@ -119,8 +269,19 @@ func (w *CSVWriter) WriteRow(row *spanner.Row) error {
 	return w.WriteValues(columnNames, values)
 }
 
-// WriteHeader writes the CSV header once using the initialized column names.
-func (w *CSVWriter) WriteHeader() error {
+// Prepare initializes the delimited schema from result-set metadata before the first
+// row is written. If a schema is already initialized, Prepare verifies that the
+// metadata column names match the existing schema.
+func (w *DelimitedWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
+	columnNames, err := prepareColumnNames(metadata)
+	if err != nil {
+		return err
+	}
+	return w.initOrValidateColumnNames(columnNames)
+}
+
+// WriteHeader writes the delimited header once using the initialized column names.
+func (w *DelimitedWriter) WriteHeader() error {
 	if w.wroteHeader {
 		return nil
 	}
@@ -147,14 +308,14 @@ func (w *CSVWriter) WriteHeader() error {
 	return nil
 }
 
-func (w *CSVWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
+func (w *DelimitedWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
 	if err := w.initOrValidateColumnNames(columnNames); err != nil {
 		return err
 	}
 	return w.WriteGCVs(values)
 }
 
-func (w *CSVWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
+func (w *DelimitedWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	csvWriter, err := w.csvWriter()
 	if err != nil {
 		return err
@@ -181,12 +342,12 @@ func (w *CSVWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	return nil
 }
 
-func (w *CSVWriter) setMetadata(metadata *sppb.ResultSetMetadata) {
+func (w *DelimitedWriter) setMetadata(metadata *sppb.ResultSetMetadata) {
 	w.columnNames = metadataColumnNames(metadata)
 	w.resolvedColumnNames = nil
 }
 
-func (w *CSVWriter) initOrValidateColumnNames(columnNames []string) error {
+func (w *DelimitedWriter) initOrValidateColumnNames(columnNames []string) error {
 	initialized := len(w.columnNames) == 0
 	if err := initOrValidateColumnNames(&w.columnNames, columnNames); err != nil {
 		return err
@@ -197,14 +358,14 @@ func (w *CSVWriter) initOrValidateColumnNames(columnNames []string) error {
 	return nil
 }
 
-func (w *CSVWriter) formatter() *spanvalue.FormatConfig {
+func (w *DelimitedWriter) formatter() *spanvalue.FormatConfig {
 	if w.Formatter != nil {
 		return w.Formatter
 	}
 	return spanvalue.SimpleFormatConfig()
 }
 
-func (w *CSVWriter) csvWriter() (*csv.Writer, error) {
+func (w *DelimitedWriter) csvWriter() (*csv.Writer, error) {
 	delimiter := w.effectiveDelimiter()
 	if w.writer != nil {
 		if w.delimiter != delimiter {
@@ -224,11 +385,15 @@ func (w *CSVWriter) csvWriter() (*csv.Writer, error) {
 	return w.writer, nil
 }
 
-func (w *CSVWriter) effectiveDelimiter() rune {
-	if w.Comma == 0 {
-		return ','
+func (w *DelimitedWriter) effectiveDelimiter() rune {
+	return effectiveDelimiter(w.Comma)
+}
+
+func effectiveDelimiter(delimiter rune) rune {
+	if delimiter == 0 {
+		return Comma
 	}
-	return w.Comma
+	return delimiter
 }
 
 func validDelimiter(delimiter rune) bool {
@@ -240,9 +405,9 @@ func validDelimiter(delimiter rune) bool {
 		delimiter != utf8.RuneError
 }
 
-// Flush flushes buffered CSV or TSV data to the underlying writer. It does not
+// Flush flushes buffered delimited data to the underlying writer. It does not
 // close the underlying writer.
-func (w *CSVWriter) Flush() error {
+func (w *DelimitedWriter) Flush() error {
 	if w.writer == nil {
 		return nil
 	}
@@ -250,7 +415,7 @@ func (w *CSVWriter) Flush() error {
 	return w.writer.Error()
 }
 
-func (w *CSVWriter) resolvedNames() ([]string, error) {
+func (w *DelimitedWriter) resolvedNames() ([]string, error) {
 	if len(w.resolvedColumnNames) != 0 || len(w.columnNames) == 0 {
 		return w.resolvedColumnNames, nil
 	}
@@ -280,13 +445,28 @@ type JSONLWriter struct {
 
 // NewJSONLWriter returns a JSONL writer optionally initialized from result-set metadata.
 func NewJSONLWriter(out io.Writer, metadata ...*sppb.ResultSetMetadata) *JSONLWriter {
-	w := &JSONLWriter{
+	w := newJSONLWriter(out)
+	w.setMetadata(firstMetadata(metadata))
+	return w
+}
+
+// NewJSONLWriterWithOptions returns a JSONL writer configured by options.
+func NewJSONLWriterWithOptions(out io.Writer, options ...JSONLOption) *JSONLWriter {
+	w := newJSONLWriter(out)
+	for _, opt := range options {
+		if opt != nil {
+			opt.applyJSONLOption(w)
+		}
+	}
+	return w
+}
+
+func newJSONLWriter(out io.Writer) *JSONLWriter {
+	return &JSONLWriter{
 		Formatter:         spanvalue.JSONFormatConfig(),
 		UnnamedFieldNamer: spanvalue.IndexedUnnamedFieldNamer,
 		out:               out,
 	}
-	w.setMetadata(firstMetadata(metadata))
-	return w
 }
 
 func (w *JSONLWriter) WriteRow(row *spanner.Row) error {
@@ -295,6 +475,17 @@ func (w *JSONLWriter) WriteRow(row *spanner.Row) error {
 		return err
 	}
 	return w.WriteValues(columnNames, values)
+}
+
+// Prepare initializes the JSONL schema from result-set metadata before the first
+// row is written. If a schema is already initialized, Prepare verifies that the
+// metadata column names match the existing schema.
+func (w *JSONLWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
+	columnNames, err := prepareColumnNames(metadata)
+	if err != nil {
+		return err
+	}
+	return w.initOrValidateColumnNames(columnNames)
 }
 
 func (w *JSONLWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
@@ -402,13 +593,28 @@ type SQLInsertWriter struct {
 
 // NewSQLInsertWriter returns a SQL INSERT writer optionally initialized from result-set metadata.
 func NewSQLInsertWriter(out io.Writer, table string, metadata ...*sppb.ResultSetMetadata) *SQLInsertWriter {
-	w := &SQLInsertWriter{
+	w := newSQLInsertWriter(out, table)
+	w.setMetadata(firstMetadata(metadata))
+	return w
+}
+
+// NewSQLInsertWriterWithOptions returns a SQL INSERT writer configured by options.
+func NewSQLInsertWriterWithOptions(out io.Writer, table string, options ...SQLInsertOption) *SQLInsertWriter {
+	w := newSQLInsertWriter(out, table)
+	for _, opt := range options {
+		if opt != nil {
+			opt.applySQLInsertOption(w)
+		}
+	}
+	return w
+}
+
+func newSQLInsertWriter(out io.Writer, table string) *SQLInsertWriter {
+	return &SQLInsertWriter{
 		Table:     table,
 		Formatter: spanvalue.LiteralFormatConfig(),
 		out:       out,
 	}
-	w.setMetadata(firstMetadata(metadata))
-	return w
 }
 
 func (w *SQLInsertWriter) WriteRow(row *spanner.Row) error {
@@ -417,6 +623,18 @@ func (w *SQLInsertWriter) WriteRow(row *spanner.Row) error {
 		return err
 	}
 	return w.WriteValues(columnNames, values)
+}
+
+// Prepare initializes the SQL INSERT schema from result-set metadata before the
+// first row is written. If a schema is already initialized, Prepare verifies
+// that the metadata column names match the existing schema.
+func (w *SQLInsertWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
+	columnNames, err := prepareColumnNames(metadata)
+	if err != nil {
+		return err
+	}
+	_, err = w.initOrValidateQuotedColumns(columnNames)
+	return err
 }
 
 func (w *SQLInsertWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
@@ -517,8 +735,49 @@ func (w *SQLInsertWriter) quotedQualifiedTable() (string, error) {
 	return quotedTable, nil
 }
 
-// rowData extracts column names and GenericColumnValue cells from row.
-func rowData(row *spanner.Row) ([]string, []spanner.GenericColumnValue, error) {
+// FormatDelimitedRow formats one row as a CSV-style delimited record without a
+// trailing newline. Pass Comma for CSV output. A zero delimiter is accepted for
+// compatibility and is treated as Comma.
+func FormatDelimitedRow(fc *spanvalue.FormatConfig, row *spanner.Row, delimiter rune) (string, error) {
+	columnNames, values, err := RowData(row)
+	if err != nil {
+		return "", err
+	}
+	return FormatDelimitedValues(fc, columnNames, values, delimiter)
+}
+
+// FormatDelimitedValues formats one row represented as column names plus GCV
+// values as a CSV-style delimited record without a trailing newline. Pass Comma
+// for CSV output. A zero delimiter is accepted for compatibility and is treated
+// as Comma.
+func FormatDelimitedValues(fc *spanvalue.FormatConfig, columnNames []string, values []spanner.GenericColumnValue, delimiter rune) (string, error) {
+	formattedValues, err := spanvalue.FormatRowColumns(simpleFormatter(fc), columnNames, values)
+	if err != nil {
+		return "", err
+	}
+	return formatDelimitedRecord(formattedValues, delimiter)
+}
+
+// FormatJSONLRow formats one row as a JSON object string without a trailing
+// newline. Callers writing JSONL streams should add the newline at the stream
+// boundary.
+func FormatJSONLRow(fc *spanvalue.FormatConfig, row *spanner.Row, namer spanvalue.UnnamedFieldNamer) (string, error) {
+	columnNames, values, err := RowData(row)
+	if err != nil {
+		return "", err
+	}
+	return FormatJSONLValues(fc, columnNames, values, namer)
+}
+
+// FormatJSONLValues formats one row represented as column names plus GCV values
+// as a JSON object string without a trailing newline. Callers writing JSONL
+// streams should add the newline at the stream boundary.
+func FormatJSONLValues(fc *spanvalue.FormatConfig, columnNames []string, values []spanner.GenericColumnValue, namer spanvalue.UnnamedFieldNamer) (string, error) {
+	return spanvalue.FormatRowJSONObjectFromColumns(jsonFormatter(fc), columnNames, values, namer)
+}
+
+// RowData extracts column names and GenericColumnValue cells from row.
+func RowData(row *spanner.Row) ([]string, []spanner.GenericColumnValue, error) {
 	if row == nil {
 		return nil, nil, ErrNilRow
 	}
@@ -528,7 +787,43 @@ func rowData(row *spanner.Row) ([]string, []spanner.GenericColumnValue, error) {
 			return nil, nil, err
 		}
 	}
-	return row.ColumnNames(), values, nil
+	return slices.Clone(row.ColumnNames()), values, nil
+}
+
+func rowData(row *spanner.Row) ([]string, []spanner.GenericColumnValue, error) {
+	return RowData(row)
+}
+
+func formatDelimitedRecord(values []string, delimiter rune) (string, error) {
+	delimiter = effectiveDelimiter(delimiter)
+	if !validDelimiter(delimiter) {
+		return "", fmt.Errorf("%w: %q", ErrInvalidDelimiter, delimiter)
+	}
+	var out bytes.Buffer
+	w := csv.NewWriter(&out)
+	w.Comma = delimiter
+	if err := w.Write(values); err != nil {
+		return "", err
+	}
+	w.Flush()
+	if err := w.Error(); err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(out.String(), "\n"), nil
+}
+
+func simpleFormatter(fc *spanvalue.FormatConfig) *spanvalue.FormatConfig {
+	if fc != nil {
+		return fc
+	}
+	return spanvalue.SimpleFormatConfig()
+}
+
+func jsonFormatter(fc *spanvalue.FormatConfig) *spanvalue.FormatConfig {
+	if fc != nil {
+		return fc
+	}
+	return spanvalue.JSONFormatConfig()
 }
 
 // firstMetadata keeps the constructors backward-compatible while allowing an
@@ -538,6 +833,14 @@ func firstMetadata(metadata []*sppb.ResultSetMetadata) *sppb.ResultSetMetadata {
 		return nil
 	}
 	return metadata[0]
+}
+
+func prepareColumnNames(metadata *sppb.ResultSetMetadata) ([]string, error) {
+	columnNames := metadataColumnNames(metadata)
+	if len(columnNames) == 0 {
+		return nil, ErrMissingColumnNames
+	}
+	return columnNames, nil
 }
 
 func metadataColumnNames(metadata *sppb.ResultSetMetadata) []string {
