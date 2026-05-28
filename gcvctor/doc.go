@@ -30,6 +30,7 @@
 // Nullable Go inputs are split by shape in the function name:
 //
 //   - [BoolFromPtr], [Int64FromPtr], and related *FromPtr helpers take *T; nil means SQL NULL.
+//   - [BytesFromSlice] takes []byte; nil means SQL NULL (slices are already reference types).
 //   - [BoolFromNullable], [Int64FromNullable], and related *FromNullable helpers take
 //     [cloud.google.com/go/spanner.NullBool], [cloud.google.com/go/spanner.NullInt64], and
 //     other client null wrappers; Valid == false means SQL NULL.

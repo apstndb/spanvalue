@@ -18,7 +18,9 @@
 //
 // [DelimitedWriter], [NewDelimitedWriter], [NewCSVWriter], [JSONLWriter],
 // [NewJSONLWriter], [SQLInsertWriter], and [NewSQLInsertWriter] stream rows.
-// [WithSQLInsertKind] selects INSERT, INSERT OR IGNORE, or INSERT OR UPDATE prefixes.
+// [WithSQLInsertKind] selects the INSERT statement prefix. Variants such as
+// INSERT OR IGNORE and INSERT OR UPDATE use SQLite-style syntax for export tools;
+// they are not valid Spanner GoogleSQL DML (use MERGE for upserts on Spanner).
 // Constructors accept options such as [WithMetadata] and [WithFormatter].
 // Each writer's Prepare method initializes schema from result-set metadata
 // (for example [DelimitedWriter.Prepare]). [RowData], [FormatDelimitedRow], and
@@ -122,14 +124,18 @@ type JSONLOption interface {
 }
 
 // SQLInsertKind selects the INSERT statement prefix written by [SQLInsertWriter].
+//
+// SQLInsertOrIgnore and SQLInsertOrUpdate emit SQLite-style prefixes requested by
+// downstream export tools (issue #79). They are not valid Spanner GoogleSQL DML;
+// do not execute them directly against a Spanner database.
 type SQLInsertKind int
 
 const (
 	// SQLInsert writes plain INSERT INTO statements.
 	SQLInsert SQLInsertKind = iota
-	// SQLInsertOrIgnore writes INSERT OR IGNORE INTO statements.
+	// SQLInsertOrIgnore writes INSERT OR IGNORE INTO statements (export dialects only).
 	SQLInsertOrIgnore
-	// SQLInsertOrUpdate writes INSERT OR UPDATE INTO statements.
+	// SQLInsertOrUpdate writes INSERT OR UPDATE INTO statements (export dialects only).
 	SQLInsertOrUpdate
 )
 

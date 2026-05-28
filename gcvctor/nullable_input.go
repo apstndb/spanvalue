@@ -49,12 +49,12 @@ func StringFromPtr(p *string) spanner.GenericColumnValue {
 	return StringValue(*p)
 }
 
-// BytesFromPtr returns a BYTES GenericColumnValue. A nil pointer yields typed SQL NULL.
-func BytesFromPtr(p *[]byte) spanner.GenericColumnValue {
-	if p == nil {
+// BytesFromSlice returns a BYTES GenericColumnValue. A nil slice yields typed SQL NULL.
+func BytesFromSlice(v []byte) spanner.GenericColumnValue {
+	if v == nil {
 		return NullFromCode(sppb.TypeCode_BYTES)
 	}
-	return BytesValue(*p)
+	return BytesValue(v)
 }
 
 // DateFromPtr returns a DATE GenericColumnValue. A nil pointer yields typed SQL NULL.
