@@ -968,13 +968,49 @@ func TestRowDataAndOneRowFormatHelpers(t *testing.T) {
 func TestFormatDelimitedValuesInvalidDelimiter(t *testing.T) {
 	t.Parallel()
 
-	_, err := FormatDelimitedValues(
-		nil,
-		[]string{"name"},
-		[]spanner.GenericColumnValue{gcvctor.StringValue("Alice")},
-		'\n',
-	)
-	if !errors.Is(err, ErrInvalidDelimiter) {
-		t.Fatalf("FormatDelimitedValues() error = %v, want ErrInvalidDelimiter", err)
+	values := []spanner.GenericColumnValue{gcvctor.StringValue("Alice")}
+	columnNames := []string{"name"}
+
+	tests := []struct {
+		name      string
+		delimiter rune
+		format    func(rune) error
+	}{
+		{
+			name:      "newline in FormatDelimitedValues",
+			delimiter: '\n',
+			format: func(delim rune) error {
+				_, err := FormatDelimitedValues(nil, columnNames, values, delim)
+				return err
+			},
+		},
+		{
+			name:      "zero in FormatDelimitedValues",
+			delimiter: 0,
+			format: func(delim rune) error {
+				_, err := FormatDelimitedValues(nil, columnNames, values, delim)
+				return err
+			},
+		},
+		{
+			name:      "zero in FormatDelimitedRow",
+			delimiter: 0,
+			format: func(delim rune) error {
+				row, err := spanner.NewRow(columnNames, []interface{}{"Alice"})
+				if err != nil {
+					return err
+				}
+				_, err = FormatDelimitedRow(nil, row, delim)
+				return err
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if err := tt.format(tt.delimiter); !errors.Is(err, ErrInvalidDelimiter) {
+				t.Fatalf("format error = %v, want ErrInvalidDelimiter", err)
+			}
+		})
 	}
 }
