@@ -20,14 +20,7 @@ func ExampleSpannerCLICompatibleFormatConfig_tupleStruct() {
 	))
 	arrayOfStruct := lo.Must(gcvctor.ArrayValue(structElem))
 
-	fmt.Println(must(fc.FormatToplevelColumn(arrayOfStruct)))
+	fmt.Println(lo.Must(fc.FormatToplevelColumn(arrayOfStruct)))
 	// Output:
 	// [(1, east)]
-}
-
-func must[T any](v T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-	return v
 }
