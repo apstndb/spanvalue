@@ -17,8 +17,8 @@
 //
 // Lower-level callbacks and plugin types are intended for custom output formats:
 // [FormatArrayFunc], [FormatStructFieldFunc], [FormatStructParenFunc], [FormatComplexFunc],
-// [ErrFallthrough], [FormatStruct], [FormatTupleStruct], [FormatTypedStruct], and
-// [FormatJSONObjectStruct]. Copy a preset with [FormatConfig.Clone] before changing
+// [ErrFallthrough], [FormatStruct], [FormatTupleStruct], [TypedStructFormat], and
+// [JSONObjectStructFormat]. Copy a preset with [FormatConfig.Clone] before changing
 // callbacks. Convenience formatters such as [FormatRowSpannerCLICompatible] use
 // internal singleton configs; clone a preset constructor result instead of mutating
 // package-level formatter variables.

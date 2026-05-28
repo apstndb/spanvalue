@@ -1,6 +1,10 @@
 package spanvalue
 
-var FormatTypedStruct = FormatStruct{
-	FormatStructParen: formatTypedStructParen,
-	FormatStructField: formatSimpleStructField,
+// TypedStructFormat returns a FormatStruct that formats STRUCT values with
+// typed field names in literal style.
+func TypedStructFormat() FormatStruct {
+	return FormatStruct{
+		FormatStructParen: formatTypedStructParen,
+		FormatStructField: formatSimpleStructField,
+	}
 }

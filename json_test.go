@@ -254,7 +254,7 @@ func TestFormatCompactArray(t *testing.T) {
 	}
 }
 
-func TestFormatJSONObjectStruct(t *testing.T) {
+func TestJSONObjectStructFormat(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -286,9 +286,9 @@ func TestFormatJSONObjectStruct(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := lo.Must(FormatJSONObjectStruct(tt.typ, false, tt.fields))
+			got := lo.Must(JSONObjectStructFormat(nil)(tt.typ, false, tt.fields))
 			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("FormatJSONObjectStruct mismatch (-want +got):\n%s", diff)
+				t.Errorf("JSONObjectStructFormat mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
