@@ -76,7 +76,7 @@ func wantDate(d civil.Date) spanner.GenericColumnValue {
 func wantTimestamp(ts time.Time) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(sppb.TypeCode_TIMESTAMP),
-		Value: structpb.NewStringValue(ts.Format(time.RFC3339Nano)),
+		Value: structpb.NewStringValue(ts.UTC().Format(time.RFC3339Nano)),
 	}
 }
 
