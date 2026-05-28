@@ -144,7 +144,9 @@ func writeJSONL(out io.Writer, rows []*spanner.Row) error {
 }
 ```
 
-SQL INSERT output:
+SQL INSERT output uses Spanner GoogleSQL quoting. Use
+`writer.WithSQLInsertKind` for `INSERT OR IGNORE` or `INSERT OR UPDATE`; see
+[INSERT DML syntax](https://cloud.google.com/spanner/docs/reference/standard-sql/dml-syntax).
 
 ```go
 func writeInserts(out io.Writer, table string, rows []*spanner.Row) error {

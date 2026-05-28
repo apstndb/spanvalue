@@ -18,9 +18,9 @@
 //
 // [DelimitedWriter], [NewDelimitedWriter], [NewCSVWriter], [JSONLWriter],
 // [NewJSONLWriter], [SQLInsertWriter], and [NewSQLInsertWriter] stream rows.
-// [WithSQLInsertKind] selects the INSERT statement prefix. Variants such as
-// INSERT OR IGNORE and INSERT OR UPDATE use SQLite-style syntax for export tools;
-// they are not valid Spanner GoogleSQL DML (use MERGE for upserts on Spanner).
+// [WithSQLInsertKind] selects the INSERT statement prefix. INSERT OR IGNORE and
+// INSERT OR UPDATE are valid Spanner GoogleSQL DML forms; see the INSERT section
+// in https://cloud.google.com/spanner/docs/reference/standard-sql/dml-syntax .
 // Constructors accept options such as [WithMetadata] and [WithFormatter].
 // Each writer's Prepare method initializes schema from result-set metadata
 // (for example [DelimitedWriter.Prepare]). [RowData], [FormatDelimitedRow], and
@@ -125,17 +125,18 @@ type JSONLOption interface {
 
 // SQLInsertKind selects the INSERT statement prefix written by [SQLInsertWriter].
 //
-// SQLInsertOrIgnore and SQLInsertOrUpdate emit SQLite-style prefixes requested by
-// downstream export tools (issue #79). They are not valid Spanner GoogleSQL DML;
-// do not execute them directly against a Spanner database.
+// Variants follow Spanner GoogleSQL DML: INSERT OR IGNORE skips rows whose primary
+// key already exists; INSERT OR UPDATE inserts or updates by primary key. They
+// cannot be combined with ON CONFLICT in the same statement, and INSERT is not
+// supported in Partitioned DML. See https://cloud.google.com/spanner/docs/reference/standard-sql/dml-syntax .
 type SQLInsertKind int
 
 const (
 	// SQLInsert writes plain INSERT INTO statements.
 	SQLInsert SQLInsertKind = iota
-	// SQLInsertOrIgnore writes INSERT OR IGNORE INTO statements (export dialects only).
+	// SQLInsertOrIgnore writes INSERT OR IGNORE INTO statements.
 	SQLInsertOrIgnore
-	// SQLInsertOrUpdate writes INSERT OR UPDATE INTO statements (export dialects only).
+	// SQLInsertOrUpdate writes INSERT OR UPDATE INTO statements.
 	SQLInsertOrUpdate
 )
 
