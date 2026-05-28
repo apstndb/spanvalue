@@ -63,10 +63,10 @@ return w.Flush()
 The `writer` package accepts `*spanner.Row` values directly through `WriteRow`.
 Use `writer.Writer` when an adapter only needs row streaming. Use
 `writer.FlushWriter` when an adapter owns both row streaming and finalization.
-`CSVWriter` and `JSONLWriter` preserve explicit duplicate column names. Empty
-column names are the only names passed to `UnnamedFieldNamer`, and generated
-names avoid collisions with existing explicit names. Set `UnnamedFieldNamer` to
-`nil` when callers need empty names to remain empty.
+`DelimitedWriter` and `JSONLWriter` preserve explicit duplicate column names.
+Empty column names are the only names passed to `UnnamedFieldNamer`, and
+generated names avoid collisions with existing explicit names. Set
+`UnnamedFieldNamer` to `nil` when callers need empty names to remain empty.
 
 Call `Flush` after the final row when using `writer.FlushWriter`; see the
 `Writer`, `FlushWriter`, and `Flusher` godoc for the interface lifecycle
@@ -102,7 +102,7 @@ CSV output:
 
 ```go
 func writeCSV(out io.Writer, rows []*spanner.Row) error {
-	w := writer.NewCSVWriter(out)
+	w := writer.NewDelimitedWriter(out, 0)
 	for _, row := range rows {
 		if err := w.WriteRow(row); err != nil {
 			return err
@@ -113,9 +113,10 @@ func writeCSV(out io.Writer, rows []*spanner.Row) error {
 ```
 
 TSV output uses the same CSV-style writer with a tab delimiter. Set the
-delimiter before the first write. A zero delimiter selects the default comma;
-non-zero delimiters must be valid runes other than `"`, `\r`, `\n`, or
-`utf8.RuneError`.
+delimiter before the first write. A zero delimiter selects the default comma.
+Non-zero delimiters must be valid runes other than `"`, `\r`, `\n`, or
+`utf8.RuneError`. `CSVWriter`, `NewCSVWriter`, and the `Comma` field remain as
+deprecated compatibility APIs.
 
 ```go
 func writeTSV(out io.Writer, rows []*spanner.Row) error {
