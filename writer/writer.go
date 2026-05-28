@@ -35,6 +35,12 @@ import (
 	"github.com/apstndb/spanvalue/internal"
 )
 
+const (
+	// Comma is the standard CSV field delimiter. Pass Comma to
+	// NewDelimitedWriter for CSV output.
+	Comma rune = ','
+)
+
 var (
 	// ErrEmptyTableName reports that SQLInsertWriter.Table is empty.
 	ErrEmptyTableName = errors.New("empty table name")
@@ -185,10 +191,10 @@ func WithHeader(header bool) DelimitedOption {
 type DelimitedWriter struct {
 	Formatter *spanvalue.FormatConfig
 	Header    bool
-	// Comma is the field delimiter. The zero value selects ','. Set it before
-	// the first write; use '\t' for TSV output. Any non-zero delimiter must be
-	// a valid encoding/csv delimiter: a valid rune other than '"', '\r', '\n',
-	// or utf8.RuneError.
+	// Comma is the field delimiter. The zero value selects Comma for
+	// compatibility. Set it before the first write; use '\t' for TSV output.
+	// Any non-zero delimiter must be a valid encoding/csv delimiter: a valid
+	// rune other than '"', '\r', '\n', or utf8.RuneError.
 	//
 	// Deprecated: prefer the delimiter argument to NewDelimitedWriter or
 	// NewDelimitedWriterWithOptions.
@@ -206,16 +212,15 @@ type DelimitedWriter struct {
 	wroteData           bool
 }
 
-// CSVWriter writes rows as CSV-style delimited text.
+// CSVWriter is a compatibility alias for DelimitedWriter.
 //
 // Deprecated: use DelimitedWriter.
 type CSVWriter = DelimitedWriter
 
 // NewCSVWriter returns a CSV writer optionally initialized from result-set metadata.
-//
-// Deprecated: use NewDelimitedWriter with delimiter 0.
-func NewCSVWriter(out io.Writer, metadata ...*sppb.ResultSetMetadata) *CSVWriter {
-	return NewDelimitedWriter(out, 0, metadata...)
+// It is a thin helper for NewDelimitedWriter(out, Comma, metadata...).
+func NewCSVWriter(out io.Writer, metadata ...*sppb.ResultSetMetadata) *DelimitedWriter {
+	return NewDelimitedWriter(out, Comma, metadata...)
 }
 
 func newDelimitedWriter(out io.Writer) *DelimitedWriter {
@@ -228,7 +233,8 @@ func newDelimitedWriter(out io.Writer) *DelimitedWriter {
 }
 
 // NewDelimitedWriter returns a CSV-style writer using delimiter as the field
-// delimiter. Pass '\t' for TSV output.
+// delimiter. Pass Comma for CSV output or '\t' for TSV output. A zero delimiter
+// is accepted for compatibility and is treated as Comma.
 func NewDelimitedWriter(out io.Writer, delimiter rune, metadata ...*sppb.ResultSetMetadata) *DelimitedWriter {
 	w := newDelimitedWriter(out)
 	w.Comma = delimiter
@@ -237,7 +243,9 @@ func NewDelimitedWriter(out io.Writer, delimiter rune, metadata ...*sppb.ResultS
 }
 
 // NewDelimitedWriterWithOptions returns a CSV-style writer using delimiter as
-// the field delimiter and configured by options. Pass '\t' for TSV output.
+// the field delimiter and configured by options. Pass Comma for CSV output or
+// '\t' for TSV output. A zero delimiter is accepted for compatibility and is
+// treated as Comma.
 func NewDelimitedWriterWithOptions(out io.Writer, delimiter rune, options ...DelimitedOption) *DelimitedWriter {
 	w := newDelimitedWriter(out)
 	w.Comma = delimiter
@@ -380,7 +388,7 @@ func (w *DelimitedWriter) effectiveDelimiter() rune {
 
 func effectiveDelimiter(delimiter rune) rune {
 	if delimiter == 0 {
-		return ','
+		return Comma
 	}
 	return delimiter
 }
@@ -725,7 +733,8 @@ func (w *SQLInsertWriter) quotedQualifiedTable() (string, error) {
 }
 
 // FormatDelimitedRow formats one row as a CSV-style delimited record without a
-// trailing newline. A zero delimiter selects comma.
+// trailing newline. Pass Comma for CSV output. A zero delimiter is accepted for
+// compatibility and is treated as Comma.
 func FormatDelimitedRow(fc *spanvalue.FormatConfig, row *spanner.Row, delimiter rune) (string, error) {
 	columnNames, values, err := RowData(row)
 	if err != nil {
@@ -735,8 +744,9 @@ func FormatDelimitedRow(fc *spanvalue.FormatConfig, row *spanner.Row, delimiter 
 }
 
 // FormatDelimitedValues formats one row represented as column names plus GCV
-// values as a CSV-style delimited record without a trailing newline. A zero
-// delimiter selects comma.
+// values as a CSV-style delimited record without a trailing newline. Pass Comma
+// for CSV output. A zero delimiter is accepted for compatibility and is treated
+// as Comma.
 func FormatDelimitedValues(fc *spanvalue.FormatConfig, columnNames []string, values []spanner.GenericColumnValue, delimiter rune) (string, error) {
 	formattedValues, err := spanvalue.FormatRowColumns(simpleFormatter(fc), columnNames, values)
 	if err != nil {

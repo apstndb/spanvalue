@@ -102,7 +102,7 @@ CSV output:
 
 ```go
 func writeCSV(out io.Writer, rows []*spanner.Row) error {
-	w := writer.NewDelimitedWriter(out, 0)
+	w := writer.NewCSVWriter(out)
 	for _, row := range rows {
 		if err := w.WriteRow(row); err != nil {
 			return err
@@ -112,11 +112,13 @@ func writeCSV(out io.Writer, rows []*spanner.Row) error {
 }
 ```
 
-TSV output uses the same CSV-style writer with a tab delimiter. Set the
-delimiter before the first write. A zero delimiter selects the default comma.
-Non-zero delimiters must be valid runes other than `"`, `\r`, `\n`, or
-`utf8.RuneError`. `CSVWriter`, `NewCSVWriter`, and the `Comma` field remain as
-deprecated compatibility APIs.
+TSV output uses the same CSV-style writer with a tab delimiter. `NewCSVWriter`
+is a thin helper for `NewDelimitedWriter(out, writer.Comma)`. Pass
+`writer.Comma` when using the generic delimited constructor for CSV output. A
+zero delimiter is accepted for compatibility and selects comma, but new code
+should be explicit. Non-zero delimiters must be valid runes other than `"`,
+`\r`, `\n`, or `utf8.RuneError`. `CSVWriter` and `DelimitedWriter.Comma` remain
+as deprecated compatibility APIs.
 
 ```go
 func writeTSV(out io.Writer, rows []*spanner.Row) error {

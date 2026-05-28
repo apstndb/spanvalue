@@ -46,7 +46,7 @@ func flushDelimitedWriter(t *testing.T, w *DelimitedWriter) {
 	}
 }
 
-func TestNewCSVWriterCompatibility(t *testing.T) {
+func TestNewCSVWriterHelper(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
@@ -67,7 +67,7 @@ func TestDelimitedWriterWriteValues(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	w := NewDelimitedWriter(&out, 0)
+	w := NewDelimitedWriter(&out, Comma)
 
 	err := w.WriteValues(
 		[]string{"name", ""},
@@ -114,7 +114,7 @@ func TestDelimitedWriterWriteValuesWithCustomDelimiter(t *testing.T) {
 		{
 			name: "deprecated comma field",
 			new: func(out *bytes.Buffer) *DelimitedWriter {
-				w := NewDelimitedWriter(out, 0)
+				w := NewDelimitedWriter(out, Comma)
 				w.Comma = '\t'
 				return w
 			},
@@ -177,7 +177,7 @@ func TestDelimitedWriterWithOptions(t *testing.T) {
 	}
 }
 
-func TestDelimitedWriterWriteValuesZeroDelimiterUsesDefault(t *testing.T) {
+func TestDelimitedWriterWriteValuesZeroDelimiterUsesCommaForCompatibility(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
@@ -230,7 +230,7 @@ func TestDelimitedWriterWriteValuesDelimiterChangeAfterWrite(t *testing.T) {
 		t.Fatalf("WriteValues() error = %v", err)
 	}
 
-	w.Comma = ','
+	w.Comma = Comma
 	err = w.WriteValues(
 		[]string{"name"},
 		[]spanner.GenericColumnValue{gcvctor.StringValue("Bob")},
@@ -244,7 +244,7 @@ func TestDelimitedWriterPrepare(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	w := NewDelimitedWriter(&out, 0)
+	w := NewDelimitedWriter(&out, Comma)
 	if err := w.Prepare(metadataWithColumnNames("name", "age")); err != nil {
 		t.Fatalf("Prepare() error = %v", err)
 	}
@@ -331,7 +331,7 @@ func TestWritersPrepareWithoutMetadata(t *testing.T) {
 	}{
 		{
 			name:    "csv",
-			prepare: NewDelimitedWriter(&bytes.Buffer{}, 0).Prepare,
+			prepare: NewDelimitedWriter(&bytes.Buffer{}, Comma).Prepare,
 		},
 		{
 			name:    "jsonl",
@@ -359,7 +359,7 @@ func TestDelimitedWriterWriteGCVsWithMetadata(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	w := NewDelimitedWriter(&out, 0, metadataWithColumnNames("name", "age"))
+	w := NewDelimitedWriter(&out, Comma, metadataWithColumnNames("name", "age"))
 
 	err := w.WriteGCVs([]spanner.GenericColumnValue{
 		gcvctor.StringValue("Alice"),
@@ -380,7 +380,7 @@ func TestDelimitedWriterWriteRow(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	w := NewDelimitedWriter(&out, 0)
+	w := NewDelimitedWriter(&out, Comma)
 
 	row, err := spanner.NewRow([]string{"id", ""}, []interface{}{int64(42), "hello"})
 	if err != nil {
@@ -402,7 +402,7 @@ func TestDelimitedWriterWriteHeaderWithMetadata(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	w := NewDelimitedWriter(&out, 0, metadataWithColumnNames("name", "age"))
+	w := NewDelimitedWriter(&out, Comma, metadataWithColumnNames("name", "age"))
 
 	if err := w.WriteHeader(); err != nil {
 		t.Fatalf("WriteHeader() error = %v", err)
@@ -447,7 +447,7 @@ func TestDelimitedWriterWriteHeaderThenWriteGCVs(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	w := NewDelimitedWriter(&out, 0, metadataWithColumnNames("name", "age"))
+	w := NewDelimitedWriter(&out, Comma, metadataWithColumnNames("name", "age"))
 
 	if err := w.WriteHeader(); err != nil {
 		t.Fatalf("WriteHeader() error = %v", err)
@@ -471,7 +471,7 @@ func TestDelimitedWriterWriteHeaderWithoutMetadata(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	w := NewDelimitedWriter(&out, 0)
+	w := NewDelimitedWriter(&out, Comma)
 
 	err := w.WriteHeader()
 	if !errors.Is(err, ErrMissingColumnNames) {
@@ -483,7 +483,7 @@ func TestDelimitedWriterWriteHeaderAfterData(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	w := NewDelimitedWriter(&out, 0, metadataWithColumnNames("name", "age"))
+	w := NewDelimitedWriter(&out, Comma, metadataWithColumnNames("name", "age"))
 	w.Header = false
 
 	if err := w.WriteGCVs([]spanner.GenericColumnValue{
@@ -503,7 +503,7 @@ func TestDelimitedWriterWriteGCVsWithoutMetadata(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	w := NewDelimitedWriter(&out, 0)
+	w := NewDelimitedWriter(&out, Comma)
 
 	err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")})
 	if !errors.Is(err, ErrMissingColumnNames) {
@@ -514,7 +514,7 @@ func TestDelimitedWriterWriteGCVsWithoutMetadata(t *testing.T) {
 func TestDelimitedWriterWriteGCVsNilOutputWithoutMetadata(t *testing.T) {
 	t.Parallel()
 
-	err := NewDelimitedWriter(nil, 0).WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")})
+	err := NewDelimitedWriter(nil, Comma).WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")})
 	if !errors.Is(err, ErrNilOutputWriter) {
 		t.Fatalf("WriteGCVs() error = %v, want ErrNilOutputWriter", err)
 	}
@@ -523,7 +523,7 @@ func TestDelimitedWriterWriteGCVsNilOutputWithoutMetadata(t *testing.T) {
 func TestDelimitedWriterWriteHeaderNilOutputWithoutMetadata(t *testing.T) {
 	t.Parallel()
 
-	err := NewDelimitedWriter(nil, 0).WriteHeader()
+	err := NewDelimitedWriter(nil, Comma).WriteHeader()
 	if !errors.Is(err, ErrNilOutputWriter) {
 		t.Fatalf("WriteHeader() error = %v, want ErrNilOutputWriter", err)
 	}
@@ -539,7 +539,7 @@ func TestWritersReturnErrNilOutputWriter(t *testing.T) {
 		{
 			name: "csv",
 			run: func() error {
-				w := NewDelimitedWriter(nil, 0, metadataWithColumnNames("name"))
+				w := NewDelimitedWriter(nil, Comma, metadataWithColumnNames("name"))
 				return w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")})
 			},
 		},
@@ -581,7 +581,7 @@ func TestWritersReturnErrNilRow(t *testing.T) {
 		{
 			name: "csv",
 			run: func() error {
-				return NewDelimitedWriter(&bytes.Buffer{}, 0).WriteRow(nil)
+				return NewDelimitedWriter(&bytes.Buffer{}, Comma).WriteRow(nil)
 			},
 		},
 		{
@@ -614,7 +614,7 @@ func TestDelimitedWriterWriteValuesColumnNamesMismatch(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	w := NewDelimitedWriter(&out, 0)
+	w := NewDelimitedWriter(&out, Comma)
 
 	if err := w.WriteValues(
 		[]string{"name"},
@@ -996,7 +996,7 @@ func TestRowDataAndOneRowFormatHelpers(t *testing.T) {
 		t.Fatalf("RowData() column names mismatch (-want +got):\n%s", diff)
 	}
 
-	csvRow, err := FormatDelimitedValues(nil, columnNames, values, 0)
+	csvRow, err := FormatDelimitedValues(nil, columnNames, values, Comma)
 	if err != nil {
 		t.Fatalf("FormatDelimitedValues() error = %v", err)
 	}
