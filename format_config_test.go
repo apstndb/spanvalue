@@ -32,12 +32,12 @@ func TestFormatConfigClone(t *testing.T) {
 	}
 
 	clone.NullString = "changed"
-	clone.FormatComplexPlugins = nil
+	clone.FormatComplexPlugins[0] = nil
 	if original.NullString == "changed" {
 		t.Fatal("mutating clone.NullString changed original")
 	}
-	if original.FormatComplexPlugins == nil {
-		t.Fatal("mutating clone.FormatComplexPlugins replaced original slice")
+	if original.FormatComplexPlugins[0] == nil {
+		t.Fatal("mutating clone.FormatComplexPlugins element changed original")
 	}
 
 	if got := (*FormatConfig)(nil).Clone(); got != nil {
