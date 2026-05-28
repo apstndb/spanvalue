@@ -14,10 +14,21 @@
 // implement FlushWriter. If an adapter exposes a Close method, that Close
 // method should call Flush; Flush does not close the underlying io.Writer.
 //
-// WithOptions constructors collect setup such as FormatConfig, metadata, and
-// unnamed-field naming policy before the first write. Prepare initializes a
-// concrete writer from result-set metadata after construction. RowData and the
-// Format* helpers support one-row non-streaming paths.
+// # Primary API
+//
+// [DelimitedWriter], [NewDelimitedWriter], [NewCSVWriter], [JSONLWriter],
+// [NewJSONLWriter], [SQLInsertWriter], and [NewSQLInsertWriter] stream rows.
+// [NewDelimitedWriterWithOptions], [NewJSONLWriterWithOptions], and
+// [NewSQLInsertWriterWithOptions] accept explicit options such as [WithMetadata]
+// and [WithFormatter]. Each writer's Prepare method initializes schema from
+// result-set metadata (for example [DelimitedWriter.Prepare]).
+// [RowData], [FormatDelimitedRow], and [FormatJSONLRow] support one-row paths.
+//
+// # Compatibility API
+//
+// [CSVWriter] is a type alias for [DelimitedWriter]. [DelimitedWriter.Comma]
+// and a zero delimiter passed to [NewDelimitedWriter] select comma for
+// compatibility; prefer [NewCSVWriter] or [NewDelimitedWriter] with [Comma].
 package writer
 
 import (

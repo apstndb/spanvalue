@@ -184,6 +184,24 @@ type Formatter interface {
 	GetNullString() string
 }
 
+// FormatConfig controls how Spanner values are formatted. Preset constructors
+// such as [LiteralFormatConfig] return a fresh instance with non-nil callbacks
+// for the value kinds they support. [FormatConfig.FormatColumn] calls FormatArray,
+// FormatStruct, and FormatNullable directly; a nil callback panics when that
+// branch runs unless a [FormatComplexFunc] plugin handles the value first.
+//
+// Nil field behavior:
+//   - FormatArray: required for non-NULL ARRAY values. NULL ARRAY values use
+//     [FormatConfig.GetNullString] before FormatArray is called.
+//   - FormatStruct.FormatStructField and FormatStruct.FormatStructParen: required
+//     for non-NULL STRUCT values. NULL STRUCT values use [FormatConfig.GetNullString]
+//     before struct callbacks run.
+//   - FormatComplexPlugins: nil or empty means no plugins run.
+//   - FormatNullable: required for non-NULL scalars reached through
+//     [FormatConfig.FormatColumn]. NULL scalars use [FormatConfig.GetNullString]
+//     before FormatNullable is called.
+//
+// Use [FormatConfig.Clone] to customize a preset without mutating shared instances.
 type FormatConfig struct {
 	NullString           string
 	FormatArray          FormatArrayFunc
