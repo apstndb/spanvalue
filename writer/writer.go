@@ -142,6 +142,8 @@ const (
 
 func (k SQLInsertKind) insertPrefix() string {
 	switch k {
+	case SQLInsert:
+		return "INSERT"
 	case SQLInsertOrIgnore:
 		return "INSERT OR IGNORE"
 	case SQLInsertOrUpdate:
