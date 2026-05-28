@@ -754,6 +754,45 @@ func TestSQLInsertWriterWriteValues(t *testing.T) {
 	}
 }
 
+func TestSQLInsertWriterInsertKind(t *testing.T) {
+	t.Parallel()
+
+	values := []spanner.GenericColumnValue{gcvctor.Int64Value(42)}
+	columnNames := []string{"id"}
+
+	tests := []struct {
+		name string
+		kind SQLInsertKind
+		want string
+	}{
+		{
+			name: "insert or ignore",
+			kind: SQLInsertOrIgnore,
+			want: "INSERT OR IGNORE INTO `users` (`id`) VALUES (42);\n",
+		},
+		{
+			name: "insert or update",
+			kind: SQLInsertOrUpdate,
+			want: "INSERT OR UPDATE INTO `users` (`id`) VALUES (42);\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var out bytes.Buffer
+			w := NewSQLInsertWriter(&out, "users", WithSQLInsertKind(tt.kind))
+			if err := w.WriteValues(columnNames, values); err != nil {
+				t.Fatalf("WriteValues() error = %v", err)
+			}
+			if diff := cmp.Diff(tt.want, out.String()); diff != "" {
+				t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestSQLInsertWriterWithOptions(t *testing.T) {
 	t.Parallel()
 

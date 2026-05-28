@@ -18,6 +18,7 @@
 //
 // [DelimitedWriter], [NewDelimitedWriter], [NewCSVWriter], [JSONLWriter],
 // [NewJSONLWriter], [SQLInsertWriter], and [NewSQLInsertWriter] stream rows.
+// [WithSQLInsertKind] selects INSERT, INSERT OR IGNORE, or INSERT OR UPDATE prefixes.
 // Constructors accept options such as [WithMetadata] and [WithFormatter].
 // Each writer's Prepare method initializes schema from result-set metadata
 // (for example [DelimitedWriter.Prepare]). [RowData], [FormatDelimitedRow], and
@@ -118,6 +119,42 @@ type DelimitedOption interface {
 // JSONLOption configures a JSONLWriter created by [NewJSONLWriter].
 type JSONLOption interface {
 	applyJSONLOption(*JSONLWriter)
+}
+
+// SQLInsertKind selects the INSERT statement prefix written by [SQLInsertWriter].
+type SQLInsertKind int
+
+const (
+	// SQLInsert writes plain INSERT INTO statements.
+	SQLInsert SQLInsertKind = iota
+	// SQLInsertOrIgnore writes INSERT OR IGNORE INTO statements.
+	SQLInsertOrIgnore
+	// SQLInsertOrUpdate writes INSERT OR UPDATE INTO statements.
+	SQLInsertOrUpdate
+)
+
+func (k SQLInsertKind) insertPrefix() string {
+	switch k {
+	case SQLInsertOrIgnore:
+		return "INSERT OR IGNORE"
+	case SQLInsertOrUpdate:
+		return "INSERT OR UPDATE"
+	default:
+		return "INSERT"
+	}
+}
+
+// WithSQLInsertKind sets the INSERT statement variant for a [SQLInsertWriter].
+func WithSQLInsertKind(kind SQLInsertKind) SQLInsertOption {
+	return sqlInsertKindOption{kind: kind}
+}
+
+type sqlInsertKindOption struct {
+	kind SQLInsertKind
+}
+
+func (o sqlInsertKindOption) applySQLInsertOption(w *SQLInsertWriter) {
+	w.insertKind = o.kind
 }
 
 // SQLInsertOption configures a SQLInsertWriter created by [NewSQLInsertWriter].
@@ -560,6 +597,7 @@ type SQLInsertWriter struct {
 	Table     string
 	Formatter *spanvalue.FormatConfig
 
+	insertKind        SQLInsertKind
 	columnNames       []string
 	quotedColumnNames string
 	quotedTable       string
@@ -650,7 +688,8 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 	if err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w.out, "INSERT INTO %s (%s) VALUES (", quotedTable, quotedColumns); err != nil {
+	prefix := w.insertKind.insertPrefix()
+	if _, err := fmt.Fprintf(w.out, "%s INTO %s (%s) VALUES (", prefix, quotedTable, quotedColumns); err != nil {
 		return err
 	}
 	for i, val := range formattedValues {
