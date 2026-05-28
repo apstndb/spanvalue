@@ -128,6 +128,30 @@ func TestCSVWriterWriteValuesWithCustomComma(t *testing.T) {
 	}
 }
 
+func TestCSVWriterWriteValuesZeroCommaUsesDefault(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewDelimitedWriter(&out, 0)
+
+	err := w.WriteValues(
+		[]string{"name", "note"},
+		[]spanner.GenericColumnValue{
+			gcvctor.StringValue("Alice"),
+			gcvctor.StringValue("comma, ok"),
+		},
+	)
+	if err != nil {
+		t.Fatalf("WriteValues() error = %v", err)
+	}
+	flushCSVWriter(t, w)
+
+	want := "name,note\nAlice,\"comma, ok\"\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("CSV output mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestCSVWriterWriteValuesInvalidComma(t *testing.T) {
 	t.Parallel()
 

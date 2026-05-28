@@ -88,8 +88,9 @@ func writeCSV(out io.Writer, rows []*spanner.Row) error {
 ```
 
 TSV output uses the same CSV-style writer with a tab delimiter. Set the
-delimiter before the first write. Explicit delimiters must be valid runes other
-than `0`, `"`, `\r`, `\n`, or `utf8.RuneError`.
+delimiter before the first write. A zero delimiter selects the default comma;
+non-zero delimiters must be valid runes other than `"`, `\r`, `\n`, or
+`utf8.RuneError`.
 
 ```go
 func writeTSV(out io.Writer, rows []*spanner.Row) error {

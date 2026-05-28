@@ -72,9 +72,9 @@ type Flusher interface {
 type CSVWriter struct {
 	Formatter *spanvalue.FormatConfig
 	Header    bool
-	// Comma is the field delimiter. The zero value uses ','. Set it before the
-	// first write; use '\t' for TSV output. When set explicitly, it must be a
-	// valid encoding/csv delimiter: a valid rune other than 0, '"', '\r', '\n',
+	// Comma is the field delimiter. The zero value selects ','. Set it before
+	// the first write; use '\t' for TSV output. Any non-zero delimiter must be
+	// a valid encoding/csv delimiter: a valid rune other than '"', '\r', '\n',
 	// or utf8.RuneError.
 	Comma rune
 	// Set before the first write. Once names have been resolved for the current
