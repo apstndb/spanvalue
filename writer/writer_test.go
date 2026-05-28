@@ -127,7 +127,7 @@ func TestDelimitedWriterWithOptions(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	w := NewDelimitedWriter(
+	w := NewDelimitedWriterWithOptions(
 		&out,
 		'\t',
 		WithMetadata(metadataWithColumnNames("name", "age")),
