@@ -68,9 +68,9 @@ column names are the only names passed to `UnnamedFieldNamer`, and generated
 names avoid collisions with existing explicit names. Set `UnnamedFieldNamer` to
 `nil` when callers need empty names to remain empty.
 
-Call `Flush` after the final row when the writer also implements
-`writer.Flusher`; see the `Writer` and `Flusher` godoc for the interface
-lifecycle contract.
+Call `Flush` after the final row when using `writer.FlushWriter`; see the
+`Writer`, `FlushWriter`, and `Flusher` godoc for the interface lifecycle
+contract.
 
 Options-style constructors are available when setup should be explicit:
 
@@ -88,7 +88,15 @@ w := writer.NewDelimitedWriterWithOptions(
 When metadata is known after construction but before rows are streamed, call
 `Prepare(metadata)` on the concrete writer. For non-streaming paths, use
 `writer.RowData`, `writer.FormatDelimitedRow`, or `writer.FormatJSONLRow`
-directly.
+directly. Pass the JSON field-name policy explicitly, for example:
+
+```go
+line, err := writer.FormatJSONLRow(
+	spanvalue.JSONFormatConfig(),
+	row,
+	spanvalue.IndexedUnnamedFieldNamer,
+)
+```
 
 CSV output:
 

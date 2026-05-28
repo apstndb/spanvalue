@@ -251,6 +251,60 @@ func TestCSVWriterPrepare(t *testing.T) {
 	}
 }
 
+func TestJSONLWriterPrepare(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewJSONLWriter(&out)
+	if err := w.Prepare(metadataWithColumnNames("", "age")); err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.StringValue("Alice"),
+		gcvctor.Int64Value(42),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+
+	want := "{\"_0\":\"Alice\",\"age\":42}\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("JSONL output mismatch (-want +got):\n%s", diff)
+	}
+
+	err := w.Prepare(metadataWithColumnNames("", "score"))
+	if !errors.Is(err, ErrColumnNamesMismatch) {
+		t.Fatalf("Prepare() mismatch error = %v, want ErrColumnNamesMismatch", err)
+	}
+}
+
+func TestSQLInsertWriterPrepare(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewSQLInsertWriter(&out, "users")
+	if err := w.Prepare(metadataWithColumnNames("id", "name")); err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.Int64Value(42),
+		gcvctor.StringValue("Alice"),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+
+	want := "INSERT INTO `users` (`id`, `name`) VALUES (42, \"Alice\");\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+	}
+
+	err := w.Prepare(metadataWithColumnNames("id", "full_name"))
+	if !errors.Is(err, ErrColumnNamesMismatch) {
+		t.Fatalf("Prepare() mismatch error = %v, want ErrColumnNamesMismatch", err)
+	}
+}
+
 func TestWritersPrepareWithoutMetadata(t *testing.T) {
 	t.Parallel()
 

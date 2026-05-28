@@ -6,9 +6,15 @@
 // collisions with existing names. CSVWriter buffers through encoding/csv, so
 // callers must call Flush after the final write.
 //
-// CSVWriter, JSONLWriter, and SQLInsertWriter implement Flusher. If an adapter
-// exposes a Close method, that Close method should call Flush; Flush does not
-// close the underlying io.Writer.
+// Use Writer when an adapter only needs row streaming, and FlushWriter when it
+// owns the full write lifecycle. CSVWriter, JSONLWriter, and SQLInsertWriter
+// implement FlushWriter. If an adapter exposes a Close method, that Close
+// method should call Flush; Flush does not close the underlying io.Writer.
+//
+// WithOptions constructors collect setup such as FormatConfig, metadata, and
+// unnamed-field naming policy before the first write. Prepare initializes a
+// concrete writer from result-set metadata after construction. RowData and the
+// Format* helpers support one-row non-streaming paths.
 package writer
 
 import (
@@ -55,8 +61,8 @@ var (
 // Writer intentionally models row streaming only. Some concrete writers also
 // implement [Flusher]; callers that own the full write lifecycle must call
 // Flush after the final row when it is available. Factories that may return a
-// buffered writer should return a concrete type or a local composite interface
-// such as interface { Writer; Flusher }, not Writer alone.
+// buffered writer should return a concrete type or [FlushWriter], not Writer
+// alone.
 type Writer interface {
 	WriteRow(row *spanner.Row) error
 }
