@@ -27,6 +27,18 @@
 // Neither encodes a non-null STRUCT whose fields are all null; use [StructValueOf] with
 // per-field nulls when you need that shape.
 //
+// Nullable Go inputs are split by shape in the function name:
+//
+//   - [BoolFromPtr], [Int64FromPtr], and related *FromPtr helpers take *T; nil means SQL NULL.
+//   - [BytesFromSlice] takes []byte; nil means SQL NULL (slices are already reference types).
+//   - [BoolFromNullable], [Int64FromNullable], and related *FromNullable helpers take
+//     [cloud.google.com/go/spanner.NullBool], [cloud.google.com/go/spanner.NullInt64], and
+//     other client null wrappers; Valid == false means SQL NULL.
+//
+// Use *FromPtr for optional fields modeled as Go pointers. Use *FromNullable when the value
+// already comes from the Spanner client library. For explicit typed NULL without an input
+// value, keep using [NullOf] or [NullFromCode].
+//
 // [NumericValueChecked] and [PGNumericValueChecked] return errors on nil [*big.Rat] input
 // instead of panicking. The legacy [NumericValue] and [PGNumericValue] helpers keep their
 // original signatures and return typed SQL NULL values on nil input.
