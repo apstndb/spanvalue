@@ -8,18 +8,22 @@ import (
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"github.com/apstndb/spanvalue"
 	"github.com/apstndb/spanvalue/gcvctor"
 	"github.com/apstndb/spanvalue/internal"
 	"github.com/google/go-cmp/cmp"
 )
 
 var (
-	_ Writer  = (*CSVWriter)(nil)
-	_ Writer  = (*JSONLWriter)(nil)
-	_ Writer  = (*SQLInsertWriter)(nil)
-	_ Flusher = (*CSVWriter)(nil)
-	_ Flusher = (*JSONLWriter)(nil)
-	_ Flusher = (*SQLInsertWriter)(nil)
+	_ Writer      = (*CSVWriter)(nil)
+	_ Writer      = (*JSONLWriter)(nil)
+	_ Writer      = (*SQLInsertWriter)(nil)
+	_ Flusher     = (*CSVWriter)(nil)
+	_ Flusher     = (*JSONLWriter)(nil)
+	_ Flusher     = (*SQLInsertWriter)(nil)
+	_ FlushWriter = (*CSVWriter)(nil)
+	_ FlushWriter = (*JSONLWriter)(nil)
+	_ FlushWriter = (*SQLInsertWriter)(nil)
 )
 
 func metadataWithColumnNames(names ...string) *sppb.ResultSetMetadata {
@@ -128,6 +132,34 @@ func TestCSVWriterWriteValuesWithCustomComma(t *testing.T) {
 	}
 }
 
+func TestCSVWriterWithOptions(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewDelimitedWriterWithOptions(
+		&out,
+		'\t',
+		WithMetadata(metadataWithColumnNames("name", "age")),
+		WithFormatter(spanvalue.LiteralFormatConfig()),
+		WithHeader(false),
+		WithUnnamedFieldNamer(nil),
+	)
+
+	err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.StringValue("Alice"),
+		gcvctor.Int64Value(42),
+	})
+	if err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	flushCSVWriter(t, w)
+
+	want := "\"\"\"Alice\"\"\"\t42\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("delimited output mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestCSVWriterWriteValuesZeroCommaUsesDefault(t *testing.T) {
 	t.Parallel()
 
@@ -188,6 +220,67 @@ func TestCSVWriterWriteValuesCommaChangeAfterWrite(t *testing.T) {
 	)
 	if !errors.Is(err, ErrDelimiterAfterWrite) {
 		t.Fatalf("WriteValues() after Comma change error = %v, want ErrDelimiterAfterWrite", err)
+	}
+}
+
+func TestCSVWriterPrepare(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewCSVWriter(&out)
+	if err := w.Prepare(metadataWithColumnNames("name", "age")); err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.StringValue("Alice"),
+		gcvctor.Int64Value(42),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	flushCSVWriter(t, w)
+
+	want := "name,age\nAlice,42\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("CSV output mismatch (-want +got):\n%s", diff)
+	}
+
+	err := w.Prepare(metadataWithColumnNames("name", "score"))
+	if !errors.Is(err, ErrColumnNamesMismatch) {
+		t.Fatalf("Prepare() mismatch error = %v, want ErrColumnNamesMismatch", err)
+	}
+}
+
+func TestWritersPrepareWithoutMetadata(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		prepare func(*sppb.ResultSetMetadata) error
+	}{
+		{
+			name:    "csv",
+			prepare: NewCSVWriter(&bytes.Buffer{}).Prepare,
+		},
+		{
+			name:    "jsonl",
+			prepare: NewJSONLWriter(&bytes.Buffer{}).Prepare,
+		},
+		{
+			name:    "sql",
+			prepare: NewSQLInsertWriter(&bytes.Buffer{}, "users").Prepare,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tt.prepare(nil)
+			if !errors.Is(err, ErrMissingColumnNames) {
+				t.Fatalf("Prepare(nil) error = %v, want ErrMissingColumnNames", err)
+			}
+		})
 	}
 }
 
@@ -491,6 +584,29 @@ func TestJSONLWriterWriteRow(t *testing.T) {
 	}
 }
 
+func TestJSONLWriterWithOptions(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewJSONLWriterWithOptions(
+		&out,
+		WithMetadata(metadataWithColumnNames("", "age")),
+		WithUnnamedFieldNamer(nil),
+	)
+
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.Int64Value(42),
+		gcvctor.Int64Value(7),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+
+	want := "{\"\":42,\"age\":7}\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("JSONL output mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestJSONLWriterWriteGCVsAfterWriteRow(t *testing.T) {
 	t.Parallel()
 
@@ -620,6 +736,30 @@ func TestSQLInsertWriterWriteValues(t *testing.T) {
 				t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestSQLInsertWriterWithOptions(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewSQLInsertWriterWithOptions(
+		&out,
+		"users",
+		WithMetadata(metadataWithColumnNames("id", "name")),
+		WithFormatter(spanvalue.LiteralFormatConfig()),
+	)
+
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.Int64Value(42),
+		gcvctor.StringValue("Alice"),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+
+	want := "INSERT INTO `users` (`id`, `name`) VALUES (42, \"Alice\");\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -766,5 +906,60 @@ func TestSQLInsertWriterWriteGCVsEmptyTableName(t *testing.T) {
 	err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(42)})
 	if !errors.Is(err, ErrEmptyTableName) {
 		t.Fatalf("WriteGCVs() error = %v, want ErrEmptyTableName", err)
+	}
+}
+
+func TestRowDataAndOneRowFormatHelpers(t *testing.T) {
+	t.Parallel()
+
+	row, err := spanner.NewRow([]string{"id", "note"}, []interface{}{int64(42), "comma, ok"})
+	if err != nil {
+		t.Fatalf("spanner.NewRow() error = %v", err)
+	}
+
+	columnNames, values, err := RowData(row)
+	if err != nil {
+		t.Fatalf("RowData() error = %v", err)
+	}
+	if diff := cmp.Diff([]string{"id", "note"}, columnNames); diff != "" {
+		t.Fatalf("RowData() column names mismatch (-want +got):\n%s", diff)
+	}
+
+	csvRow, err := FormatCSVValues(nil, columnNames, values)
+	if err != nil {
+		t.Fatalf("FormatCSVValues() error = %v", err)
+	}
+	if want := `42,"comma, ok"`; csvRow != want {
+		t.Fatalf("FormatCSVValues() = %q, want %q", csvRow, want)
+	}
+
+	tsvRow, err := FormatDelimitedRow(nil, row, '\t')
+	if err != nil {
+		t.Fatalf("FormatDelimitedRow() error = %v", err)
+	}
+	if want := "42\tcomma, ok"; tsvRow != want {
+		t.Fatalf("FormatDelimitedRow() = %q, want %q", tsvRow, want)
+	}
+
+	jsonRow, err := FormatJSONLRow(nil, row, spanvalue.IndexedUnnamedFieldNamer)
+	if err != nil {
+		t.Fatalf("FormatJSONLRow() error = %v", err)
+	}
+	if want := `{"id":42,"note":"comma, ok"}`; jsonRow != want {
+		t.Fatalf("FormatJSONLRow() = %q, want %q", jsonRow, want)
+	}
+}
+
+func TestFormatDelimitedValuesInvalidDelimiter(t *testing.T) {
+	t.Parallel()
+
+	_, err := FormatDelimitedValues(
+		nil,
+		[]string{"name"},
+		[]spanner.GenericColumnValue{gcvctor.StringValue("Alice")},
+		'\n',
+	)
+	if !errors.Is(err, ErrInvalidDelimiter) {
+		t.Fatalf("FormatDelimitedValues() error = %v, want ErrInvalidDelimiter", err)
 	}
 }

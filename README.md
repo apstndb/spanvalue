@@ -62,8 +62,7 @@ return w.Flush()
 
 The `writer` package accepts `*spanner.Row` values directly through `WriteRow`.
 Use `writer.Writer` when an adapter only needs row streaming. Use
-`writer.Flusher` alongside `writer.Writer` when an adapter owns the full write
-lifecycle.
+`writer.FlushWriter` when an adapter owns both row streaming and finalization.
 `CSVWriter` and `JSONLWriter` preserve explicit duplicate column names. Empty
 column names are the only names passed to `UnnamedFieldNamer`, and generated
 names avoid collisions with existing explicit names. Set `UnnamedFieldNamer` to
@@ -72,6 +71,24 @@ names avoid collisions with existing explicit names. Set `UnnamedFieldNamer` to
 Call `Flush` after the final row when the writer also implements
 `writer.Flusher`; see the `Writer` and `Flusher` godoc for the interface
 lifecycle contract.
+
+Options-style constructors are available when setup should be explicit:
+
+```go
+w := writer.NewDelimitedWriterWithOptions(
+	out,
+	'\t',
+	writer.WithMetadata(meta),
+	writer.WithFormatter(cfg),
+	writer.WithHeader(true),
+	writer.WithUnnamedFieldNamer(nil),
+)
+```
+
+When metadata is known after construction but before rows are streamed, call
+`Prepare(metadata)` on the concrete writer. For non-streaming paths, use
+`writer.RowData`, `writer.FormatDelimitedRow`, or `writer.FormatJSONLRow`
+directly.
 
 CSV output:
 
