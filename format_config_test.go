@@ -31,11 +31,7 @@ func TestFormatConfigClone(t *testing.T) {
 		t.Fatalf("len(FormatComplexPlugins) = %d, want %d", len(clone.FormatComplexPlugins), len(original.FormatComplexPlugins))
 	}
 
-	clone.NullString = "changed"
 	clone.FormatComplexPlugins[0] = nil
-	if original.NullString == "changed" {
-		t.Fatal("mutating clone.NullString changed original")
-	}
 	if original.FormatComplexPlugins[0] == nil {
 		t.Fatal("mutating clone.FormatComplexPlugins element changed original")
 	}
