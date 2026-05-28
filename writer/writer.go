@@ -23,9 +23,10 @@
 // (for example [DelimitedWriter.Prepare]). [RowData], [FormatDelimitedRow], and
 // [FormatJSONLRow] support one-row paths.
 //
-// Deprecated: [NewDelimitedWriterWithOptions], [NewJSONLWriterWithOptions], and
-// [NewSQLInsertWriterWithOptions] are compatibility wrappers around the primary
-// constructors.
+// # Compatibility constructors
+//
+// [NewDelimitedWriterWithOptions], [NewJSONLWriterWithOptions], and
+// [NewSQLInsertWriterWithOptions] forward to the primary constructors above.
 package writer
 
 import (
@@ -242,7 +243,9 @@ func NewDelimitedWriter(out io.Writer, delimiter rune, options ...DelimitedOptio
 	return w
 }
 
-// NewDelimitedWriterWithOptions is deprecated. Use [NewDelimitedWriter] instead.
+// NewDelimitedWriterWithOptions forwards to [NewDelimitedWriter].
+//
+// Deprecated: Use [NewDelimitedWriter] instead.
 func NewDelimitedWriterWithOptions(out io.Writer, delimiter rune, options ...DelimitedOption) *DelimitedWriter {
 	return NewDelimitedWriter(out, delimiter, options...)
 }
@@ -427,7 +430,9 @@ func NewJSONLWriter(out io.Writer, options ...JSONLOption) *JSONLWriter {
 	return w
 }
 
-// NewJSONLWriterWithOptions is deprecated. Use [NewJSONLWriter] instead.
+// NewJSONLWriterWithOptions forwards to [NewJSONLWriter].
+//
+// Deprecated: Use [NewJSONLWriter] instead.
 func NewJSONLWriterWithOptions(out io.Writer, options ...JSONLOption) *JSONLWriter {
 	return NewJSONLWriter(out, options...)
 }
@@ -573,7 +578,9 @@ func NewSQLInsertWriter(out io.Writer, table string, options ...SQLInsertOption)
 	return w
 }
 
-// NewSQLInsertWriterWithOptions is deprecated. Use [NewSQLInsertWriter] instead.
+// NewSQLInsertWriterWithOptions forwards to [NewSQLInsertWriter].
+//
+// Deprecated: Use [NewSQLInsertWriter] instead.
 func NewSQLInsertWriterWithOptions(out io.Writer, table string, options ...SQLInsertOption) *SQLInsertWriter {
 	return NewSQLInsertWriter(out, table, options...)
 }
