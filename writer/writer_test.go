@@ -1143,6 +1143,33 @@ func TestWriteProtoValuesNilFieldType(t *testing.T) {
 	}
 }
 
+func TestDelimitedWriterPrepareColumnNames(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewDelimitedWriter(&out, ',')
+	if err := w.PrepareColumnNames([]string{"name", "age"}); err != nil {
+		t.Fatalf("PrepareColumnNames() error = %v", err)
+	}
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.StringValue("Ada"),
+		gcvctor.Int64Value(30),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	flushDelimitedWriter(t, w)
+
+	want := "name,age\nAda,30\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output mismatch (-want +got):\n%s", diff)
+	}
+
+	err := w.PrepareColumnNames([]string{"name", "score"})
+	if !errors.Is(err, ErrColumnNamesMismatch) {
+		t.Fatalf("PrepareColumnNames() mismatch error = %v, want ErrColumnNamesMismatch", err)
+	}
+}
+
 func TestPrepareRowTypeMatchesPrepareMetadata(t *testing.T) {
 	t.Parallel()
 
