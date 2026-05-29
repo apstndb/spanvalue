@@ -44,7 +44,7 @@ func ReadableBytesString(b []byte) string {
 	if isReadableASCII(b) {
 		return string(b)
 	}
-	out := make([]byte, 0, len(b)+len(b))
+	out := make([]byte, 0, len(b))
 	out = appendReadableEscaped(out, b)
 	return string(out)
 }
@@ -104,7 +104,7 @@ func ReadableStringFromBase64Wire(wire string) (string, error) {
 		return out, nil
 	}
 
-	out := make([]byte, 0, nw+nw)
+	out := make([]byte, 0, nw)
 	out = appendReadableEscaped(out, decoded)
 	putDecodeBuf(bp, buf)
 	return string(out), nil
