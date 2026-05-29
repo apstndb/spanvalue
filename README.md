@@ -73,8 +73,8 @@ owns both row streaming and finalization.
 `iter.Do` and `WriteRow` are enough (the first row supplies column names). When the result
 may be empty but metadata still lists columns, use the `iter.Next` loop below and call
 `PrepareRowType(iter.Metadata.GetRowType())` on the first loop iteration (even when `Next` returns
-`iterator.Done`), then `WriteRow` and `Flush`
-in a defer. You do not need to build `[]GenericColumnValue` per row or call
+`iterator.Done`), then `WriteRow` in the loop and `return w.Flush()` after the loop (do not
+`defer w.Flush()`—that discards Flush errors). You do not need to build `[]GenericColumnValue` per row or call
 `WriteStructValues` on that path. If you already hold `*sppb.ResultSetMetadata` outside a
 `RowIterator` (for example an in-memory `spannerpb.ResultSet`), `WithMetadata(md)` at
 construction is fine.
