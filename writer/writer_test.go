@@ -1143,19 +1143,46 @@ func TestWriteStructValuesNilFieldType(t *testing.T) {
 	}
 }
 
+func TestDelimitedWriterPrepareColumnNamesAfterConstruction(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewDelimitedWriter(&out, ',')
+	if err := w.PrepareColumnNames([]string{"name", "age"}); err != nil {
+		t.Fatalf("PrepareColumnNames() error = %v", err)
+	}
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.StringValue("Ada"),
+		gcvctor.Int64Value(30),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	flushDelimitedWriter(t, w)
+
+	want := "name,age\nAda,30\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output mismatch (-want +got):\n%s", diff)
+	}
+
+	err := w.PrepareColumnNames([]string{"name", "score"})
+	if !errors.Is(err, ErrColumnNamesMismatch) {
+		t.Fatalf("PrepareColumnNames() mismatch error = %v, want ErrColumnNamesMismatch", err)
+	}
+}
+
 func TestSQLInsertWriterPrepareColumnNamesRecoversAfterQuoteError(t *testing.T) {
 	t.Parallel()
 
 	w := NewSQLInsertWriter(&bytes.Buffer{}, "users")
-	err := w.prepareColumnNames([]string{""})
+	err := w.PrepareColumnNames([]string{""})
 	if !errors.Is(err, ErrEmptyColumnName) {
-		t.Fatalf("prepareColumnNames() error = %v, want ErrEmptyColumnName", err)
+		t.Fatalf("PrepareColumnNames() error = %v, want ErrEmptyColumnName", err)
 	}
-	if err := w.prepareColumnNames([]string{"id"}); err != nil {
-		t.Fatalf("prepareColumnNames() retry error = %v", err)
+	if err := w.PrepareColumnNames([]string{"id"}); err != nil {
+		t.Fatalf("PrepareColumnNames() retry error = %v", err)
 	}
 	if w.quotedColumnNames == "" {
-		t.Fatal("quotedColumnNames not cached after successful prepareColumnNames")
+		t.Fatal("quotedColumnNames not cached after successful PrepareColumnNames")
 	}
 }
 
@@ -1163,11 +1190,39 @@ func TestSQLInsertWriterPrepareRowTypeCachesQuotedColumns(t *testing.T) {
 	t.Parallel()
 
 	w := NewSQLInsertWriter(&bytes.Buffer{}, "users")
-	if err := w.prepareRowType(rowTypeWithColumnNames("id", "name")); err != nil {
-		t.Fatalf("prepareRowType() error = %v", err)
+	if err := w.PrepareRowType(rowTypeWithColumnNames("id", "name")); err != nil {
+		t.Fatalf("PrepareRowType() error = %v", err)
 	}
 	if w.quotedColumnNames == "" {
-		t.Fatal("quotedColumnNames not cached after prepareRowType")
+		t.Fatal("quotedColumnNames not cached after PrepareRowType")
+	}
+}
+
+func TestPrepareRowTypeAfterConstruction(t *testing.T) {
+	t.Parallel()
+
+	rowType := rowTypeWithColumnNames("id", "name")
+	var delimited, jsonl bytes.Buffer
+	dw := NewDelimitedWriter(&delimited, ',')
+	jw := NewJSONLWriter(&jsonl)
+	if err := dw.PrepareRowType(rowType); err != nil {
+		t.Fatalf("DelimitedWriter.PrepareRowType() error = %v", err)
+	}
+	if err := jw.PrepareRowType(rowType); err != nil {
+		t.Fatalf("JSONLWriter.PrepareRowType() error = %v", err)
+	}
+	if err := dw.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.StringValue("a")}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	if err := jw.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(2), gcvctor.StringValue("b")}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	flushDelimitedWriter(t, dw)
+	if want := "id,name\n1,a\n"; delimited.String() != want {
+		t.Fatalf("delimited = %q, want %q", delimited.String(), want)
+	}
+	if want := "{\"id\":2,\"name\":\"b\"}\n"; jsonl.String() != want {
+		t.Fatalf("jsonl = %q, want %q", jsonl.String(), want)
 	}
 }
 

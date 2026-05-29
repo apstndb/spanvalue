@@ -34,13 +34,15 @@
 // column lists). Some paths also register per-column *sppb.Type values so rows
 // can be streamed as []*structpb.Value without fabricating metadata wrappers.
 //
-// Register schema with [WithRowType], [WithColumnNames], or [WithMetadata] at
-// construction. [WithRowType] and [WithMetadata] store names plus field types
-// (internal columnSchema) and are required for [WriteStructValues].
+// Register schema with [WithRowType], [WithColumnNames], or [WithMetadata] when
+// the writer is constructed, or with [DelimitedWriter.PrepareRowType] /
+// [DelimitedWriter.PrepareColumnNames] after a query when names or types were
+// not known earlier. [WithRowType] and [WithMetadata] store names plus field
+// types (internal columnSchema) and are required for [WriteStructValues].
 // [WithColumnNames] stores names only; types come from each GCV in [WriteGCVs].
 //
-// [DelimitedWriter.Prepare] is deprecated late-binding for result-set metadata
-// only; prefer constructing the writer with With options when possible.
+// [DelimitedWriter.Prepare] is deprecated; use PrepareRowType or
+// PrepareColumnNames, or With options at construction.
 //
 // Row write layers (high to low):
 //
@@ -409,9 +411,22 @@ func (w *DelimitedWriter) WriteRow(row *spanner.Row) error {
 // row is written. If a schema is already initialized, Prepare verifies that the
 // metadata column names match the existing schema.
 //
-// Deprecated: Prefer [WithRowType], [WithColumnNames], or [WithMetadata] at construction.
+// Deprecated: Use [DelimitedWriter.PrepareRowType], [DelimitedWriter.PrepareColumnNames],
+// or With options at construction.
 func (w *DelimitedWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
-	return w.prepareRowType(rowTypeFromMetadata(metadata))
+	return w.PrepareRowType(rowTypeFromMetadata(metadata))
+}
+
+// PrepareRowType initializes the delimited schema from a row type before the first
+// row is written. If a schema is already initialized, column names must match.
+func (w *DelimitedWriter) PrepareRowType(rowType *sppb.StructType) error {
+	return w.prepareRowType(rowType)
+}
+
+// PrepareColumnNames initializes the delimited schema from column names before the
+// first row is written. If a schema is already initialized, names must match.
+func (w *DelimitedWriter) PrepareColumnNames(names []string) error {
+	return w.prepareColumnNames(names)
 }
 
 func (w *DelimitedWriter) prepareRowType(rowType *sppb.StructType) error {
@@ -423,6 +438,17 @@ func (w *DelimitedWriter) prepareRowType(rowType *sppb.StructType) error {
 		return err
 	}
 	w.setRowType(rowType)
+	return nil
+}
+
+func (w *DelimitedWriter) prepareColumnNames(names []string) error {
+	if len(names) == 0 {
+		return ErrMissingColumnNames
+	}
+	if err := w.initOrValidateColumnNames(names); err != nil {
+		return err
+	}
+	w.setColumnNames(names)
 	return nil
 }
 
@@ -462,7 +488,7 @@ func (w *DelimitedWriter) WriteValues(columnNames []string, values []spanner.Gen
 }
 
 // WriteStructValues writes one row from structpb values using the field-type schema
-// registered by [WithRowType] or [WithMetadata].
+// registered by [WithRowType], [WithMetadata], or [PrepareRowType].
 func (w *DelimitedWriter) WriteStructValues(values []*structpb.Value) error {
 	gcvs, err := gcvsFromStructValues(w.schema.types, values)
 	if err != nil {
@@ -628,9 +654,20 @@ func (w *JSONLWriter) WriteRow(row *spanner.Row) error {
 // row is written. If a schema is already initialized, Prepare verifies that the
 // metadata column names match the existing schema.
 //
-// Deprecated: Prefer [WithRowType], [WithColumnNames], or [WithMetadata] at construction.
+// Deprecated: Use [JSONLWriter.PrepareRowType], [JSONLWriter.PrepareColumnNames],
+// or With options at construction.
 func (w *JSONLWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
-	return w.prepareRowType(rowTypeFromMetadata(metadata))
+	return w.PrepareRowType(rowTypeFromMetadata(metadata))
+}
+
+// PrepareRowType initializes the JSONL schema from a row type before the first row is written.
+func (w *JSONLWriter) PrepareRowType(rowType *sppb.StructType) error {
+	return w.prepareRowType(rowType)
+}
+
+// PrepareColumnNames initializes the JSONL schema from column names before the first row is written.
+func (w *JSONLWriter) PrepareColumnNames(names []string) error {
+	return w.prepareColumnNames(names)
 }
 
 func (w *JSONLWriter) prepareRowType(rowType *sppb.StructType) error {
@@ -645,6 +682,17 @@ func (w *JSONLWriter) prepareRowType(rowType *sppb.StructType) error {
 	return nil
 }
 
+func (w *JSONLWriter) prepareColumnNames(names []string) error {
+	if len(names) == 0 {
+		return ErrMissingColumnNames
+	}
+	if err := w.initOrValidateColumnNames(names); err != nil {
+		return err
+	}
+	w.setColumnNames(names)
+	return nil
+}
+
 func (w *JSONLWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
 	if err := w.initOrValidateColumnNames(columnNames); err != nil {
 		return err
@@ -653,7 +701,7 @@ func (w *JSONLWriter) WriteValues(columnNames []string, values []spanner.Generic
 }
 
 // WriteStructValues writes one row from structpb values using the field-type schema
-// registered by [WithRowType] or [WithMetadata].
+// registered by [WithRowType], [WithMetadata], or [PrepareRowType].
 func (w *JSONLWriter) WriteStructValues(values []*structpb.Value) error {
 	gcvs, err := gcvsFromStructValues(w.schema.types, values)
 	if err != nil {
@@ -803,9 +851,20 @@ func (w *SQLInsertWriter) WriteRow(row *spanner.Row) error {
 // first row is written. If a schema is already initialized, Prepare verifies
 // that the metadata column names match the existing schema.
 //
-// Deprecated: Prefer [WithRowType], [WithColumnNames], or [WithMetadata] at construction.
+// Deprecated: Use [SQLInsertWriter.PrepareRowType], [SQLInsertWriter.PrepareColumnNames],
+// or With options at construction.
 func (w *SQLInsertWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
-	return w.prepareRowType(rowTypeFromMetadata(metadata))
+	return w.PrepareRowType(rowTypeFromMetadata(metadata))
+}
+
+// PrepareRowType initializes the SQL INSERT schema from a row type before the first row is written.
+func (w *SQLInsertWriter) PrepareRowType(rowType *sppb.StructType) error {
+	return w.prepareRowType(rowType)
+}
+
+// PrepareColumnNames initializes the SQL INSERT schema from column names before the first row is written.
+func (w *SQLInsertWriter) PrepareColumnNames(names []string) error {
+	return w.prepareColumnNames(names)
 }
 
 func (w *SQLInsertWriter) prepareRowType(rowType *sppb.StructType) error {
@@ -841,7 +900,7 @@ func (w *SQLInsertWriter) WriteValues(columnNames []string, values []spanner.Gen
 }
 
 // WriteStructValues writes one row from structpb values using the field-type schema
-// registered by [WithRowType] or [WithMetadata].
+// registered by [WithRowType], [WithMetadata], or [PrepareRowType].
 func (w *SQLInsertWriter) WriteStructValues(values []*structpb.Value) error {
 	gcvs, err := gcvsFromStructValues(w.schema.types, values)
 	if err != nil {
