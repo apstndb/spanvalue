@@ -78,15 +78,17 @@ Constructors accept options when setup should be explicit:
 w := writer.NewDelimitedWriter(
 	out,
 	'\t',
-	writer.WithMetadata(meta),
+	writer.WithRowType(meta.GetRowType()), // or WithColumnNames(names) or WithMetadata(meta)
 	writer.WithFormatter(cfg),
-	writer.WithHeader(true),
+	writer.WithHeader(true),  // false for headerless CSV/TSV
 	writer.WithUnnamedFieldNamer(nil),
 )
 ```
 
-When metadata is known after construction but before rows are streamed, call
-`Prepare(metadata)` on the concrete writer. For non-streaming paths, use
+Register schema with `WithRowType`, `WithColumnNames`, or `WithMetadata` (names from
+`RowType` only). Stream rows with `WriteGCVs`, `WriteProtoValues` (row type schema
+required), or `WriteRow`. When metadata is known after construction, call
+`Prepare` or `PrepareRowType` on the concrete writer. For non-streaming paths, use
 `writer.RowData`, `writer.FormatDelimitedRow`, or `writer.FormatJSONLRow`
 directly. Pass the JSON field-name policy explicitly, for example:
 
