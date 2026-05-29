@@ -89,7 +89,8 @@ Register schema with `WithRowType`, `WithColumnNames`, or `WithMetadata` (stores
 `metadata.GetRowType()`, including field types for `WriteProtoValues`; other
 metadata fields are unused). Stream rows with `WriteGCVs`, `WriteProtoValues`, or
 `WriteRow`. When schema is known after construction, call `PrepareRowType`,
-`PrepareColumnNames`, or the deprecated `Prepare` on the concrete writer. See the
+`PrepareMetadata`, `PrepareColumnNames`, or the deprecated `Prepare` on the
+concrete writer. See the
 `writer` package documentation for the schema and row-input model. For non-streaming paths, use
 `writer.RowData`, `writer.FormatDelimitedRow`, or `writer.FormatJSONLRow`
 directly. Pass the JSON field-name policy explicitly, for example:
