@@ -76,38 +76,31 @@ Call `Flush` after the final row when using `writer.FlushWriter`; see the
 contract.
 
 With the [Spanner client](https://pkg.go.dev/cloud.google.com/go/spanner#section-readme),
-schema usually comes from a `RowIterator` after `Query` or `Read`:
+stream `Query` or `Read` results with `WriteRow` (each `*spanner.Row` already carries
+typed column values; the writer picks up column names from the first row):
 
 ```go
-rowIter := txn.Query(ctx, stmt)
-defer rowIter.Stop()
+iter := txn.Query(ctx, stmt)
 
 w := writer.NewDelimitedWriter(
 	out,
 	'\t',
-	writer.WithRowType(rowIter.Metadata.GetRowType()),
-	// or writer.WithMetadata(rowIter.Metadata),
 	writer.WithFormatter(cfg),
 	writer.WithHeader(true), // false for headerless CSV/TSV
 )
-for {
-	row, err := rowIter.Next()
-	if err == iterator.Done {
-		break
-	}
-	if err != nil {
-		return err
-	}
-	if err := w.WriteRow(row); err != nil {
-		return err
-	}
+if err := iter.Do(func(row *spanner.Row) error {
+	return w.WriteRow(row)
+}); err != nil {
+	return err
 }
 return w.Flush()
 ```
 
-If the writer is created before the query, call `PrepareRowType(rowIter.Metadata.GetRowType())`
-(or `PrepareColumnNames`) once the iterator is open. `Prepare(metadata)` is deprecated;
-prefer `PrepareRowType` or `With*` options. Stream rows with `WriteGCVs`,
+Use `WithRowType`, `WithMetadata`, or `PrepareRowType` when you need a registered
+field-type schema (for example `WriteStructValues`). When the row type comes from
+`iter.Metadata`, call `PrepareRowType` after the first `iter.Next()` once metadata is
+available, or pass a row type you already know at construction time. `Prepare(metadata)`
+is deprecated; prefer `PrepareRowType` or `With*` options. Stream rows with `WriteGCVs`,
 `WriteStructValues`, or `WriteRow`.
 Delimited, JSONL, and SQL encodings differ after
 spanvalue formats each column; see the `writer` package documentation. For
