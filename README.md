@@ -98,10 +98,10 @@ if err := iter.Do(func(row *spanner.Row) error {
 return w.Flush()
 ```
 
-When the result may be empty but you still want a CSV/TSV header, use `iter.Next`.
-Spanner sets `iter.Metadata` after the first `Next` (row or `iterator.Done`); register
-names with `PrepareRowType` on that pass, then stream rows. `Flush` writes a pending
-header when no data row was emitted:
+When a `SELECT` may return zero rows but metadata still lists result columns, use
+`iter.Next`. Spanner sets `iter.Metadata` after the first `Next` (row or
+`iterator.Done`); register names with `PrepareRowType` on that pass, then stream rows.
+`Flush` writes a pending header when no data row was emitted:
 
 ```go
 iter := txn.Query(ctx, stmt)
