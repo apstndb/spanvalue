@@ -59,6 +59,14 @@ func FormatConfigWithoutScalarPlugins(fc *FormatConfig) *FormatConfig {
 	return clone
 }
 
+// scalarTypeCode returns the column type code, or ok false to fall through when Type is nil.
+func scalarTypeCode(value spanner.GenericColumnValue) (sppb.TypeCode, bool) {
+	if value.Type == nil {
+		return 0, false
+	}
+	return value.Type.GetCode(), true
+}
+
 func scalarFastPathActive(formatter Formatter, presetNullable FormatNullableFunc) bool {
 	fc, ok := formatter.(*FormatConfig)
 	if !ok {
@@ -74,11 +82,15 @@ func scalarFastPathActive(formatter Formatter, presetNullable FormatNullableFunc
 // plugins. NUMERIC uses the string wire payload as-is; canonical wire is the GCV constructor's
 // responsibility (see [github.com/apstndb/spanvalue/gcvctor.StringBasedValueFromCode]).
 func FormatSimpleValue(formatter Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
-	switch value.Type.GetCode() {
+	code, ok := scalarTypeCode(value)
+	if !ok {
+		return "", ErrFallthrough
+	}
+	switch code {
 	case sppb.TypeCode_ARRAY, sppb.TypeCode_STRUCT:
 		return "", ErrFallthrough
 	}
-	if !isScalarFastPathTypeCode(value.Type.GetCode()) {
+	if !isScalarFastPathTypeCode(code) {
 		return "", ErrFallthrough
 	}
 	if !scalarFastPathActive(formatter, formatNullableValueSimple) {
@@ -112,11 +124,15 @@ func FormatLiteralValue(formatter Formatter, value spanner.GenericColumnValue, _
 
 // FormatSpannerCLIValue is a [FormatComplexFunc] for [SpannerCLICompatibleFormatConfig].
 func FormatSpannerCLIValue(formatter Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
-	switch value.Type.GetCode() {
+	code, ok := scalarTypeCode(value)
+	if !ok {
+		return "", ErrFallthrough
+	}
+	switch code {
 	case sppb.TypeCode_ARRAY, sppb.TypeCode_STRUCT:
 		return "", ErrFallthrough
 	}
-	if !isScalarFastPathTypeCode(value.Type.GetCode()) {
+	if !isScalarFastPathTypeCode(code) {
 		return "", ErrFallthrough
 	}
 	if !scalarFastPathActive(formatter, FormatNullableSpannerCLICompatible) {

@@ -28,6 +28,9 @@ func validateScalarWire(gcv spanner.GenericColumnValue) error {
 	if IsNull(gcv) {
 		return fmt.Errorf("%w: null value", ErrUnknownType)
 	}
+	if gcv.Type == nil {
+		return fmt.Errorf("%w: nil type", ErrUnknownType)
+	}
 	code := gcv.Type.GetCode()
 	switch code {
 	case sppb.TypeCode_BOOL:
