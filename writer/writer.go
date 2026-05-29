@@ -34,15 +34,20 @@
 // column lists). Some paths also register per-column *sppb.Type values so rows
 // can be streamed as []*structpb.Value without fabricating metadata wrappers.
 //
-// Register schema with [WithRowType], [WithColumnNames], or [WithMetadata] when
-// the writer is constructed, or with [DelimitedWriter.PrepareRowType] /
-// [DelimitedWriter.PrepareColumnNames] after a query when names or types were
-// not known earlier. [WithRowType] and [WithMetadata] store names plus field
-// types (internal columnSchema) and are required for [WriteStructValues].
-// [WithColumnNames] stores names only; types come from each GCV in [WriteGCVs].
+// With the [cloud.google.com/go/spanner] client, a typical read path starts from
+// [cloud.google.com/go/spanner.RowIterator] after Query or Read. Use
+// rowIter.Metadata.GetRowType() for [WithRowType] and [PrepareRowType], or pass
+// rowIter.Metadata to [WithMetadata] (other metadata fields are ignored).
+//
+// Register schema with those options when the writer is constructed, or with
+// [DelimitedWriter.PrepareRowType] / [DelimitedWriter.PrepareColumnNames] after
+// the iterator is opened when the writer was created first. [WithRowType] and
+// [WithMetadata] store names plus field types (internal columnSchema) and are
+// required for [WriteStructValues]. [WithColumnNames] stores names only; types
+// come from each GCV in [WriteGCVs].
 //
 // [DelimitedWriter.Prepare] is formally deprecated (see its Deprecated note);
-// use PrepareRowType(metadata.GetRowType()), PrepareColumnNames, or With
+// use PrepareRowType(rowIter.Metadata.GetRowType()), PrepareColumnNames, or With
 // options at construction.
 //
 // Row write layers (high to low):
@@ -55,7 +60,7 @@
 // Delimited, JSONL, and SQL writers use different output encodings after spanvalue
 // formats each column; there is no shared "formatted row" interface.
 //
-// spanvalue formats cells from Type+Value pairs internally. ResultSetMetadata is
+// spanvalue formats cells from Type+Value pairs internally. rowIter.Metadata is
 // only a carrier for RowType when registering schema, not used while formatting.
 //
 // DelimitedWriter defaults to emitting a header row. Use [WithHeader] with false
@@ -224,7 +229,8 @@ type metadataOption struct {
 
 // WithMetadata initializes a writer schema from metadata.GetRowType(), including
 // field types for [WriteStructValues]. Other metadata fields are ignored.
-// Equivalent to WithRowType(metadata.GetRowType()).
+// With the Spanner client, pass rowIter.Metadata. Equivalent to
+// WithRowType(rowIter.Metadata.GetRowType()).
 func WithMetadata(metadata *sppb.ResultSetMetadata) Option {
 	return metadataOption{metadata: metadata}
 }
@@ -246,7 +252,8 @@ type rowTypeOption struct {
 }
 
 // WithRowType initializes a writer schema from a Spanner row type.
-// When the schema comes from a query result, pass metadata.GetRowType().
+// With the Spanner client, pass rowIter.Metadata.GetRowType() from a
+// [cloud.google.com/go/spanner.RowIterator].
 func WithRowType(rowType *sppb.StructType) Option {
 	return rowTypeOption{rowType: rowType}
 }
@@ -412,7 +419,7 @@ func (w *DelimitedWriter) WriteRow(row *spanner.Row) error {
 // Prepare initializes the delimited schema from result-set metadata before the first
 // row is written.
 //
-// Deprecated: Use [DelimitedWriter.PrepareRowType] with metadata.GetRowType(),
+// Deprecated: Use [DelimitedWriter.PrepareRowType] with rowIter.Metadata.GetRowType(),
 // [DelimitedWriter.PrepareColumnNames], [WithRowType], [WithColumnNames], or
 // [WithMetadata] instead.
 func (w *DelimitedWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
@@ -420,8 +427,9 @@ func (w *DelimitedWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
 }
 
 // PrepareRowType initializes the delimited schema from a row type before the first
-// row is written. When only result-set metadata is available, pass
-// metadata.GetRowType(). If a schema is already initialized, column names must match.
+// row is written. With the Spanner client, pass rowIter.Metadata.GetRowType() after
+// opening a [cloud.google.com/go/spanner.RowIterator]. If a schema is already
+// initialized, column names must match.
 func (w *DelimitedWriter) PrepareRowType(rowType *sppb.StructType) error {
 	return w.prepareRowType(rowType)
 }
@@ -657,14 +665,14 @@ func (w *JSONLWriter) WriteRow(row *spanner.Row) error {
 // row is written. If a schema is already initialized, Prepare verifies that the
 // metadata column names match the existing schema.
 //
-// Deprecated: Use [JSONLWriter.PrepareRowType] with metadata.GetRowType(),
+// Deprecated: Use [JSONLWriter.PrepareRowType] with rowIter.Metadata.GetRowType(),
 // [JSONLWriter.PrepareColumnNames], [WithRowType], [WithColumnNames], or [WithMetadata].
 func (w *JSONLWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
 	return w.PrepareRowType(rowTypeFromMetadata(metadata))
 }
 
 // PrepareRowType initializes the JSONL schema from a row type before the first row is written.
-// When only result-set metadata is available, pass metadata.GetRowType().
+// With the Spanner client, pass rowIter.Metadata.GetRowType() from a RowIterator.
 func (w *JSONLWriter) PrepareRowType(rowType *sppb.StructType) error {
 	return w.prepareRowType(rowType)
 }
@@ -855,14 +863,14 @@ func (w *SQLInsertWriter) WriteRow(row *spanner.Row) error {
 // first row is written. If a schema is already initialized, Prepare verifies
 // that the metadata column names match the existing schema.
 //
-// Deprecated: Use [SQLInsertWriter.PrepareRowType] with metadata.GetRowType(),
+// Deprecated: Use [SQLInsertWriter.PrepareRowType] with rowIter.Metadata.GetRowType(),
 // [SQLInsertWriter.PrepareColumnNames], [WithRowType], [WithColumnNames], or [WithMetadata].
 func (w *SQLInsertWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
 	return w.PrepareRowType(rowTypeFromMetadata(metadata))
 }
 
 // PrepareRowType initializes the SQL INSERT schema from a row type before the first row is written.
-// When only result-set metadata is available, pass metadata.GetRowType().
+// With the Spanner client, pass rowIter.Metadata.GetRowType() from a RowIterator.
 func (w *SQLInsertWriter) PrepareRowType(rowType *sppb.StructType) error {
 	return w.prepareRowType(rowType)
 }

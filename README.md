@@ -75,27 +75,40 @@ Call `Flush` after the final row when using `writer.FlushWriter`; see the
 `Writer`, `FlushWriter`, and `Flusher` godoc for the interface lifecycle
 contract.
 
-Constructors accept options when setup should be explicit:
+With the [Spanner client](https://pkg.go.dev/cloud.google.com/go/spanner#section-readme),
+schema usually comes from a `RowIterator` after `Query` or `Read`:
 
 ```go
+rowIter := txn.Query(ctx, stmt)
+defer rowIter.Stop()
+
 w := writer.NewDelimitedWriter(
 	out,
 	'\t',
-	writer.WithRowType(meta.GetRowType()), // or WithColumnNames(names) or WithMetadata(meta)
+	writer.WithRowType(rowIter.Metadata.GetRowType()),
+	// or writer.WithMetadata(rowIter.Metadata),
 	writer.WithFormatter(cfg),
-	writer.WithHeader(true),  // false for headerless CSV/TSV
-	writer.WithUnnamedFieldNamer(nil),
+	writer.WithHeader(true), // false for headerless CSV/TSV
 )
+for {
+	row, err := rowIter.Next()
+	if err == iterator.Done {
+		break
+	}
+	if err != nil {
+		return err
+	}
+	if err := w.WriteRow(row); err != nil {
+		return err
+	}
+}
+return w.Flush()
 ```
 
-Register schema with `WithRowType`, `WithColumnNames`, or `WithMetadata` (stores
-`metadata.GetRowType()` as column names plus field types; other metadata fields
-are unused). Stream rows with `WriteGCVs`, `WriteStructValues`, or `WriteRow`.
-Register schema at construction with `WithRowType`, `WithColumnNames`, or
-`WithMetadata`, or call `PrepareRowType` / `PrepareColumnNames` after the query
-when the writer was created first (`PrepareRowType(metadata.GetRowType())` when you
-have metadata). `Prepare(metadata)` is deprecated; prefer `PrepareRowType` or
-`With*` options.
+If the writer is created before the query, call `PrepareRowType(rowIter.Metadata.GetRowType())`
+(or `PrepareColumnNames`) once the iterator is open. `Prepare(metadata)` is deprecated;
+prefer `PrepareRowType` or `With*` options. Stream rows with `WriteGCVs`,
+`WriteStructValues`, or `WriteRow`.
 Delimited, JSONL, and SQL encodings differ after
 spanvalue formats each column; see the `writer` package documentation. For
 non-streaming paths, use
