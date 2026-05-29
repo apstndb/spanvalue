@@ -171,7 +171,7 @@ func formatGCVScalarLiteral(gcv spanner.GenericColumnValue) (string, error) {
 	switch gcv.Type.GetCode() {
 	case sppb.TypeCode_BOOL:
 		return strconv.FormatBool(gcv.Value.GetBoolValue()), nil
-	case sppb.TypeCode_INT64, sppb.TypeCode_ENUM:
+	case sppb.TypeCode_INT64:
 		s := gcv.Value.GetStringValue()
 		if _, err := strconv.ParseInt(s, 10, 64); err != nil {
 			return "", err
@@ -219,7 +219,7 @@ func formatGCVScalarLiteral(gcv spanner.GenericColumnValue) (string, error) {
 	case sppb.TypeCode_TYPE_CODE_UNSPECIFIED:
 		fallthrough
 	default:
-		return "", fmt.Errorf("%w: %T", ErrUnknownType, gcv.Type.GetCode())
+		return "", fmt.Errorf("%w: %v", ErrUnknownType, gcv.Type.String())
 	}
 }
 
@@ -257,7 +257,7 @@ func formatGCVScalarSpannerCLI(gcv spanner.GenericColumnValue) (string, error) {
 	case sppb.TypeCode_TYPE_CODE_UNSPECIFIED:
 		fallthrough
 	default:
-		return "", fmt.Errorf("%w: %T", ErrUnknownType, gcv.Type.GetCode())
+		return "", fmt.Errorf("%w: %v", ErrUnknownType, gcv.Type.String())
 	}
 }
 
@@ -335,23 +335,11 @@ func gcvFloat32(v *structpb.Value) (float32, error) {
 }
 
 func readableStringFromBytesWire(gcv spanner.GenericColumnValue) (string, error) {
-	s := gcv.Value.GetStringValue()
-	if s == "" && gcv.Value != nil {
-		if _, ok := gcv.Value.Kind.(*structpb.Value_StringValue); !ok {
-			return "", fmt.Errorf("%w: BYTES/PROTO value kind %T", ErrUnknownType, gcv.Value.GetKind())
-		}
-	}
-	return internal.ReadableStringFromBase64Wire(s)
+	return internal.ReadableStringFromBase64Wire(gcv.Value.GetStringValue())
 }
 
 func bytesFromGCVString(gcv spanner.GenericColumnValue) ([]byte, error) {
-	s := gcv.Value.GetStringValue()
-	if s == "" && gcv.Value != nil {
-		if _, ok := gcv.Value.Kind.(*structpb.Value_StringValue); !ok {
-			return nil, fmt.Errorf("%w: BYTES/PROTO value kind %T", ErrUnknownType, gcv.Value.GetKind())
-		}
-	}
-	return base64.StdEncoding.DecodeString(s)
+	return base64.StdEncoding.DecodeString(gcv.Value.GetStringValue())
 }
 
 // numericWireString returns the NUMERIC string wire payload as-is. Spanner, Spanner Omni, and the

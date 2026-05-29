@@ -3,6 +3,7 @@ package internal
 import (
 	"encoding/base64"
 	"sync"
+	"unsafe"
 )
 
 // readableEscapedByte maps each byte to the same text as EscapeRune(b, false, -1).
@@ -64,6 +65,16 @@ func putDecodeBuf(bp *[]byte, buf []byte) {
 	base64DecodeBufPool.Put(bp)
 }
 
+// base64WireInput is a zero-copy view of wire for [base64.StdEncoding.Decode].
+// The slice aliases wire and must not outlive it or be retained after Decode returns.
+// wire must not be mutated concurrently for the duration of Decode; Spanner
+// GenericColumnValue string wire from GetStringValue satisfies this when the
+// value is not modified per cloud.google.com/go/spanner.GenericColumnValue docs.
+// Call only when len(wire) > 0.
+func base64WireInput(wire string) []byte {
+	return unsafe.Slice(unsafe.StringData(wire), len(wire))
+}
+
 // ReadableStringFromBase64Wire decodes a Spanner BYTES/PROTO base64 wire string and
 // formats the payload with [ReadableBytesString].
 func ReadableStringFromBase64Wire(wire string) (string, error) {
@@ -80,7 +91,7 @@ func ReadableStringFromBase64Wire(wire string) (string, error) {
 		buf = buf[:n]
 	}
 
-	nw, err := base64.StdEncoding.Decode(buf, []byte(wire))
+	nw, err := base64.StdEncoding.Decode(buf, base64WireInput(wire))
 	if err != nil {
 		putDecodeBuf(bp, buf)
 		return "", err
