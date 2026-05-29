@@ -35,6 +35,7 @@ func LiteralFormatConfig() *FormatConfig {
 		FormatComplexPlugins: []FormatComplexFunc{
 			FormatProtoAsCast,
 			FormatEnumAsCast,
+			FormatLiteralValue,
 		},
 	}
 }

@@ -47,6 +47,11 @@
 // ([cloud.google.com/go/spanner/apiv1/spannerpb.TypeAnnotationCode_PG_NUMERIC],
 // [cloud.google.com/go/spanner/apiv1/spannerpb.TypeAnnotationCode_PG_JSONB]).
 //
+// NUMERIC wire strings: [NumericValue] and [PGNumericValue] store Spanner-canonical decimals.
+// [StringBasedValueFromCode] does not normalize; callers that build NUMERIC cells by hand must
+// supply the same wire form Spanner returns (see that helper's doc). The [github.com/apstndb/spanvalue]
+// formatters treat NUMERIC string payloads as authoritative and do not parse them again.
+//
 // Formatting these values as strings is provided by the sibling package
 // [github.com/apstndb/spanvalue].
 package gcvctor

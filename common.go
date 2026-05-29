@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
@@ -44,14 +43,7 @@ func (n NullBytes) String() string {
 	if n == nil {
 		return nullStringClientLib
 	}
-	var sb strings.Builder
-	// Grow uses a cheap lower bound only. Escape expansion is content-dependent,
-	// so larger multipliers are speculative unless profiling shows a benefit.
-	sb.Grow(len(n))
-	for _, b := range n {
-		sb.WriteString(internal.ByteToEscapeSequenceReadable(b))
-	}
-	return sb.String()
+	return internal.ReadableBytesString(n)
 }
 
 var _, _ NullableValue = (NullBytes)(nil), (*NullBytes)(nil)
@@ -119,12 +111,10 @@ func (fc *FormatConfig) formatSimpleColumn(value spanner.GenericColumnValue) (st
 	if IsNull(value) {
 		return fc.GetNullString(), nil
 	}
-
 	nv, err := simpleGCVToNullable(value)
 	if err != nil {
 		return "", err
 	}
-
 	return fc.FormatNullable(nv)
 }
 
@@ -196,10 +186,12 @@ type Formatter interface {
 //   - FormatStruct.FormatStructField and FormatStruct.FormatStructParen: required
 //     for non-NULL STRUCT values. NULL STRUCT values use [FormatConfig.GetNullString]
 //     before struct callbacks run.
-//   - FormatComplexPlugins: nil or empty means no plugins run.
-//   - FormatNullable: required for non-NULL scalars reached through
-//     [FormatConfig.FormatColumn]. NULL scalars use [FormatConfig.GetNullString]
-//     before FormatNullable is called.
+//   - FormatComplexPlugins: nil or empty means no plugins run. Preset constructors
+//     append a trailing scalar plugin ([FormatSimpleValue], [FormatLiteralValue],
+//     [FormatSpannerCLIValue], or [FormatJSONSimpleValue]) that formats scalars directly
+//     from GenericColumnValue without Decode; remove it on a clone to use the legacy path.
+//   - FormatNullable: formats non-NULL scalars after Decode when no scalar plugin handles
+//     the value. NULL scalars use [FormatConfig.GetNullString] before FormatNullable runs.
 //
 // Use [FormatConfig.Clone] to customize a preset without mutating shared instances.
 type FormatConfig struct {

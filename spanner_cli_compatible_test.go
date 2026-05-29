@@ -122,6 +122,11 @@ func TestDecodeColumn(t *testing.T) {
 			want:  "1.23",
 		},
 		{
+			desc:  "numeric integer",
+			value: big.NewRat(10, 1),
+			want:  "10",
+		},
+		{
 			desc:  "string",
 			value: "foo",
 			want:  "foo",

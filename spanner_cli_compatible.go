@@ -3,7 +3,6 @@ package spanvalue
 import (
 	"encoding/base64"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -27,14 +26,15 @@ func SpannerCLICompatibleFormatConfig() *FormatConfig {
 			FormatStructParen: FormatBracketStruct,
 		},
 		FormatNullable: FormatNullableSpannerCLICompatible,
+		FormatComplexPlugins: []FormatComplexFunc{
+			FormatSpannerCLIValue,
+		},
 	}
 }
 
 func FormatRowSpannerCLICompatible(row *spanner.Row) ([]string, error) {
 	return spannerCLICompatibleFormatConfig.FormatRow(row)
 }
-
-var trailingPointZeroRe = regexp.MustCompile(`\.?0*$`)
 
 func FormatNullableSpannerCLICompatible(value NullableValue) (string, error) {
 	// Actually, it is redundant to check IsNull() here, but it is for consistency.
@@ -50,9 +50,9 @@ func FormatNullableSpannerCLICompatible(value NullableValue) (string, error) {
 	case spanner.NullFloat64:
 		return fmt.Sprintf("%f", v.Float64), nil
 	case spanner.NullNumeric:
-		return trailingPointZeroRe.ReplaceAllString(v.String(), ""), nil
+		return trimSpannerCLINumericFraction(v.String()), nil
 	case spanner.PGNumeric:
-		return trailingPointZeroRe.ReplaceAllString(v.Numeric, ""), nil
+		return trimSpannerCLINumericFraction(v.Numeric), nil
 	case spanner.NullTime:
 		return v.Time.Format(time.RFC3339Nano), nil
 	// They are actually processed by the default case, but explicitly written here for clarity.
