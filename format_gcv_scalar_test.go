@@ -95,6 +95,49 @@ func TestFormatConfig_customFormatNullableUsesHook(t *testing.T) {
 	}
 }
 
+func TestValidateFloatWire_nonFiniteStringsOnly(t *testing.T) {
+	t.Parallel()
+
+	for _, s := range []string{"NaN", "Infinity", "-Infinity"} {
+		if err := validateFloatWire(structpb.NewStringValue(s), sppb.TypeCode_FLOAT64); err != nil {
+			t.Errorf("validateFloatWire(%q): %v", s, err)
+		}
+	}
+	if err := validateFloatWire(structpb.NewStringValue("1.5"), sppb.TypeCode_FLOAT64); err == nil {
+		t.Fatal("expected error for finite float as string wire")
+	}
+	if err := validateFloatWire(structpb.NewNumberValue(1.5), sppb.TypeCode_FLOAT64); err != nil {
+		t.Fatalf("number wire: %v", err)
+	}
+}
+
+func TestFormatSimpleValue_fallthroughUnknownTypeCode(t *testing.T) {
+	t.Parallel()
+
+	const want = "CUSTOM_UNKNOWN"
+	handler := FormatComplexFunc(func(_ Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
+		if value.Type.GetCode() == sppb.TypeCode_TYPE_CODE_UNSPECIFIED {
+			return want, nil
+		}
+		return "", ErrFallthrough
+	})
+
+	fc := SimpleFormatConfig()
+	fc.FormatComplexPlugins = append(fc.FormatComplexPlugins, handler)
+
+	gcv := spanner.GenericColumnValue{
+		Type:  typector.CodeToSimpleType(sppb.TypeCode_TYPE_CODE_UNSPECIFIED),
+		Value: structpb.NewStringValue("payload"),
+	}
+	got, err := fc.FormatToplevelColumn(gcv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
 func TestFormatSimpleValue_rejectsMalformedWireKind(t *testing.T) {
 	t.Parallel()
 

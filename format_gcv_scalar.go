@@ -2,7 +2,6 @@ package spanvalue
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -69,12 +68,16 @@ func scalarFastPathActive(formatter Formatter, presetNullable FormatNullableFunc
 
 // FormatSimpleValue is a [FormatComplexFunc] that formats non-ARRAY, non-STRUCT scalars for
 // [SimpleFormatConfig] without constructing a [NullableValue]. It returns [ErrFallthrough] for
-// ARRAY and STRUCT, when [FormatConfig.FormatNullable] is not the preset default, or for types
-// handled by earlier plugins. NUMERIC uses the string wire payload as-is; canonical wire is the
-// GCV constructor's responsibility (see [github.com/apstndb/spanvalue/gcvctor.StringBasedValueFromCode]).
+// ARRAY, STRUCT, and type codes outside [isScalarFastPathTypeCode], when
+// [FormatConfig.FormatNullable] is not the preset default, or for types handled by earlier
+// plugins. NUMERIC uses the string wire payload as-is; canonical wire is the GCV constructor's
+// responsibility (see [github.com/apstndb/spanvalue/gcvctor.StringBasedValueFromCode]).
 func FormatSimpleValue(formatter Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
 	switch value.Type.GetCode() {
 	case sppb.TypeCode_ARRAY, sppb.TypeCode_STRUCT:
+		return "", ErrFallthrough
+	}
+	if !isScalarFastPathTypeCode(value.Type.GetCode()) {
 		return "", ErrFallthrough
 	}
 	if !scalarFastPathActive(formatter, formatNullableValueSimple) {
@@ -94,6 +97,9 @@ func FormatLiteralValue(formatter Formatter, value spanner.GenericColumnValue, _
 	case sppb.TypeCode_ARRAY, sppb.TypeCode_STRUCT, sppb.TypeCode_PROTO, sppb.TypeCode_ENUM:
 		return "", ErrFallthrough
 	}
+	if !isScalarFastPathTypeCode(value.Type.GetCode()) {
+		return "", ErrFallthrough
+	}
 	if !scalarFastPathActive(formatter, formatNullableValueLiteral) {
 		return "", ErrFallthrough
 	}
@@ -107,6 +113,9 @@ func FormatLiteralValue(formatter Formatter, value spanner.GenericColumnValue, _
 func FormatSpannerCLIValue(formatter Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
 	switch value.Type.GetCode() {
 	case sppb.TypeCode_ARRAY, sppb.TypeCode_STRUCT:
+		return "", ErrFallthrough
+	}
+	if !isScalarFastPathTypeCode(value.Type.GetCode()) {
 		return "", ErrFallthrough
 	}
 	if !scalarFastPathActive(formatter, FormatNullableSpannerCLICompatible) {
@@ -353,22 +362,5 @@ func numericWireString(gcv spanner.GenericColumnValue) string {
 }
 
 func pgJSONBString(gcv spanner.GenericColumnValue) (string, error) {
-	switch k := gcv.Value.GetKind().(type) {
-	case *structpb.Value_StringValue:
-		return k.StringValue, nil
-	default:
-		b, err := gcv.Value.MarshalJSON()
-		if err != nil {
-			return "", err
-		}
-		var v any
-		if err := json.Unmarshal(b, &v); err != nil {
-			return "", err
-		}
-		out, err := json.Marshal(v)
-		if err != nil {
-			return "", err
-		}
-		return string(out), nil
-	}
+	return gcv.Value.GetStringValue(), nil
 }

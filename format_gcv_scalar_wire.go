@@ -8,6 +8,22 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+// isScalarFastPathTypeCode reports whether the preset scalar plugins format this
+// [sppb.TypeCode] directly. Other codes fall through to later plugins or
+// [FormatConfig.formatSimpleColumn].
+func isScalarFastPathTypeCode(code sppb.TypeCode) bool {
+	switch code {
+	case sppb.TypeCode_BOOL, sppb.TypeCode_INT64, sppb.TypeCode_ENUM,
+		sppb.TypeCode_FLOAT32, sppb.TypeCode_FLOAT64,
+		sppb.TypeCode_STRING, sppb.TypeCode_BYTES, sppb.TypeCode_PROTO,
+		sppb.TypeCode_TIMESTAMP, sppb.TypeCode_DATE, sppb.TypeCode_NUMERIC,
+		sppb.TypeCode_JSON, sppb.TypeCode_INTERVAL, sppb.TypeCode_UUID:
+		return true
+	default:
+		return false
+	}
+}
+
 func validateScalarWire(gcv spanner.GenericColumnValue) error {
 	if gcv.Value == nil {
 		return nil
@@ -23,12 +39,9 @@ func validateScalarWire(gcv spanner.GenericColumnValue) error {
 	case sppb.TypeCode_FLOAT32, sppb.TypeCode_FLOAT64:
 		return validateFloatWire(gcv.Value, code)
 	case sppb.TypeCode_JSON:
-		if gcv.Type.GetTypeAnnotation() == sppb.TypeAnnotationCode_PG_JSONB {
-			return validatePGJSONBWire(gcv.Value)
-		}
+		// [sppb.TypeCode_JSON] and PG_JSONB-annotated JSON are encoded as a JSON string
+		// (see TypeCode godoc in cloud.google.com/go/spanner/apiv1/spannerpb).
 		return requireStringWire(gcv.Value, code)
-	case sppb.TypeCode_TYPE_CODE_UNSPECIFIED:
-		fallthrough
 	default:
 		return fmt.Errorf("%w: %v", ErrUnknownType, gcv.Type.String())
 	}
@@ -49,19 +62,20 @@ func requireStringWire(v *structpb.Value, code sppb.TypeCode) error {
 }
 
 func validateFloatWire(v *structpb.Value, code sppb.TypeCode) error {
-	switch v.GetKind().(type) {
-	case *structpb.Value_NumberValue, *structpb.Value_StringValue:
+	// TypeCode_FLOAT32/FLOAT64: JSON number, or "NaN"/"Infinity"/"-Infinity" strings.
+	// Spanner client wire uses structpb NumberValue for finite values and StringValue
+	// for non-finite values (see [gcvctor.float64ToStructpbValue]).
+	switch k := v.GetKind().(type) {
+	case *structpb.Value_NumberValue:
 		return nil
+	case *structpb.Value_StringValue:
+		switch k.StringValue {
+		case "NaN", "Infinity", "-Infinity":
+			return nil
+		default:
+			return fmt.Errorf("%w: %v unexpected float string %q", ErrUnknownType, code, k.StringValue)
+		}
 	default:
 		return fmt.Errorf("%w: %v value kind %T", ErrUnknownType, code, v.GetKind())
-	}
-}
-
-func validatePGJSONBWire(v *structpb.Value) error {
-	switch v.GetKind().(type) {
-	case *structpb.Value_StringValue, *structpb.Value_StructValue, *structpb.Value_ListValue:
-		return nil
-	default:
-		return fmt.Errorf("%w: JSON value kind %T", ErrUnknownType, v.GetKind())
 	}
 }
