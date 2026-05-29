@@ -55,10 +55,11 @@
 //     unregistered); it does not return an error because options cannot report one (#95 tracks
 //     error-returning options). Prefer [PrepareRowType] for zero-column metadata.
 //
-// [WithMetadata] registers the same names and types as [WithRowType](metadata.GetRowType()); call
-// one or the other, not both. Use it when metadata is already available (not [RowIterator.Metadata]
-// before the first [RowIterator.Next]). For streaming, call [PrepareRowType](iter.Metadata.GetRowType())
-// after the first Next when the result may be empty but still has columns; defer [DelimitedWriter.Flush]
+// [WithMetadata] registers the same names and types as [WithRowType]; call one or the other, not both.
+// Use it when metadata is already available (not iter.Metadata from a
+// [cloud.google.com/go/spanner.RowIterator] before the first Next). For streaming, call
+// [PrepareRowType] with iter.Metadata.GetRowType() after the first Next when the result may be empty
+// but still has columns (including when Next returns iterator.Done); defer [DelimitedWriter.Flush]
 // for a header-only CSV. When every query returns at least one row, [WriteRow] registers names from
 // the first row.
 //

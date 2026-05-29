@@ -1281,7 +1281,7 @@ func TestDelimitedWriterWriteGCVsEnumProto(t *testing.T) {
 	}
 	flushDelimitedWriter(t, w)
 
-	// ENUM is formatted as the stored INT64 string; PROTO as the raw bytes string (SimpleFormatConfig).
+	// ENUM is the stored INT64 string; PROTO is base64 on the wire but decoded for SimpleFormatConfig CSV.
 	want := "status,payload\n1,abcd\n"
 	if diff := cmp.Diff(want, out.String()); diff != "" {
 		t.Fatalf("output mismatch (-want +got):\n%s", diff)
