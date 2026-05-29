@@ -119,9 +119,6 @@ for {
 	row, err := iter.Next()
 	if first {
 		first = false
-		if err != nil && err != iterator.Done {
-			return err
-		}
 		if iter.Metadata != nil {
 			if err := w.PrepareRowType(iter.Metadata.GetRowType()); err != nil {
 				return err
