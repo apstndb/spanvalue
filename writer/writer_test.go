@@ -1169,6 +1169,15 @@ func TestDelimitedWriterPrepareColumnNamesEmptyErrors(t *testing.T) {
 	}
 }
 
+func TestDelimitedWriterWithColumnNamesEmptyIgnored(t *testing.T) {
+	t.Parallel()
+
+	err := NewDelimitedWriter(&bytes.Buffer{}, ',', WithColumnNames(nil), WithHeader(true)).Flush()
+	if !errors.Is(err, ErrMissingColumnNames) {
+		t.Fatalf("Flush() error = %v, want ErrMissingColumnNames (writer still unregistered)", err)
+	}
+}
+
 func TestDelimitedWriterPrepareEmptyRowTypeFlushWritesNothing(t *testing.T) {
 	t.Parallel()
 

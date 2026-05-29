@@ -48,10 +48,11 @@
 //     columns). [DelimitedWriter.Flush] succeeds and writes no output; [DelimitedWriter.WriteHeader]
 //     is a no-op because there are no column names. A later [WriteRow] still initializes
 //     names from the row if one arrives.
-//   - [PrepareColumnNames] and [WithColumnNames] with an empty name list return
-//     [ErrMissingColumnNames] and do not register a schema. For a zero-column result set,
-//     use [PrepareRowType] or [WithRowType] instead (for example after iter.Metadata.GetRowType()
-//     on DML without THEN RETURN).
+//   - [PrepareColumnNames] with an empty name list returns [ErrMissingColumnNames].
+//   - [WithColumnNames] with an empty name list is ignored at construction (the writer stays
+//     unregistered); it does not return an error because options cannot report one. For a
+//     zero-column result set, use [PrepareRowType] or [WithRowType] instead (for example after
+//     iter.Metadata.GetRowType() on DML without THEN RETURN).
 //
 // [DelimitedWriter] defaults to a CSV/TSV header once column names are known ([WithHeader]):
 // before the first data row, or on [DelimitedWriter.Flush] when no data row was written
@@ -103,9 +104,9 @@ var (
 	// ErrMissingColumnNames reports that an operation requires a registered column schema
 	// when none was registered yet, or column names/types are insufficient for the write
 	// (for example values without names). It is not returned for a registered zero-column
-	// schema (see package doc "Registered schema vs missing schema"). An empty name list
-	// passed to [WithColumnNames] or [PrepareColumnNames] also returns this error; use
-	// [PrepareRowType] for zero-column result sets.
+	// schema (see package doc "Registered schema vs missing schema"). [PrepareColumnNames]
+	// with an empty name list returns this error; [WithColumnNames] with an empty list is
+	// ignored (writer stays unregistered). Use [PrepareRowType] for zero-column result sets.
 	ErrMissingColumnNames = errors.New("missing column names")
 	// ErrColumnNamesMismatch reports that provided column names differ from initialized schema.
 	ErrColumnNamesMismatch = errors.New("column names mismatch")
@@ -438,9 +439,9 @@ func (w *DelimitedWriter) PrepareRowType(rowType *sppb.StructType) error {
 	return w.prepareRowType(rowType)
 }
 
-// PrepareColumnNames registers column names only; same as [WithColumnNames].
-// An empty names slice returns [ErrMissingColumnNames]; for zero-column result sets use
-// [DelimitedWriter.PrepareRowType] instead.
+// PrepareColumnNames registers column names only; same as [WithColumnNames] for non-empty
+// names. Unlike [WithColumnNames], an empty names slice returns [ErrMissingColumnNames];
+// for zero-column result sets use [DelimitedWriter.PrepareRowType] instead.
 func (w *DelimitedWriter) PrepareColumnNames(names []string) error {
 	return w.prepareColumnNames(names)
 }
@@ -714,7 +715,6 @@ func (w *JSONLWriter) PrepareRowType(rowType *sppb.StructType) error {
 }
 
 // PrepareColumnNames registers column names; see [DelimitedWriter.PrepareColumnNames].
-// An empty names slice returns [ErrMissingColumnNames].
 func (w *JSONLWriter) PrepareColumnNames(names []string) error {
 	return w.prepareColumnNames(names)
 }
@@ -926,8 +926,7 @@ func (w *SQLInsertWriter) PrepareRowType(rowType *sppb.StructType) error {
 }
 
 // PrepareColumnNames initializes the SQL INSERT schema from column names before the first row is written.
-// An empty names slice returns [ErrMissingColumnNames]; for zero-column result sets use
-// [SQLInsertWriter.PrepareRowType] instead.
+// See [DelimitedWriter.PrepareColumnNames] for empty-name behavior.
 func (w *SQLInsertWriter) PrepareColumnNames(names []string) error {
 	return w.prepareColumnNames(names)
 }
