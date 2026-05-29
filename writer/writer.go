@@ -44,9 +44,11 @@
 //     from the first row. See [WithHeader] for CSV/TSV header behavior on [DelimitedWriter].
 //   - WriteValues: not required. Every call passes column names plus GCVs and may
 //     initialize the writer on the first row.
-//   - WriteGCVs: column names must already be set via [WithColumnNames],
-//     [PrepareColumnNames], or an earlier WriteRow/WriteValues. Types come from each
-//     GCV; [WithRowType] is not used on this path.
+//   - WriteGCVs: column names must already be registered ([WithColumnNames],
+//     [WithRowType], [PrepareColumnNames], [PrepareRowType], or an earlier WriteRow/
+//     WriteValues). Formatting uses each GCV's Type. Registered field types from
+//     [WithRowType] are not read on this path but stay on the writer for
+//     [WriteStructValues].
 //   - WriteStructValues: [WithRowType], [WithMetadata], or [PrepareRowType] is
 //     required so field types are registered ([ErrMissingFieldTypes] otherwise).
 //
@@ -64,14 +66,15 @@
 //
 //   - [Writer.WriteRow]: *spanner.Row from the Spanner client.
 //   - WriteValues: column names plus []GenericColumnValue per call.
-//   - WriteGCVs: []GenericColumnValue; column names must be registered.
+//   - WriteGCVs: []GenericColumnValue; column names must be registered; types per GCV.
 //   - WriteStructValues: []*structpb.Value; field types must be registered.
 //
 // Delimited, JSONL, and SQL writers use different output encodings after spanvalue
 // formats each column; there is no shared "formatted row" interface.
 //
-// spanvalue formats cells from Type+Value pairs internally. Result-set metadata is
-// only a carrier for RowType when registering schema, not used while formatting rows.
+// spanvalue formats cells from Type+Value pairs internally. [WriteGCVs] and
+// WriteValues use each GCV's Type at format time; [columnSchema].types is for
+// [WriteStructValues] only. [WithMetadata] is only a carrier for GetRowType when registering.
 //
 // # Delimited headers
 //
@@ -248,10 +251,11 @@ type metadataOption struct {
 	metadata *sppb.ResultSetMetadata
 }
 
-// WithMetadata initializes a writer schema from metadata.GetRowType(), including
-// field types for [WriteStructValues]. Other metadata fields are ignored.
-// Equivalent to [WithRowType](metadata.GetRowType()). When metadata comes from a
-// [cloud.google.com/go/spanner.RowIterator], it is available after the first Next.
+// WithMetadata initializes column names and field types from metadata.GetRowType().
+// Same semantics as [WithRowType]: names for labeling and WriteGCVs; types for
+// [WriteStructValues] (WriteGCVs uses each GCV's Type). Other metadata fields are
+// ignored. When metadata comes from a [cloud.google.com/go/spanner.RowIterator], it is
+// available after the first Next.
 func WithMetadata(metadata *sppb.ResultSetMetadata) Option {
 	return metadataOption{metadata: metadata}
 }
@@ -272,9 +276,11 @@ type rowTypeOption struct {
 	rowType *sppb.StructType
 }
 
-// WithRowType registers column names and field types. Required for WriteStructValues;
-// not required for WriteRow, WriteValues, or WriteGCVs. Use application schema at
-// construction, or iter.Metadata.GetRowType after the first RowIterator Next.
+// WithRowType registers column names and field types. Required for WriteStructValues.
+// For WriteGCVs and WriteValues, registered names are used and each GCV supplies its
+// own Type (schema.types is not consulted). Optional for WriteRow when rows are
+// present. Use application schema at construction, or iter.Metadata.GetRowType after
+// the first RowIterator Next.
 func WithRowType(rowType *sppb.StructType) Option {
 	return rowTypeOption{rowType: rowType}
 }
@@ -295,9 +301,10 @@ type columnNamesOption struct {
 	names []string
 }
 
-// WithColumnNames registers column names only. Required before the first WriteGCVs
-// unless an earlier WriteRow or WriteValues initialized names. Not required for
-// WriteRow or WriteValues. Types on the WriteGCVs path come from each GCV.
+// WithColumnNames registers column names only and clears registered field types.
+// Use before the first WriteGCVs unless names came from WriteRow or WriteValues.
+// [WithRowType] is an alternative that also records field types for WriteStructValues.
+// Not required for WriteRow or WriteValues; cell types on WriteGCVs come from each GCV.
 func WithColumnNames(names []string) Option {
 	return columnNamesOption{names: slices.Clone(names)}
 }
@@ -467,8 +474,10 @@ func (w *DelimitedWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
 }
 
 // PrepareRowType registers column names and field types before the first row.
-// Same role as [WithRowType]; required for WriteStructValues, not for WriteRow or WriteValues.
-// When the row type comes from a RowIterator, use iter.Metadata.GetRowType after the first Next.
+// Same role as [WithRowType]: names for WriteGCVs/WriteValues/headers; types for
+// WriteStructValues only (WriteGCVs still uses each GCV's Type). Not required for
+// WriteRow when rows are present. When the row type comes from a RowIterator, use
+// iter.Metadata.GetRowType after the first Next.
 func (w *DelimitedWriter) PrepareRowType(rowType *sppb.StructType) error {
 	return w.prepareRowType(rowType)
 }
@@ -544,7 +553,8 @@ func (w *DelimitedWriter) WriteValues(columnNames []string, values []spanner.Gen
 }
 
 // WriteGCVs writes one row from GCVs. Column names must already be registered
-// ([WithColumnNames], [PrepareColumnNames], or an earlier WriteRow/WriteValues).
+// ([WithColumnNames], [WithRowType], [PrepareColumnNames], [PrepareRowType], or an
+// earlier WriteRow/WriteValues). Formatting uses each GCV's Type, not schema.types.
 func (w *DelimitedWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	csvWriter, err := w.csvWriter()
 	if err != nil {
