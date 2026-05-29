@@ -138,8 +138,15 @@ for {
 return w.Flush()
 ```
 
-Which schema to pre-register depends on the write API (names only vs names and types);
-see `go doc writer`, section "Column names and field types".
+Which schema to pre-register depends on the write API (names only vs names and types).
+Registration is not the same as having zero columns: without `Prepare*` / `With*` and
+with no row written, `Flush` or `WriteHeader` returns `writer.ErrMissingColumnNames`.
+`PrepareRowType(nil)` or a zero-field `GetRowType()` registers an empty schema (DML
+without `THEN RETURN`: `Flush` writes nothing). An empty `PrepareColumnNames` slice
+still errors—use `PrepareRowType` for that case. A zero-row `SELECT` has column names
+in metadata, so `PrepareRowType` plus `Flush` can emit a header-only file. See
+`go doc writer`, sections "Column names and field types" and
+"Registered schema vs missing schema".
 Delimited, JSONL, and SQL encodings differ after
 spanvalue formats each column; see the `writer` package documentation. For
 non-streaming paths, use
