@@ -850,12 +850,12 @@ func (w *SQLInsertWriter) PrepareRowType(rowType *sppb.StructType) error {
 	if err != nil {
 		return err
 	}
-	if _, err := validatedColumnNames(w.schema.names, columnNames); err != nil {
+	if _, err := w.initOrValidateQuotedColumns(columnNames); err != nil {
 		return err
 	}
-	w.setRowType(rowType)
-	_, err = w.initOrValidateQuotedColumns(columnNames)
-	return err
+	w.schema.names = columnNamesFromRowType(rowType)
+	w.schema.types = fieldTypesFromRowType(rowType)
+	return nil
 }
 
 // PrepareColumnNames initializes the SQL INSERT schema from column names before the first row is written.
@@ -863,12 +863,11 @@ func (w *SQLInsertWriter) PrepareColumnNames(names []string) error {
 	if len(names) == 0 {
 		return ErrMissingColumnNames
 	}
-	if _, err := validatedColumnNames(w.schema.names, names); err != nil {
+	if _, err := w.initOrValidateQuotedColumns(names); err != nil {
 		return err
 	}
-	w.setColumnNames(names)
-	_, err := w.initOrValidateQuotedColumns(names)
-	return err
+	w.schema.types = nil
+	return nil
 }
 
 func (w *SQLInsertWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {

@@ -1170,6 +1170,22 @@ func TestDelimitedWriterPrepareColumnNames(t *testing.T) {
 	}
 }
 
+func TestSQLInsertWriterPrepareColumnNamesRecoversAfterQuoteError(t *testing.T) {
+	t.Parallel()
+
+	w := NewSQLInsertWriter(&bytes.Buffer{}, "users")
+	err := w.PrepareColumnNames([]string{""})
+	if !errors.Is(err, ErrEmptyColumnName) {
+		t.Fatalf("PrepareColumnNames() error = %v, want ErrEmptyColumnName", err)
+	}
+	if err := w.PrepareColumnNames([]string{"id"}); err != nil {
+		t.Fatalf("PrepareColumnNames() retry error = %v", err)
+	}
+	if w.quotedColumnNames == "" {
+		t.Fatal("quotedColumnNames not cached after successful PrepareColumnNames")
+	}
+}
+
 func TestSQLInsertWriterPrepareRowTypeCachesQuotedColumns(t *testing.T) {
 	t.Parallel()
 
