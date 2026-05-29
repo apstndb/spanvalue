@@ -38,8 +38,8 @@
 // (the same two shapes as the With options). There is no separate Prepare API
 // for metadata: use [WithMetadata] or PrepareRowType(metadata.GetRowType()).
 //
-//   - [WithRowType] / PrepareRowType: *sppb.StructType (names and field types).
-//     Required for WriteProtoValues.
+//   - [WithRowType] / PrepareRowType: column names plus per-column field types
+//     (stored as names and types slices). Required for WriteProtoValues.
 //   - [WithColumnNames] / PrepareColumnNames: names only; GCV rows supply types.
 //   - [WithMetadata]: metadata.GetRowType() (other metadata fields ignored).
 //
@@ -328,6 +328,23 @@ func WithHeader(header bool) DelimitedOption {
 	})
 }
 
+// columnSchema holds column names for output labeling and optional field types for
+// WriteProtoValues. When types is non-empty, len(types) equals len(names).
+type columnSchema struct {
+	names []string
+	types []*sppb.Type
+}
+
+func (s *columnSchema) applyRowType(rowType *sppb.StructType) {
+	s.names = columnNamesFromRowType(rowType)
+	s.types = fieldTypesFromRowType(rowType)
+}
+
+func (s *columnSchema) applyNamesOnly(names []string) {
+	s.names = slices.Clone(names)
+	s.types = nil
+}
+
 // DelimitedWriter writes rows as CSV-style delimited text. Call Flush after the final write.
 type DelimitedWriter struct {
 	Formatter *spanvalue.FormatConfig
@@ -336,8 +353,7 @@ type DelimitedWriter struct {
 	// schema, later changes do not retroactively rewrite cached header names.
 	UnnamedFieldNamer spanvalue.UnnamedFieldNamer
 
-	columnNames         []string
-	rowType             *sppb.StructType
+	schema              columnSchema
 	resolvedColumnNames []string
 	out                 io.Writer
 	writer              *csv.Writer
@@ -441,7 +457,7 @@ func (w *DelimitedWriter) WriteHeader() error {
 	if err != nil {
 		return err
 	}
-	if len(w.columnNames) == 0 {
+	if len(w.schema.names) == 0 {
 		return ErrMissingColumnNames
 	}
 
@@ -466,7 +482,7 @@ func (w *DelimitedWriter) WriteValues(columnNames []string, values []spanner.Gen
 // WriteProtoValues writes one row from protobuf values using the row type schema
 // registered by [WithRowType], [WithMetadata], or [PrepareRowType].
 func (w *DelimitedWriter) WriteProtoValues(values []*structpb.Value) error {
-	gcvs, err := gcvsFromRowType(w.rowType, values)
+	gcvs, err := gcvsFromFieldTypes(w.schema.types, values)
 	if err != nil {
 		return err
 	}
@@ -478,11 +494,11 @@ func (w *DelimitedWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	if err != nil {
 		return err
 	}
-	if len(w.columnNames) == 0 {
+	if len(w.schema.names) == 0 {
 		return ErrMissingColumnNames
 	}
 
-	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.columnNames, values)
+	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.schema.names, values)
 	if err != nil {
 		return err
 	}
@@ -501,23 +517,21 @@ func (w *DelimitedWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 }
 
 func (w *DelimitedWriter) setRowType(rowType *sppb.StructType) {
-	w.rowType = rowType
-	w.columnNames = columnNamesFromRowType(rowType)
+	w.schema.applyRowType(rowType)
 	w.resolvedColumnNames = nil
 }
 
 func (w *DelimitedWriter) setColumnNames(names []string) {
-	w.rowType = nil
-	w.columnNames = slices.Clone(names)
+	w.schema.applyNamesOnly(names)
 	w.resolvedColumnNames = nil
 }
 
 func (w *DelimitedWriter) initOrValidateColumnNames(columnNames []string) error {
-	initialized := len(w.columnNames) == 0
-	if err := initOrValidateColumnNames(&w.columnNames, columnNames); err != nil {
+	initialized := len(w.schema.names) == 0
+	if err := initOrValidateColumnNames(&w.schema.names, columnNames); err != nil {
 		return err
 	}
-	if initialized && len(w.columnNames) > 0 {
+	if initialized && len(w.schema.names) > 0 {
 		w.resolvedColumnNames = nil
 	}
 	return nil
@@ -567,13 +581,13 @@ func (w *DelimitedWriter) Flush() error {
 }
 
 func (w *DelimitedWriter) resolvedNames() ([]string, error) {
-	if len(w.resolvedColumnNames) != 0 || len(w.columnNames) == 0 {
+	if len(w.resolvedColumnNames) != 0 || len(w.schema.names) == 0 {
 		return w.resolvedColumnNames, nil
 	}
 	if w.UnnamedFieldNamer == nil {
-		return w.columnNames, nil
+		return w.schema.names, nil
 	}
-	resolvedNames, err := internal.ResolveColumnNames(w.columnNames, w.UnnamedFieldNamer)
+	resolvedNames, err := internal.ResolveColumnNames(w.schema.names, w.UnnamedFieldNamer)
 	if err != nil {
 		return nil, err
 	}
@@ -588,8 +602,7 @@ type JSONLWriter struct {
 	// schema, later changes do not retroactively rewrite cached object keys.
 	UnnamedFieldNamer spanvalue.UnnamedFieldNamer
 
-	columnNames         []string
-	rowType             *sppb.StructType
+	schema              columnSchema
 	resolvedColumnNames []string
 	marshaledKeys       [][]byte
 	out                 io.Writer
@@ -674,7 +687,7 @@ func (w *JSONLWriter) WriteValues(columnNames []string, values []spanner.Generic
 // WriteProtoValues writes one row from protobuf values using the row type schema
 // registered by [WithRowType], [WithMetadata], or [PrepareRowType].
 func (w *JSONLWriter) WriteProtoValues(values []*structpb.Value) error {
-	gcvs, err := gcvsFromRowType(w.rowType, values)
+	gcvs, err := gcvsFromFieldTypes(w.schema.types, values)
 	if err != nil {
 		return err
 	}
@@ -685,10 +698,10 @@ func (w *JSONLWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	if w.out == nil {
 		return ErrNilOutputWriter
 	}
-	if len(w.columnNames) == 0 {
+	if len(w.schema.names) == 0 {
 		return ErrMissingColumnNames
 	}
-	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.columnNames, values)
+	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.schema.names, values)
 	if err != nil {
 		return err
 	}
@@ -714,25 +727,23 @@ func (w *JSONLWriter) Flush() error {
 }
 
 func (w *JSONLWriter) setRowType(rowType *sppb.StructType) {
-	w.rowType = rowType
-	w.columnNames = columnNamesFromRowType(rowType)
+	w.schema.applyRowType(rowType)
 	w.resolvedColumnNames = nil
 	w.marshaledKeys = nil
 }
 
 func (w *JSONLWriter) setColumnNames(names []string) {
-	w.rowType = nil
-	w.columnNames = slices.Clone(names)
+	w.schema.applyNamesOnly(names)
 	w.resolvedColumnNames = nil
 	w.marshaledKeys = nil
 }
 
 func (w *JSONLWriter) initOrValidateColumnNames(columnNames []string) error {
-	initialized := len(w.columnNames) == 0
-	if err := initOrValidateColumnNames(&w.columnNames, columnNames); err != nil {
+	initialized := len(w.schema.names) == 0
+	if err := initOrValidateColumnNames(&w.schema.names, columnNames); err != nil {
 		return err
 	}
-	if initialized && len(w.columnNames) > 0 {
+	if initialized && len(w.schema.names) > 0 {
 		w.resolvedColumnNames = nil
 		w.marshaledKeys = nil
 	}
@@ -747,13 +758,13 @@ func (w *JSONLWriter) formatter() *spanvalue.FormatConfig {
 }
 
 func (w *JSONLWriter) resolvedNames() ([]string, error) {
-	if len(w.resolvedColumnNames) != 0 || len(w.columnNames) == 0 {
+	if len(w.resolvedColumnNames) != 0 || len(w.schema.names) == 0 {
 		return w.resolvedColumnNames, nil
 	}
 	if w.UnnamedFieldNamer == nil {
-		return w.columnNames, nil
+		return w.schema.names, nil
 	}
-	resolvedNames, err := internal.ResolveColumnNames(w.columnNames, w.UnnamedFieldNamer)
+	resolvedNames, err := internal.ResolveColumnNames(w.schema.names, w.UnnamedFieldNamer)
 	if err != nil {
 		return nil, err
 	}
@@ -779,8 +790,7 @@ type SQLInsertWriter struct {
 	Formatter *spanvalue.FormatConfig
 
 	insertKind        SQLInsertKind
-	rowType           *sppb.StructType
-	columnNames       []string
+	schema            columnSchema
 	quotedColumnNames string
 	quotedTable       string
 	quotedTableInput  string
@@ -864,7 +874,7 @@ func (w *SQLInsertWriter) WriteValues(columnNames []string, values []spanner.Gen
 // WriteProtoValues writes one row from protobuf values using the row type schema
 // registered by [WithRowType], [WithMetadata], or [PrepareRowType].
 func (w *SQLInsertWriter) WriteProtoValues(values []*structpb.Value) error {
-	gcvs, err := gcvsFromRowType(w.rowType, values)
+	gcvs, err := gcvsFromFieldTypes(w.schema.types, values)
 	if err != nil {
 		return err
 	}
@@ -896,7 +906,7 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 	if err != nil {
 		return err
 	}
-	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.columnNames, values)
+	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.schema.names, values)
 	if err != nil {
 		return err
 	}
@@ -919,14 +929,12 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 }
 
 func (w *SQLInsertWriter) setRowType(rowType *sppb.StructType) {
-	w.rowType = rowType
-	w.columnNames = columnNamesFromRowType(rowType)
+	w.schema.applyRowType(rowType)
 	w.quotedColumnNames = ""
 }
 
 func (w *SQLInsertWriter) setColumnNames(names []string) {
-	w.rowType = nil
-	w.columnNames = slices.Clone(names)
+	w.schema.applyNamesOnly(names)
 	w.quotedColumnNames = ""
 }
 
@@ -941,7 +949,7 @@ func (w *SQLInsertWriter) initOrValidateQuotedColumns(columnNames []string) (str
 	if len(columnNames) == 0 && w.quotedColumnNames != "" {
 		return w.quotedColumnNames, nil
 	}
-	names, err := validatedColumnNames(w.columnNames, columnNames)
+	names, err := validatedColumnNames(w.schema.names, columnNames)
 	if err != nil {
 		return "", err
 	}
@@ -949,8 +957,8 @@ func (w *SQLInsertWriter) initOrValidateQuotedColumns(columnNames []string) (str
 	if err != nil {
 		return "", err
 	}
-	if len(w.columnNames) == 0 {
-		w.columnNames = names
+	if len(w.schema.names) == 0 {
+		w.schema.names = names
 	}
 	w.quotedColumnNames = strings.Join(quotedColumns, ", ")
 	return w.quotedColumnNames, nil
@@ -1086,21 +1094,34 @@ func columnNamesFromRowType(rowType *sppb.StructType) []string {
 	return names
 }
 
-func gcvsFromRowType(rowType *sppb.StructType, values []*structpb.Value) ([]spanner.GenericColumnValue, error) {
+func fieldTypesFromRowType(rowType *sppb.StructType) []*sppb.Type {
 	if rowType == nil {
-		return nil, ErrMissingRowType
+		return nil
 	}
 	fields := rowType.GetFields()
-	if len(values) != len(fields) {
-		return nil, fmt.Errorf("%w: got %d values for %d fields", ErrMismatchedProtoValueCount, len(values), len(fields))
+	types := make([]*sppb.Type, len(fields))
+	for i, field := range fields {
+		if field != nil {
+			types[i] = field.GetType()
+		}
+	}
+	return types
+}
+
+func gcvsFromFieldTypes(types []*sppb.Type, values []*structpb.Value) ([]spanner.GenericColumnValue, error) {
+	if len(types) == 0 {
+		return nil, ErrMissingRowType
+	}
+	if len(values) != len(types) {
+		return nil, fmt.Errorf("%w: got %d values for %d fields", ErrMismatchedProtoValueCount, len(values), len(types))
 	}
 	gcvs := make([]spanner.GenericColumnValue, len(values))
 	for i, value := range values {
-		field := fields[i]
-		if field == nil {
+		typ := types[i]
+		if typ == nil {
 			return nil, fmt.Errorf("column %d: %w", i, spanvalue.ErrNilStructField)
 		}
-		gcv, err := spanvalue.GenericColumnValueOf(field.GetType(), value)
+		gcv, err := spanvalue.GenericColumnValueOf(typ, value)
 		if err != nil {
 			return nil, fmt.Errorf("column %d: %w", i, err)
 		}
