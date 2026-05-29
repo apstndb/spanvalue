@@ -97,10 +97,8 @@ if err := iter.Do(func(row *spanner.Row) error {
 return w.Flush()
 ```
 
-Schema registration is required only for some paths—for example field types for
-`WriteStructValues`, column names for `WriteGCVs` (types stay in each GCV; `WithRowType`
-can still supply names), or a delimited header with no data rows. See `go doc writer`
-section "When With* and Prepare* are required".
+Which schema to pre-register depends on the write API (names only vs names and types);
+see `go doc writer`, section "Column names and field types".
 Delimited, JSONL, and SQL encodings differ after
 spanvalue formats each column; see the `writer` package documentation. For
 non-streaming paths, use
