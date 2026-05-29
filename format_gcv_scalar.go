@@ -240,13 +240,13 @@ func formatFloatSimple(gcv spanner.GenericColumnValue, bits int) (string, error)
 		if err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("%v", f), nil
+		return strconv.FormatFloat(float64(f), 'g', -1, 32), nil
 	}
 	f, err := gcvFloat64(gcv.Value)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%v", f), nil
+	return strconv.FormatFloat(f, 'g', -1, 64), nil
 }
 
 func formatFloatSpannerCLI(gcv spanner.GenericColumnValue, bits int) (string, error) {
@@ -255,13 +255,13 @@ func formatFloatSpannerCLI(gcv spanner.GenericColumnValue, bits int) (string, er
 		if err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("%f", f), nil
+		return strconv.FormatFloat(float64(f), 'f', 6, 32), nil
 	}
 	f, err := gcvFloat64(gcv.Value)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%f", f), nil
+	return strconv.FormatFloat(f, 'f', 6, 64), nil
 }
 
 // gcvFloat64 reads a FLOAT64 wire value (NumberValue or NaN/±Inf strings).

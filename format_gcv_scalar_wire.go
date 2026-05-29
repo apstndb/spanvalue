@@ -25,8 +25,8 @@ func isScalarFastPathTypeCode(code sppb.TypeCode) bool {
 }
 
 func validateScalarWire(gcv spanner.GenericColumnValue) error {
-	if gcv.Value == nil {
-		return nil
+	if IsNull(gcv) {
+		return fmt.Errorf("%w: null value", ErrUnknownType)
 	}
 	code := gcv.Type.GetCode()
 	switch code {
