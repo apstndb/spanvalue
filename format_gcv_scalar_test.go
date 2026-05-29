@@ -3,44 +3,22 @@ package spanvalue
 import (
 	"math"
 	"math/big"
-	"reflect"
-	"slices"
 	"testing"
 	"time"
 
 	"cloud.google.com/go/civil"
 	"cloud.google.com/go/spanner"
+	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"github.com/apstndb/spantype/typector"
 	"github.com/apstndb/spanvalue/gcvctor"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
-var scalarFastPathPluginPCs = func() []uintptr {
-	plugins := []FormatComplexFunc{
-		FormatSimpleValue,
-		FormatLiteralValue,
-		FormatSpannerCLIValue,
-		FormatJSONSimpleValue,
-	}
-	pcs := make([]uintptr, len(plugins))
-	for i, p := range plugins {
-		pcs[i] = reflect.ValueOf(p).Pointer()
-	}
-	return pcs
-}()
-
-func isScalarFastPathPlugin(f FormatComplexFunc) bool {
-	if f == nil {
-		return false
-	}
-	return slices.Contains(scalarFastPathPluginPCs, reflect.ValueOf(f).Pointer())
-}
-
 func formatConfigNullableOnly(fc *FormatConfig) *FormatConfig {
-	clone := fc.Clone()
-	clone.FormatComplexPlugins = slices.DeleteFunc(clone.FormatComplexPlugins, isScalarFastPathPlugin)
-	return clone
+	return FormatConfigWithoutScalarPlugins(fc)
 }
 
 func TestFormatGCVScalarPluginsMatchNullablePath(t *testing.T) {
@@ -99,5 +77,33 @@ func TestFormatGCVScalarPluginsMatchNullablePath(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestFormatConfig_customFormatNullableUsesHook(t *testing.T) {
+	t.Parallel()
+
+	fc := SimpleFormatConfig()
+	fc.FormatNullable = func(NullableValue) (string, error) { return "CUSTOM", nil }
+
+	got, err := fc.FormatToplevelColumn(gcvctor.BoolValue(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "CUSTOM" {
+		t.Fatalf("got %q want CUSTOM", got)
+	}
+}
+
+func TestFormatSimpleValue_rejectsMalformedWireKind(t *testing.T) {
+	t.Parallel()
+
+	gcv := spanner.GenericColumnValue{
+		Type:  typector.CodeToSimpleType(sppb.TypeCode_BOOL),
+		Value: structpb.NewStringValue("true"),
+	}
+	_, err := SimpleFormatConfig().FormatToplevelColumn(gcv)
+	if err == nil {
+		t.Fatal("expected error for BOOL typed value with string wire")
 	}
 }

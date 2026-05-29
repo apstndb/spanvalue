@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
+	"slices"
 	"strconv"
 
 	"cloud.google.com/go/spanner"
@@ -20,13 +22,62 @@ var (
 	_ FormatComplexFunc = FormatSpannerCLIValue
 )
 
+var presetScalarPlugins = []FormatComplexFunc{
+	FormatSimpleValue,
+	FormatLiteralValue,
+	FormatSpannerCLIValue,
+}
+
+func isPresetScalarPlugin(f FormatComplexFunc) bool {
+	if f == nil {
+		return false
+	}
+	fp := reflect.ValueOf(f).Pointer()
+	for _, p := range presetScalarPlugins {
+		if reflect.ValueOf(p).Pointer() == fp {
+			return true
+		}
+	}
+	return false
+}
+
+func nullableFuncsEqual(a, b FormatNullableFunc) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
+}
+
+// FormatConfigWithoutScalarPlugins returns a clone of fc with preset scalar fast-path plugins
+// removed so scalars use Decode and [FormatNullable].
+func FormatConfigWithoutScalarPlugins(fc *FormatConfig) *FormatConfig {
+	if fc == nil {
+		return nil
+	}
+	clone := fc.Clone()
+	clone.FormatComplexPlugins = slices.DeleteFunc(clone.FormatComplexPlugins, isPresetScalarPlugin)
+	return clone
+}
+
+func scalarFastPathActive(formatter Formatter, presetNullable FormatNullableFunc) bool {
+	fc, ok := formatter.(*FormatConfig)
+	if !ok {
+		return true
+	}
+	return nullableFuncsEqual(fc.FormatNullable, presetNullable)
+}
+
 // FormatSimpleValue is a [FormatComplexFunc] that formats non-ARRAY, non-STRUCT scalars for
 // [SimpleFormatConfig] without constructing a [NullableValue]. It returns [ErrFallthrough] for
-// ARRAY and STRUCT. NUMERIC uses the string wire payload as-is; canonical wire is the GCV
-// constructor's responsibility (see [github.com/apstndb/spanvalue/gcvctor.StringBasedValueFromCode]).
+// ARRAY and STRUCT, when [FormatConfig.FormatNullable] is not the preset default, or for types
+// handled by earlier plugins. NUMERIC uses the string wire payload as-is; canonical wire is the
+// GCV constructor's responsibility (see [github.com/apstndb/spanvalue/gcvctor.StringBasedValueFromCode]).
 func FormatSimpleValue(formatter Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
 	switch value.Type.GetCode() {
 	case sppb.TypeCode_ARRAY, sppb.TypeCode_STRUCT:
+		return "", ErrFallthrough
+	}
+	if !scalarFastPathActive(formatter, formatNullableValueSimple) {
 		return "", ErrFallthrough
 	}
 	if IsNull(value) {
@@ -43,6 +94,9 @@ func FormatLiteralValue(formatter Formatter, value spanner.GenericColumnValue, _
 	case sppb.TypeCode_ARRAY, sppb.TypeCode_STRUCT, sppb.TypeCode_PROTO, sppb.TypeCode_ENUM:
 		return "", ErrFallthrough
 	}
+	if !scalarFastPathActive(formatter, formatNullableValueLiteral) {
+		return "", ErrFallthrough
+	}
 	if IsNull(value) {
 		return formatter.GetNullString(), nil
 	}
@@ -55,6 +109,9 @@ func FormatSpannerCLIValue(formatter Formatter, value spanner.GenericColumnValue
 	case sppb.TypeCode_ARRAY, sppb.TypeCode_STRUCT:
 		return "", ErrFallthrough
 	}
+	if !scalarFastPathActive(formatter, FormatNullableSpannerCLICompatible) {
+		return "", ErrFallthrough
+	}
 	if IsNull(value) {
 		return formatter.GetNullString(), nil
 	}
@@ -62,6 +119,9 @@ func FormatSpannerCLIValue(formatter Formatter, value spanner.GenericColumnValue
 }
 
 func formatGCVScalarSimple(gcv spanner.GenericColumnValue) (string, error) {
+	if err := validateScalarWire(gcv); err != nil {
+		return "", err
+	}
 	switch gcv.Type.GetCode() {
 	case sppb.TypeCode_BOOL:
 		return strconv.FormatBool(gcv.Value.GetBoolValue()), nil
@@ -96,6 +156,9 @@ func formatGCVScalarSimple(gcv spanner.GenericColumnValue) (string, error) {
 }
 
 func formatGCVScalarLiteral(gcv spanner.GenericColumnValue) (string, error) {
+	if err := validateScalarWire(gcv); err != nil {
+		return "", err
+	}
 	switch gcv.Type.GetCode() {
 	case sppb.TypeCode_BOOL:
 		return strconv.FormatBool(gcv.Value.GetBoolValue()), nil
@@ -152,6 +215,9 @@ func formatGCVScalarLiteral(gcv spanner.GenericColumnValue) (string, error) {
 }
 
 func formatGCVScalarSpannerCLI(gcv spanner.GenericColumnValue) (string, error) {
+	if err := validateScalarWire(gcv); err != nil {
+		return "", err
+	}
 	switch gcv.Type.GetCode() {
 	case sppb.TypeCode_BOOL:
 		return strconv.FormatBool(gcv.Value.GetBoolValue()), nil

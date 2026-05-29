@@ -9,8 +9,10 @@
 // [SimpleFormatConfig], [SpannerCLICompatibleFormatConfig], and [JSONFormatConfig] to pick
 // a preset. Scalar plugins ([FormatSimpleValue], [FormatLiteralValue],
 // [FormatSpannerCLIValue], [FormatJSONSimpleValue]) format GenericColumnValue directly
-// without Decode; remove them from [FormatConfig.FormatComplexPlugins] on a clone to use
-// Decode + [FormatNullable]. Customize a preset with [FormatConfig.Clone].
+// without Decode; remove them with [FormatConfigWithoutScalarPlugins] or from
+// [FormatConfig.FormatComplexPlugins] on a clone to use Decode + [FormatNullable].
+// Scalar plugins fall through to that path when [FormatConfig.FormatNullable] is replaced.
+// Customize a preset with [FormatConfig.Clone].
 // [FormatConfig.FormatColumn] runs [FormatComplexFunc] plugins first, then built-in
 // ARRAY, STRUCT, and scalar formatting.
 // Convenience entry points include [FormatRowLiteral], [FormatColumnLiteral],
