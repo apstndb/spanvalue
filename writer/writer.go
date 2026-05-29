@@ -32,7 +32,7 @@
 // Names only: [WithColumnNames], PrepareColumnNames. Names and types: [WithRowType],
 // [WithMetadata], PrepareRowType. [WithMetadata] uses metadata.GetRowType(); from a
 // [cloud.google.com/go/spanner.RowIterator], Metadata is set after the first Next.
-// [DelimitedWriter.Prepare] is deprecated.
+// [DelimitedWriter.Prepare], [JSONLWriter.Prepare], and [SQLInsertWriter.Prepare] are deprecated.
 //
 // [DelimitedWriter] defaults to a CSV/TSV header once column names are known ([WithHeader]):
 // before the first data row, or on [DelimitedWriter.Flush] when no data row was written.
