@@ -938,12 +938,17 @@ func (w *SQLInsertWriter) prepareRowType(rowType *sppb.StructType) error {
 	if err := validatePrepareRowTypeTransition(&w.schema, columnNames); err != nil {
 		return err
 	}
-	w.setRowType(rowType)
 	if len(columnNames) == 0 {
+		w.setRowType(rowType)
 		return nil
 	}
-	_, err := w.initOrValidateQuotedColumns(columnNames)
-	return err
+	quotedColumns, err := quoteIdentifiers(columnNames)
+	if err != nil {
+		return err
+	}
+	w.setRowType(rowType)
+	w.quotedColumnNames = strings.Join(quotedColumns, ", ")
+	return nil
 }
 
 func (w *SQLInsertWriter) prepareColumnNames(names []string) error {
