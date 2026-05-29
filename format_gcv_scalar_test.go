@@ -3,6 +3,7 @@ package spanvalue
 import (
 	"math"
 	"math/big"
+	"reflect"
 	"testing"
 	"time"
 
@@ -19,6 +20,18 @@ import (
 
 func formatConfigNullableOnly(fc *FormatConfig) *FormatConfig {
 	return FormatConfigWithoutScalarPlugins(fc)
+}
+
+func TestFormatConfigWithoutScalarPlugins_removesJSONScalarPlugin(t *testing.T) {
+	t.Parallel()
+
+	stripped := FormatConfigWithoutScalarPlugins(JSONFormatConfig())
+	jsonPlugin := reflect.ValueOf(FormatJSONSimpleValue).Pointer()
+	for _, p := range stripped.FormatComplexPlugins {
+		if reflect.ValueOf(p).Pointer() == jsonPlugin {
+			t.Fatal("FormatJSONSimpleValue still present after FormatConfigWithoutScalarPlugins")
+		}
+	}
 }
 
 func TestFormatGCVScalarPluginsMatchNullablePath(t *testing.T) {

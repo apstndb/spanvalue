@@ -19,12 +19,14 @@ var (
 	_ FormatComplexFunc = FormatSimpleValue
 	_ FormatComplexFunc = FormatLiteralValue
 	_ FormatComplexFunc = FormatSpannerCLIValue
+	_ FormatComplexFunc = FormatJSONSimpleValue
 )
 
 var presetScalarPlugins = []FormatComplexFunc{
 	FormatSimpleValue,
 	FormatLiteralValue,
 	FormatSpannerCLIValue,
+	FormatJSONSimpleValue,
 }
 
 func isPresetScalarPlugin(f FormatComplexFunc) bool {
