@@ -99,8 +99,8 @@ return w.Flush()
 ```
 
 When the result may be empty but you still want a CSV/TSV header, use `iter.Next`.
-After the first `Next`, Spanner sets `iter.Metadata` (row or `iterator.Done`);
-register names with `PrepareRowType`, then stream rows. `Flush` writes a pending
+Spanner sets `iter.Metadata` after the first `Next` (row or `iterator.Done`); register
+names with `PrepareRowType` on that pass, then stream rows. `Flush` writes a pending
 header when no data row was emitted:
 
 ```go
@@ -114,30 +114,28 @@ w := writer.NewDelimitedWriter(
 	writer.WithHeader(true),
 )
 
-row, err := iter.Next()
-if err != nil && err != iterator.Done {
-	return err
-}
-if iter.Metadata != nil {
-	if err := w.PrepareRowType(iter.Metadata.GetRowType()); err != nil {
+first := true
+for {
+	row, err := iter.Next()
+	if first {
+		first = false
+		if err != nil && err != iterator.Done {
+			return err
+		}
+		if iter.Metadata != nil {
+			if err := w.PrepareRowType(iter.Metadata.GetRowType()); err != nil {
+				return err
+			}
+		}
+	}
+	if err == iterator.Done {
+		break
+	}
+	if err != nil {
 		return err
 	}
-}
-if err == nil {
 	if err := w.WriteRow(row); err != nil {
 		return err
-	}
-	for {
-		row, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return err
-		}
-		if err := w.WriteRow(row); err != nil {
-			return err
-		}
 	}
 }
 return w.Flush()
