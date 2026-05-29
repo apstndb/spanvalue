@@ -291,8 +291,8 @@ func PGJSONBValue(v any) (spanner.GenericColumnValue, error) {
 }
 
 // ProtoValue returns a non-null PROTO GenericColumnValue for the fully qualified message name fqn.
-// The value is the raw message bytes; delimited export uses SimpleFormatConfig string form (see
-// writer.TestDelimitedWriterWriteGCVsEnumProto).
+// The message bytes are stored in the GCV as a base64-encoded string; delimited export formats
+// that payload via SimpleFormatConfig (see writer.TestDelimitedWriterWriteGCVsEnumProto).
 func ProtoValue(fqn string, b []byte) spanner.GenericColumnValue {
 	return BytesBasedValueOf(typector.FQNToProtoType(fqn), b)
 }

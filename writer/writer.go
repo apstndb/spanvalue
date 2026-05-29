@@ -56,9 +56,11 @@
 //     error-returning options). Prefer [PrepareRowType] for zero-column metadata.
 //
 // [WithMetadata] registers the same names and types as [WithRowType](metadata.GetRowType()); call
-// one or the other, not both. For [cloud.google.com/go/spanner.RowIterator] streaming, prefer
-// [WithMetadata](iter.Metadata) once at construction and [WriteRow] per [RowIterator.Next]; defer
-// [DelimitedWriter.Flush] so a zero-row SELECT still emits a header when [WithHeader] is true.
+// one or the other, not both. Use it when metadata is already available (not [RowIterator.Metadata]
+// before the first [RowIterator.Next]). For streaming, call [PrepareRowType](iter.Metadata.GetRowType())
+// after the first Next when the result may be empty but still has columns; defer [DelimitedWriter.Flush]
+// for a header-only CSV. When every query returns at least one row, [WriteRow] registers names from
+// the first row.
 //
 // [DelimitedWriter] defaults to a CSV/TSV header once column names are known ([WithHeader]):
 // before the first data row, or on [DelimitedWriter.Flush] when no data row was written

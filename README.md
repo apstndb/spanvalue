@@ -67,10 +67,16 @@ a registered field-type schema (spannerpb + structpb at the boundary), and
 when an adapter only needs `WriteRow`. Use `writer.FlushWriter` when an adapter
 owns both row streaming and finalization.
 
-**Production streaming (Spanner client):** register schema once with
-`writer.WithMetadata(iter.Metadata)` (equivalent to `WithRowType(metadata.GetRowType())`—do
-not pass both), then `WriteRow` on each `Next()`, and `Flush` in a defer. You do not
-need to build `[]GenericColumnValue` per row or call `WriteStructValues` on that path.
+**Production streaming (Spanner client):** `iter.Metadata` is set only after the first
+`Next()`. Do not pass `iter.Metadata` to `WithMetadata` at writer construction—it is still
+`nil` there and registers an empty schema. When every query returns at least one row,
+`iter.Do` and `WriteRow` are enough (the first row supplies column names). When the result
+may be empty but metadata still lists columns, use the `iter.Next` loop below and call
+`PrepareRowType(iter.Metadata.GetRowType())` on the first pass, then `WriteRow` and `Flush`
+in a defer. You do not need to build `[]GenericColumnValue` per row or call
+`WriteStructValues` on that path. If you already hold `*sppb.ResultSetMetadata` outside a
+`RowIterator` (for example an in-memory `spannerpb.ResultSet`), `WithMetadata(md)` at
+construction is fine.
 
 **In-memory fixtures:** after `WithMetadata` or `WithRowType`, prefer `WriteStructValues`
 with `[]*structpb.Value` cells (or `WriteGCVs` with `gcvctor` helpers). Do not zip
@@ -151,10 +157,10 @@ return w.Flush()
 
 | Goal | API |
 |------|-----|
-| Streaming `RowIterator` | `WithMetadata(iter.Metadata)` once, then `WriteRow` |
+| Streaming `RowIterator` | `PrepareRowType(iter.Metadata.GetRowType())` after first `Next`, then `WriteRow` (or `iter.Do` when every query has ≥1 row) |
 | Known column names only | `WithColumnNames` / `PrepareColumnNames` (at least one name) |
-| Names and types from metadata | `WithRowType` / `PrepareRowType` / `WithMetadata` |
-| Zero columns (e.g. DML without `THEN RETURN`) | `PrepareRowType(nil)` or `PrepareRowType(GetRowType())` when fields are empty—**not** `PrepareColumnNames` |
+| Names and types from metadata | `WithRowType` / `PrepareRowType` / `WithMetadata` (when `md` is already available) |
+| Zero columns (e.g. DML without `THEN RETURN`) | `PrepareRowType(nil)` or `PrepareRowType(metadata.GetRowType())` when fields are empty—**not** `PrepareColumnNames` |
 | Zero-row `SELECT` (columns in metadata, no rows) | `PrepareRowType` after first `Next`, then `Flush` for header-only CSV |
 
 Registration is not the same as having zero columns: without `Prepare*` / `With*` and
