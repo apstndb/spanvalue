@@ -30,38 +30,42 @@
 //
 // # Schema registration and row input
 //
-// Writers need column names for labeling output (CSV headers, JSON keys, INSERT
-// column lists). Some paths also register per-column *sppb.Type values so rows
-// can be streamed as []*structpb.Value without fabricating metadata wrappers.
+// Writers need column names for CSV headers, JSON keys, and INSERT column lists.
+// Some write APIs also need registered *sppb.Type values (see below).
 //
-// With the [cloud.google.com/go/spanner] client, stream [Writer.WriteRow] after
-// Query or Read: each *spanner.Row already carries typed GenericColumnValue cells,
-// and the writer records column names from the first row. That path does not need
-// [cloud.google.com/go/spanner.RowIterator].Metadata or [WithRowType].
+// # When With* and Prepare* are required
 //
-// Register a field-type schema with [WithRowType], [WithMetadata], or
-// [DelimitedWriter.PrepareRowType] for [WriteStructValues] or when column names must
-// be fixed before the first data row. Pass a *sppb.StructType from application
-// schema at construction, or from iter.Metadata.GetRowType after the first
-// [cloud.google.com/go/spanner.RowIterator.Next] (Spanner populates metadata then,
-// not when the iterator is created). When the writer exists before the query, call
-// [DelimitedWriter.PrepareRowType] or [DelimitedWriter.PrepareColumnNames] once the
-// row type or names are available.
+// [WithRowType], [WithMetadata], [WithColumnNames], [PrepareRowType], and
+// [PrepareColumnNames] are optional unless the write API cannot supply schema
+// by itself:
 //
-// [WithRowType] and [WithMetadata] store names plus field types (internal columnSchema)
-// and are required for [WriteStructValues]. [WithColumnNames] stores names only; types
-// come from each GCV in [WriteGCVs].
+//   - [Writer.WriteRow]: not required when at least one row is written. Each *spanner.Row
+//     supplies column names and typed GenericColumnValue cells; the writer records names
+//     from the first row. See [WithHeader] for CSV/TSV header behavior on [DelimitedWriter].
+//   - WriteValues: not required. Every call passes column names plus GCVs and may
+//     initialize the writer on the first row.
+//   - WriteGCVs: column names must already be set via [WithColumnNames],
+//     [PrepareColumnNames], or an earlier WriteRow/WriteValues. Types come from each
+//     GCV; [WithRowType] is not used on this path.
+//   - WriteStructValues: [WithRowType], [WithMetadata], or [PrepareRowType] is
+//     required so field types are registered ([ErrMissingFieldTypes] otherwise).
+//
+// Register names or types before the first data row when you use WriteStructValues,
+// create the writer before Query/Read, or need a delimited header with zero data rows
+// (see [WithHeader]). At construction use [WithRowType] or [WithColumnNames]; later use
+// Prepare* once names or types are known. When the row type comes from a
+// [cloud.google.com/go/spanner.RowIterator], read iter.Metadata after the first
+// Next (not when the iterator is created).
 //
 // [DelimitedWriter.Prepare] is formally deprecated (see its Deprecated note);
-// use [DelimitedWriter.PrepareRowType], [DelimitedWriter.PrepareColumnNames], or
-// [WithRowType] / [WithColumnNames] / [WithMetadata] instead.
+// use [PrepareRowType], [PrepareColumnNames], or With* options instead.
 //
 // Row write layers (high to low):
 //
-//   - [Writer.WriteRow]: Spanner client row (*spanner.Row).
-//   - WriteValues: explicit column names plus GCVs (may initialize names per row).
-//   - [WriteGCVs]: registered column names; each GCV carries Type and Value.
-//   - [DelimitedWriter.WriteStructValues]: registered field types; []*structpb.Value per row.
+//   - [Writer.WriteRow]: *spanner.Row from the Spanner client.
+//   - WriteValues: column names plus []GenericColumnValue per call.
+//   - WriteGCVs: []GenericColumnValue; column names must be registered.
+//   - WriteStructValues: []*structpb.Value; field types must be registered.
 //
 // Delimited, JSONL, and SQL writers use different output encodings after spanvalue
 // formats each column; there is no shared "formatted row" interface.
@@ -69,9 +73,16 @@
 // spanvalue formats cells from Type+Value pairs internally. Result-set metadata is
 // only a carrier for RowType when registering schema, not used while formatting rows.
 //
-// DelimitedWriter defaults to emitting a header row. Use [WithHeader] with false
-// for headerless CSV/TSV when names are registered but must not appear as the
-// first output line.
+// # Delimited headers
+//
+// [DelimitedWriter] defaults to [WithHeader](true). When header output is enabled,
+// the header line is written automatically immediately before the first data row,
+// once column names are known (typically from the first [Writer.WriteRow]).
+// [WithHeader](false) skips that automatic header for headerless CSV/TSV.
+//
+// WriteRow alone does not require [WithColumnNames] when rows are present. For an
+// empty result with a header, register names via [WithColumnNames], [PrepareColumnNames],
+// or [WithRowType], then call [DelimitedWriter.WriteHeader] before [Flush].
 //
 // # Compatibility constructors
 //
@@ -128,6 +139,10 @@ var (
 )
 
 // Writer writes Spanner rows to an output stream.
+//
+// WriteRow does not require [WithRowType], [WithColumnNames], or Prepare*; concrete
+// writers read column names and values from each row. See the package doc section
+// "When With* and Prepare* are required" for other write APIs.
 //
 // Writer intentionally models row streaming only. Some concrete writers also
 // implement [Flusher]; callers that own the full write lifecycle must call
@@ -257,9 +272,9 @@ type rowTypeOption struct {
 	rowType *sppb.StructType
 }
 
-// WithRowType initializes a writer schema from a Spanner row type (names and field
-// types). Use application schema at construction, or iter.Metadata.GetRowType after
-// the first [cloud.google.com/go/spanner.RowIterator.Next], not before.
+// WithRowType registers column names and field types. Required for WriteStructValues;
+// not required for WriteRow, WriteValues, or WriteGCVs. Use application schema at
+// construction, or iter.Metadata.GetRowType after the first RowIterator Next.
 func WithRowType(rowType *sppb.StructType) Option {
 	return rowTypeOption{rowType: rowType}
 }
@@ -280,8 +295,9 @@ type columnNamesOption struct {
 	names []string
 }
 
-// WithColumnNames initializes a writer schema from column names only.
-// Use [DelimitedWriter.WriteGCVs] (or other WriteGCVs methods) so each row supplies types in GCVs.
+// WithColumnNames registers column names only. Required before the first WriteGCVs
+// unless an earlier WriteRow or WriteValues initialized names. Not required for
+// WriteRow or WriteValues. Types on the WriteGCVs path come from each GCV.
 func WithColumnNames(names []string) Option {
 	return columnNamesOption{names: slices.Clone(names)}
 }
@@ -336,7 +352,20 @@ func (o unnamedFieldNamerOption) applyJSONLOption(w *JSONLWriter) {
 	w.UnnamedFieldNamer = o.namer
 }
 
-// WithHeader sets whether DelimitedWriter writes a header before data rows.
+// WithHeader sets whether [DelimitedWriter] emits a CSV/TSV header line. The default
+// is true ([NewDelimitedWriter], [NewCSVWriter]).
+//
+// When header is true and at least one data row is written, the header is output
+// automatically immediately before the first data row, after column names are known
+// (for example from the first [DelimitedWriter.WriteRow]). No separate With* registration
+// is needed for that case.
+//
+// When header is true but no data rows are written, register column names with
+// [WithColumnNames], [PrepareColumnNames], or [WithRowType], then call
+// [DelimitedWriter.WriteHeader] before [Flush].
+//
+// WithHeader(false) suppresses the automatic header on the first data row. Column names
+// may still be registered or taken from WriteRow for correct field order in headerless export.
 func WithHeader(header bool) DelimitedOption {
 	return delimitedOptionFunc(func(w *DelimitedWriter) {
 		w.Header = header
@@ -361,9 +390,12 @@ func (s *columnSchema) applyNamesOnly(names []string) {
 }
 
 // DelimitedWriter writes rows as CSV-style delimited text. Call Flush after the final write.
+// Header controls automatic header output; see [WithHeader] and [DelimitedWriter.WriteHeader].
 type DelimitedWriter struct {
 	Formatter *spanvalue.FormatConfig
-	Header    bool
+	// Header enables a header line before the first data row when true (default).
+	// See [WithHeader].
+	Header bool
 	// Set before the first write. Once names have been resolved for the current
 	// schema, later changes do not retroactively rewrite cached header names.
 	UnnamedFieldNamer spanvalue.UnnamedFieldNamer
@@ -413,8 +445,10 @@ func NewDelimitedWriterWithOptions(out io.Writer, delimiter rune, options ...Del
 	return NewDelimitedWriter(out, delimiter, options...)
 }
 
-// WriteRow writes one delimited row. Column names are taken from the row and
-// registered on the first write when not already set.
+// WriteRow writes one delimited row. Does not require With* or Prepare* when at least
+// one row is written; column names come from the row. When [DelimitedWriter.Header] is
+// true (default), the CSV/TSV header is written before the first data row. For zero data
+// rows with a header, register names and call [DelimitedWriter.WriteHeader]; see [WithHeader].
 func (w *DelimitedWriter) WriteRow(row *spanner.Row) error {
 	columnNames, values, err := rowData(row)
 	if err != nil {
@@ -432,16 +466,16 @@ func (w *DelimitedWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
 	return w.PrepareRowType(rowTypeFromMetadata(metadata))
 }
 
-// PrepareRowType initializes the delimited schema from a row type before the first
-// row is written. When the row type comes from a [cloud.google.com/go/spanner.RowIterator],
-// use iter.Metadata.GetRowType after the first Next. If a schema is already
-// initialized, column names must match.
+// PrepareRowType registers column names and field types before the first row.
+// Same role as [WithRowType]; required for WriteStructValues, not for WriteRow or WriteValues.
+// When the row type comes from a RowIterator, use iter.Metadata.GetRowType after the first Next.
 func (w *DelimitedWriter) PrepareRowType(rowType *sppb.StructType) error {
 	return w.prepareRowType(rowType)
 }
 
-// PrepareColumnNames initializes the delimited schema from column names before the
-// first row is written. If a schema is already initialized, names must match.
+// PrepareColumnNames registers column names before the first row. Same role as
+// [WithColumnNames]; use before WriteGCVs or when emitting a header with no data rows.
+// Not required for WriteRow or WriteValues.
 func (w *DelimitedWriter) PrepareColumnNames(names []string) error {
 	return w.prepareColumnNames(names)
 }
@@ -469,7 +503,10 @@ func (w *DelimitedWriter) prepareColumnNames(names []string) error {
 	return nil
 }
 
-// WriteHeader writes the delimited header once using the initialized column names.
+// WriteHeader writes the CSV/TSV header line once. Column names must already be registered
+// ([WithColumnNames], [PrepareColumnNames], [WithRowType], or an earlier WriteRow).
+// Use when [WithHeader](true) and the export has no data rows, or to emit the header
+// before streaming without relying on the first data row.
 func (w *DelimitedWriter) WriteHeader() error {
 	if w.wroteHeader {
 		return nil
@@ -497,6 +534,8 @@ func (w *DelimitedWriter) WriteHeader() error {
 	return nil
 }
 
+// WriteValues writes one row from column names and GCVs. Does not require With* or
+// Prepare*; names are passed on each call and may initialize the writer on the first row.
 func (w *DelimitedWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
 	if err := w.initOrValidateColumnNames(columnNames); err != nil {
 		return err
@@ -504,16 +543,8 @@ func (w *DelimitedWriter) WriteValues(columnNames []string, values []spanner.Gen
 	return w.WriteGCVs(values)
 }
 
-// WriteStructValues writes one row from structpb values using the field-type schema
-// registered by [WithRowType], [WithMetadata], or [PrepareRowType].
-func (w *DelimitedWriter) WriteStructValues(values []*structpb.Value) error {
-	gcvs, err := gcvsFromStructValues(w.schema.types, values)
-	if err != nil {
-		return err
-	}
-	return w.WriteGCVs(gcvs)
-}
-
+// WriteGCVs writes one row from GCVs. Column names must already be registered
+// ([WithColumnNames], [PrepareColumnNames], or an earlier WriteRow/WriteValues).
 func (w *DelimitedWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	csvWriter, err := w.csvWriter()
 	if err != nil {
@@ -539,6 +570,16 @@ func (w *DelimitedWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	}
 	w.wroteData = true
 	return nil
+}
+
+// WriteStructValues writes one row from structpb values using the field-type schema
+// registered by [WithRowType], [WithMetadata], or [PrepareRowType].
+func (w *DelimitedWriter) WriteStructValues(values []*structpb.Value) error {
+	gcvs, err := gcvsFromStructValues(w.schema.types, values)
+	if err != nil {
+		return err
+	}
+	return w.WriteGCVs(gcvs)
 }
 
 func (w *DelimitedWriter) setRowType(rowType *sppb.StructType) {
@@ -659,6 +700,7 @@ func newJSONLWriter(out io.Writer) *JSONLWriter {
 	}
 }
 
+// WriteRow writes one JSONL row. Does not require With* or Prepare*; see [DelimitedWriter.WriteRow].
 func (w *JSONLWriter) WriteRow(row *spanner.Row) error {
 	columnNames, values, err := rowData(row)
 	if err != nil {
@@ -677,14 +719,12 @@ func (w *JSONLWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
 	return w.PrepareRowType(rowTypeFromMetadata(metadata))
 }
 
-// PrepareRowType initializes the JSONL schema from a row type before the first row is written.
-// When the row type comes from a [cloud.google.com/go/spanner.RowIterator], use
-// iter.Metadata.GetRowType after the first Next.
+// PrepareRowType registers names and field types; see [DelimitedWriter.PrepareRowType].
 func (w *JSONLWriter) PrepareRowType(rowType *sppb.StructType) error {
 	return w.prepareRowType(rowType)
 }
 
-// PrepareColumnNames initializes the JSONL schema from column names before the first row is written.
+// PrepareColumnNames registers column names; see [DelimitedWriter.PrepareColumnNames].
 func (w *JSONLWriter) PrepareColumnNames(names []string) error {
 	return w.prepareColumnNames(names)
 }
@@ -712,6 +752,7 @@ func (w *JSONLWriter) prepareColumnNames(names []string) error {
 	return nil
 }
 
+// WriteValues writes one row; see [DelimitedWriter.WriteValues].
 func (w *JSONLWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
 	if err := w.initOrValidateColumnNames(columnNames); err != nil {
 		return err
@@ -719,8 +760,7 @@ func (w *JSONLWriter) WriteValues(columnNames []string, values []spanner.Generic
 	return w.WriteGCVs(values)
 }
 
-// WriteStructValues writes one row from structpb values using the field-type schema
-// registered by [WithRowType], [WithMetadata], or [PrepareRowType].
+// WriteStructValues writes one row; see [DelimitedWriter.WriteStructValues].
 func (w *JSONLWriter) WriteStructValues(values []*structpb.Value) error {
 	gcvs, err := gcvsFromStructValues(w.schema.types, values)
 	if err != nil {
@@ -729,6 +769,7 @@ func (w *JSONLWriter) WriteStructValues(values []*structpb.Value) error {
 	return w.WriteGCVs(gcvs)
 }
 
+// WriteGCVs writes one row; see [DelimitedWriter.WriteGCVs].
 func (w *JSONLWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	if w.out == nil {
 		return ErrNilOutputWriter

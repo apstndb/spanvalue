@@ -76,8 +76,9 @@ Call `Flush` after the final row when using `writer.FlushWriter`; see the
 contract.
 
 With the [Spanner client](https://pkg.go.dev/cloud.google.com/go/spanner#section-readme),
-stream `Query` or `Read` results with `WriteRow` (each `*spanner.Row` already carries
-typed column values; the writer picks up column names from the first row):
+stream `Query` or `Read` results with `WriteRow` (no `With*` / `Prepare*` when rows
+are present; `WithHeader(true)` writes the CSV/TSV header from the first row—see
+`go doc writer` for zero-row header exports):
 
 ```go
 iter := txn.Query(ctx, stmt)
@@ -96,12 +97,9 @@ if err := iter.Do(func(row *spanner.Row) error {
 return w.Flush()
 ```
 
-Use `WithRowType`, `WithMetadata`, or `PrepareRowType` when you need a registered
-field-type schema (for example `WriteStructValues`). When the row type comes from
-`iter.Metadata`, call `PrepareRowType` after the first `iter.Next()` once metadata is
-available, or pass a row type you already know at construction time. `Prepare(metadata)`
-is deprecated; prefer `PrepareRowType` or `With*` options. Stream rows with `WriteGCVs`,
-`WriteStructValues`, or `WriteRow`.
+Schema registration (`WithRowType`, `WithColumnNames`, `Prepare*`) is required only
+for some write APIs (for example `WriteStructValues`, `WriteGCVs`, or a header with no
+data rows); see the `writer` package godoc section "When With* and Prepare* are required".
 Delimited, JSONL, and SQL encodings differ after
 spanvalue formats each column; see the `writer` package documentation. For
 non-streaming paths, use
