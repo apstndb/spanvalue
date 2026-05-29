@@ -91,9 +91,9 @@ w := writer.NewDelimitedWriter(
 Register schema with `WithRowType`, `WithColumnNames`, or `WithMetadata` (stores
 `metadata.GetRowType()` as column names plus field types; other metadata fields
 are unused). Stream rows with `WriteGCVs`, `WriteStructValues`, or `WriteRow`.
-Prefer registering schema at construction; when it is known later, use
-`PrepareRowType` or `PrepareColumnNames` (or `PrepareRowType(meta.GetRowType())`
-when you only have metadata). Delimited, JSONL, and SQL encodings differ after
+Prefer registering schema at construction with `WithRowType`, `WithColumnNames`,
+or `WithMetadata`. Deprecated `Prepare(metadata)` remains for late-bound metadata.
+Delimited, JSONL, and SQL encodings differ after
 spanvalue formats each column; see the `writer` package documentation. For
 non-streaming paths, use
 `writer.RowData`, `writer.FormatDelimitedRow`, or `writer.FormatJSONLRow`
