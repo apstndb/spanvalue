@@ -12,6 +12,7 @@ import (
 	"github.com/apstndb/spanvalue/gcvctor"
 	"github.com/apstndb/spanvalue/internal"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 var (
@@ -27,16 +28,23 @@ var (
 )
 
 func metadataWithColumnNames(names ...string) *sppb.ResultSetMetadata {
+	return &sppb.ResultSetMetadata{RowType: rowTypeWithColumnNames(names...)}
+}
+
+func rowTypeWithColumnNames(names ...string) *sppb.StructType {
 	fields := make([]*sppb.StructType_Field, len(names))
 	for i, name := range names {
+		code := sppb.TypeCode_INT64
+		switch name {
+		case "name", "note", "payload", "full_name":
+			code = sppb.TypeCode_STRING
+		}
 		fields[i] = &sppb.StructType_Field{
 			Name: name,
-			Type: &sppb.Type{Code: sppb.TypeCode_STRING},
+			Type: &sppb.Type{Code: code},
 		}
 	}
-	return &sppb.ResultSetMetadata{
-		RowType: &sppb.StructType{Fields: fields},
-	}
+	return &sppb.StructType{Fields: fields}
 }
 
 func flushDelimitedWriter(t *testing.T, w *DelimitedWriter) {
@@ -1051,5 +1059,236 @@ func TestFormatDelimitedValuesInvalidDelimiter(t *testing.T) {
 				t.Fatalf("format error = %v, want ErrInvalidDelimiter", err)
 			}
 		})
+	}
+}
+
+func TestDelimitedWriterFlushWritesHeaderWithNoRows(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewDelimitedWriter(&out, ',', WithColumnNames([]string{"id", "name"}), WithHeader(true))
+	if err := w.Flush(); err != nil {
+		t.Fatalf("Flush() error = %v", err)
+	}
+
+	want := "id,name\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestDelimitedWriterFlushDoesNotDuplicateHeader(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewDelimitedWriter(&out, ',', WithColumnNames([]string{"id", "name"}), WithHeader(true))
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.Int64Value(1),
+		gcvctor.StringValue("a"),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	if err := w.Flush(); err != nil {
+		t.Fatalf("Flush() error = %v", err)
+	}
+
+	want := "id,name\n1,a\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestDelimitedWriterFlushWithoutColumnNames(t *testing.T) {
+	t.Parallel()
+
+	err := NewDelimitedWriter(&bytes.Buffer{}, ',', WithHeader(true)).Flush()
+	if !errors.Is(err, ErrMissingColumnNames) {
+		t.Fatalf("Flush() error = %v, want ErrMissingColumnNames", err)
+	}
+}
+
+func TestWithColumnNamesHeaderlessDelimited(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewDelimitedWriter(&out, ',', WithColumnNames([]string{"id", "name"}), WithHeader(false))
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.Int64Value(1),
+		gcvctor.StringValue("a"),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	flushDelimitedWriter(t, w)
+
+	want := "1,a\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestWithColumnNamesWriteGCVs(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewDelimitedWriter(&out, '\t', WithColumnNames([]string{"id", "name"}))
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.Int64Value(1),
+		gcvctor.StringValue("a"),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	flushDelimitedWriter(t, w)
+
+	want := "id\tname\n1\ta\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestWithRowTypeWriteStructValues(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewJSONLWriter(&out, WithRowType(rowTypeWithColumnNames("id", "name")))
+	if err := w.WriteStructValues([]*structpb.Value{
+		structpb.NewStringValue("42"),
+		structpb.NewStringValue("Alice"),
+	}); err != nil {
+		t.Fatalf("WriteStructValues() error = %v", err)
+	}
+
+	want := "{\"id\":42,\"name\":\"Alice\"}\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestWriteStructValuesMissingFieldTypes(t *testing.T) {
+	t.Parallel()
+
+	w := NewDelimitedWriter(&bytes.Buffer{}, ',')
+	err := w.WriteStructValues([]*structpb.Value{structpb.NewStringValue("1")})
+	if !errors.Is(err, ErrMissingFieldTypes) {
+		t.Fatalf("WriteStructValues() error = %v, want ErrMissingFieldTypes", err)
+	}
+}
+
+func TestWriteStructValuesNilFieldType(t *testing.T) {
+	t.Parallel()
+
+	rowType := &sppb.StructType{
+		Fields: []*sppb.StructType_Field{
+			{Name: "id", Type: nil},
+		},
+	}
+	w := NewSQLInsertWriter(&bytes.Buffer{}, "users", WithRowType(rowType))
+	err := w.WriteStructValues([]*structpb.Value{structpb.NewStringValue("1")})
+	if !errors.Is(err, spanvalue.ErrNilStructField) {
+		t.Fatalf("WriteStructValues() error = %v, want ErrNilStructField", err)
+	}
+}
+
+func TestDelimitedWriterPrepareColumnNamesAfterConstruction(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewDelimitedWriter(&out, ',')
+	if err := w.PrepareColumnNames([]string{"name", "age"}); err != nil {
+		t.Fatalf("PrepareColumnNames() error = %v", err)
+	}
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.StringValue("Ada"),
+		gcvctor.Int64Value(30),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	flushDelimitedWriter(t, w)
+
+	want := "name,age\nAda,30\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output mismatch (-want +got):\n%s", diff)
+	}
+
+	err := w.PrepareColumnNames([]string{"name", "score"})
+	if !errors.Is(err, ErrColumnNamesMismatch) {
+		t.Fatalf("PrepareColumnNames() mismatch error = %v, want ErrColumnNamesMismatch", err)
+	}
+}
+
+func TestSQLInsertWriterPrepareColumnNamesRecoversAfterQuoteError(t *testing.T) {
+	t.Parallel()
+
+	w := NewSQLInsertWriter(&bytes.Buffer{}, "users")
+	err := w.PrepareColumnNames([]string{""})
+	if !errors.Is(err, ErrEmptyColumnName) {
+		t.Fatalf("PrepareColumnNames() error = %v, want ErrEmptyColumnName", err)
+	}
+	if err := w.PrepareColumnNames([]string{"id"}); err != nil {
+		t.Fatalf("PrepareColumnNames() retry error = %v", err)
+	}
+	if w.quotedColumnNames == "" {
+		t.Fatal("quotedColumnNames not cached after successful PrepareColumnNames")
+	}
+}
+
+func TestSQLInsertWriterPrepareRowTypeCachesQuotedColumns(t *testing.T) {
+	t.Parallel()
+
+	w := NewSQLInsertWriter(&bytes.Buffer{}, "users")
+	if err := w.PrepareRowType(rowTypeWithColumnNames("id", "name")); err != nil {
+		t.Fatalf("PrepareRowType() error = %v", err)
+	}
+	if w.quotedColumnNames == "" {
+		t.Fatal("quotedColumnNames not cached after PrepareRowType")
+	}
+}
+
+func TestPrepareRowTypeAfterConstruction(t *testing.T) {
+	t.Parallel()
+
+	rowType := rowTypeWithColumnNames("id", "name")
+	var delimited, jsonl bytes.Buffer
+	dw := NewDelimitedWriter(&delimited, ',')
+	jw := NewJSONLWriter(&jsonl)
+	if err := dw.PrepareRowType(rowType); err != nil {
+		t.Fatalf("DelimitedWriter.PrepareRowType() error = %v", err)
+	}
+	if err := jw.PrepareRowType(rowType); err != nil {
+		t.Fatalf("JSONLWriter.PrepareRowType() error = %v", err)
+	}
+	if err := dw.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.StringValue("a")}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	if err := jw.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(2), gcvctor.StringValue("b")}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	flushDelimitedWriter(t, dw)
+	if want := "id,name\n1,a\n"; delimited.String() != want {
+		t.Fatalf("delimited = %q, want %q", delimited.String(), want)
+	}
+	if want := "{\"id\":2,\"name\":\"b\"}\n"; jsonl.String() != want {
+		t.Fatalf("jsonl = %q, want %q", jsonl.String(), want)
+	}
+}
+
+func TestWithRowTypeConsistentAcrossWriters(t *testing.T) {
+	t.Parallel()
+
+	rowType := rowTypeWithColumnNames("id", "name")
+	var delimited, jsonl bytes.Buffer
+	dw := NewDelimitedWriter(&delimited, ',', WithRowType(rowType))
+	jw := NewJSONLWriter(&jsonl, WithRowType(rowType))
+	if err := dw.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.StringValue("a")}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	if err := jw.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(2), gcvctor.StringValue("b")}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	flushDelimitedWriter(t, dw)
+	if want := "id,name\n1,a\n"; delimited.String() != want {
+		t.Fatalf("delimited = %q, want %q", delimited.String(), want)
+	}
+	if want := "{\"id\":2,\"name\":\"b\"}\n"; jsonl.String() != want {
+		t.Fatalf("jsonl = %q, want %q", jsonl.String(), want)
 	}
 }

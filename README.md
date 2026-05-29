@@ -60,9 +60,12 @@ return w.Flush()
 
 ## Streaming row exports
 
-The `writer` package accepts `*spanner.Row` values directly through `WriteRow`.
-Use `writer.Writer` when an adapter only needs row streaming. Use
-`writer.FlushWriter` when an adapter owns both row streaming and finalization.
+The `writer` package streams rows at several levels: `WriteRow` for
+`*spanner.Row` (Spanner client), `WriteStructValues` for `[]*structpb.Value` with
+a registered field-type schema (spannerpb + structpb at the boundary), and
+`WriteGCVs` when values are already `GenericColumnValue`. Use `writer.Writer`
+when an adapter only needs `WriteRow`. Use `writer.FlushWriter` when an adapter
+owns both row streaming and finalization.
 `DelimitedWriter` and `JSONLWriter` preserve explicit duplicate column names.
 Empty column names are the only names passed to `UnnamedFieldNamer`, and
 generated names avoid collisions with existing explicit names. Set
@@ -72,21 +75,79 @@ Call `Flush` after the final row when using `writer.FlushWriter`; see the
 `Writer`, `FlushWriter`, and `Flusher` godoc for the interface lifecycle
 contract.
 
-Constructors accept options when setup should be explicit:
+With the [Spanner client](https://pkg.go.dev/cloud.google.com/go/spanner#section-readme),
+export through a `RowIterator` with `WriteRow` and `writer.WithHeader(true)` (default).
+
+When every query returns at least one row, `iter.Do` is enough—`WriteRow` picks up
+column names from the first row and writes the header before the first data row:
 
 ```go
+iter := txn.Query(ctx, stmt)
+
 w := writer.NewDelimitedWriter(
 	out,
 	'\t',
-	writer.WithMetadata(meta),
 	writer.WithFormatter(cfg),
-	writer.WithHeader(true),
-	writer.WithUnnamedFieldNamer(nil),
+	writer.WithHeader(true), // false for headerless CSV/TSV
 )
+if err := iter.Do(func(row *spanner.Row) error {
+	return w.WriteRow(row)
+}); err != nil {
+	return err
+}
+return w.Flush()
 ```
 
-When metadata is known after construction but before rows are streamed, call
-`Prepare(metadata)` on the concrete writer. For non-streaming paths, use
+When the result may be empty but you still want a CSV/TSV header, use `iter.Next`.
+After the first `Next`, Spanner sets `iter.Metadata` (row or `iterator.Done`);
+register names with `PrepareRowType`, then stream rows. `Flush` writes a pending
+header when no data row was emitted:
+
+```go
+iter := txn.Query(ctx, stmt)
+defer iter.Stop()
+
+w := writer.NewDelimitedWriter(
+	out,
+	'\t',
+	writer.WithFormatter(cfg),
+	writer.WithHeader(true),
+)
+
+row, err := iter.Next()
+if err != nil && err != iterator.Done {
+	return err
+}
+if iter.Metadata != nil {
+	if err := w.PrepareRowType(iter.Metadata.GetRowType()); err != nil {
+		return err
+	}
+}
+if err == nil {
+	if err := w.WriteRow(row); err != nil {
+		return err
+	}
+	for {
+		row, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if err := w.WriteRow(row); err != nil {
+			return err
+		}
+	}
+}
+return w.Flush()
+```
+
+Which schema to pre-register depends on the write API (names only vs names and types);
+see `go doc writer`, section "Column names and field types".
+Delimited, JSONL, and SQL encodings differ after
+spanvalue formats each column; see the `writer` package documentation. For
+non-streaming paths, use
 `writer.RowData`, `writer.FormatDelimitedRow`, or `writer.FormatJSONLRow`
 directly. Pass the JSON field-name policy explicitly, for example:
 

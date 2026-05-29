@@ -9,22 +9,36 @@
 // names avoid collisions with existing names. DelimitedWriter buffers through
 // encoding/csv, so callers must call Flush after the final write.
 //
-// Use Writer when an adapter only needs row streaming, and FlushWriter when it
-// owns the full write lifecycle. DelimitedWriter, JSONLWriter, and SQLInsertWriter
-// implement FlushWriter. If an adapter exposes a Close method, that Close
-// method should call Flush; Flush does not close the underlying io.Writer.
+// [Writer] streams *spanner.Row values; concrete writers also offer WriteValues,
+// WriteGCVs, and WriteStructValues. [FlushWriter] adds Flush (required for buffered
+// DelimitedWriter). Flush does not close the underlying io.Writer.
 //
-// # Primary API
+// # Constructors
 //
-// [DelimitedWriter], [NewDelimitedWriter], [NewCSVWriter], [JSONLWriter],
-// [NewJSONLWriter], [SQLInsertWriter], and [NewSQLInsertWriter] stream rows.
-// [WithSQLInsertKind] selects the INSERT statement prefix. INSERT OR IGNORE and
-// INSERT OR UPDATE are valid Spanner GoogleSQL DML forms; see the INSERT section
-// in https://cloud.google.com/spanner/docs/reference/standard-sql/dml-syntax .
-// Constructors accept options such as [WithMetadata] and [WithFormatter].
-// Each writer's Prepare method initializes schema from result-set metadata
-// (for example [DelimitedWriter.Prepare]). [RowData], [FormatDelimitedRow], and
-// [FormatJSONLRow] support one-row paths.
+// [NewDelimitedWriter], [NewCSVWriter], [NewJSONLWriter], and [NewSQLInsertWriter]
+// accept [WithFormatter] and schema options below. [WithSQLInsertKind] selects the
+// INSERT prefix (see Spanner INSERT DML syntax). [RowData], [FormatDelimitedRow], and
+// [FormatJSONLRow] format a single row without a writer.
+//
+// # Column names and field types
+//
+// Each write API either supplies schema on every call or expects it in the writer:
+//
+//   - WriteRow, WriteValues: column names and GCV types per call; no registration.
+//   - WriteGCVs: register column names before the first row; types from each GCV.
+//   - WriteStructValues: register column names and field types before the first row.
+//
+// Pre-register at construction with With* or later with Prepare* on the concrete writer.
+// Names only: [WithColumnNames], PrepareColumnNames. Names and types: [WithRowType],
+// [WithMetadata], PrepareRowType. [WithMetadata] uses metadata.GetRowType(); from a
+// [cloud.google.com/go/spanner.RowIterator], Metadata is set after the first Next.
+// [DelimitedWriter.Prepare], [JSONLWriter.Prepare], and [SQLInsertWriter.Prepare] are deprecated.
+//
+// [DelimitedWriter] defaults to a CSV/TSV header once column names are known ([WithHeader]):
+// before the first data row, or on [DelimitedWriter.Flush] when no data row was written.
+// [WithHeader](false) omits the header. [DelimitedWriter.WriteHeader] forces the header earlier.
+//
+// Delimited, JSONL, and SQL encodings differ after spanvalue formats each column.
 //
 // # Compatibility constructors
 //
@@ -45,6 +59,7 @@ import (
 	"cloud.google.com/go/spanner"
 	databasepb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/apstndb/spanvalue"
 	"github.com/apstndb/spanvalue/internal"
@@ -73,11 +88,16 @@ var (
 	ErrHeaderAfterData = errors.New("header after data")
 	// ErrInvalidDelimiter reports that DelimitedWriter received an invalid delimiter.
 	ErrInvalidDelimiter = errors.New("invalid delimiter")
+	// ErrMissingFieldTypes reports that WriteStructValues requires registered field types.
+	ErrMissingFieldTypes = errors.New("missing field types schema")
+	// ErrMismatchedStructValueCount reports that WriteStructValues value count does not match the schema.
+	ErrMismatchedStructValueCount = errors.New("mismatched struct value count")
 )
 
 // Writer writes Spanner rows to an output stream.
 //
-// Writer intentionally models row streaming only. Some concrete writers also
+// WriteRow supplies column names and values on each call; see package doc
+// "Column names and field types". Writer intentionally models row streaming only. Some concrete writers also
 // implement [Flusher]; callers that own the full write lifecycle must call
 // Flush after the final row when it is available. Factories that may return a
 // buffered writer should return a concrete type or [FlushWriter], not Writer
@@ -181,21 +201,64 @@ type metadataOption struct {
 	metadata *sppb.ResultSetMetadata
 }
 
-// WithMetadata initializes a writer schema from result-set metadata.
+// WithMetadata registers names and types from metadata.GetRowType(); same as
+// [WithRowType]. Other metadata fields are ignored.
 func WithMetadata(metadata *sppb.ResultSetMetadata) Option {
 	return metadataOption{metadata: metadata}
 }
 
 func (o metadataOption) applyDelimitedOption(w *DelimitedWriter) {
-	w.setMetadata(o.metadata)
+	w.setRowType(rowTypeFromMetadata(o.metadata))
 }
 
 func (o metadataOption) applyJSONLOption(w *JSONLWriter) {
-	w.setMetadata(o.metadata)
+	w.setRowType(rowTypeFromMetadata(o.metadata))
 }
 
 func (o metadataOption) applySQLInsertOption(w *SQLInsertWriter) {
-	w.setMetadata(o.metadata)
+	w.setRowType(rowTypeFromMetadata(o.metadata))
+}
+
+type rowTypeOption struct {
+	rowType *sppb.StructType
+}
+
+// WithRowType registers column names and field types at construction.
+func WithRowType(rowType *sppb.StructType) Option {
+	return rowTypeOption{rowType: rowType}
+}
+
+func (o rowTypeOption) applyDelimitedOption(w *DelimitedWriter) {
+	w.setRowType(o.rowType)
+}
+
+func (o rowTypeOption) applyJSONLOption(w *JSONLWriter) {
+	w.setRowType(o.rowType)
+}
+
+func (o rowTypeOption) applySQLInsertOption(w *SQLInsertWriter) {
+	w.setRowType(o.rowType)
+}
+
+type columnNamesOption struct {
+	names []string
+}
+
+// WithColumnNames registers column names only and clears any registered field types.
+func WithColumnNames(names []string) Option {
+	return columnNamesOption{names: slices.Clone(names)}
+}
+
+func (o columnNamesOption) applyDelimitedOption(w *DelimitedWriter) {
+	w.setColumnNames(o.names)
+}
+
+func (o columnNamesOption) applyJSONLOption(w *JSONLWriter) {
+	w.setColumnNames(o.names)
+}
+
+func (o columnNamesOption) applySQLInsertOption(w *SQLInsertWriter) {
+	w.setColumnNames(o.names)
 }
 
 type formatterOption struct {
@@ -236,22 +299,44 @@ func (o unnamedFieldNamerOption) applyJSONLOption(w *JSONLWriter) {
 	w.UnnamedFieldNamer = o.namer
 }
 
-// WithHeader sets whether DelimitedWriter writes a header before data rows.
+// WithHeader sets whether [DelimitedWriter] emits a CSV/TSV header (default true).
+// The header is written before the first data row, or on [DelimitedWriter.Flush] if only
+// names were registered. See [DelimitedWriter.WriteHeader] to emit it earlier.
 func WithHeader(header bool) DelimitedOption {
 	return delimitedOptionFunc(func(w *DelimitedWriter) {
 		w.Header = header
 	})
 }
 
+// columnSchema holds column names for output labeling and optional field types for
+// WriteStructValues. When types is non-empty, len(types) equals len(names).
+type columnSchema struct {
+	names []string
+	types []*sppb.Type
+}
+
+func (s *columnSchema) applyRowType(rowType *sppb.StructType) {
+	s.names = columnNamesFromRowType(rowType)
+	s.types = fieldTypesFromRowType(rowType)
+}
+
+func (s *columnSchema) applyNamesOnly(names []string) {
+	s.names = slices.Clone(names)
+	s.types = nil
+}
+
 // DelimitedWriter writes rows as CSV-style delimited text. Call Flush after the final write.
+// Header controls automatic header output; see [WithHeader] and [DelimitedWriter.WriteHeader].
 type DelimitedWriter struct {
 	Formatter *spanvalue.FormatConfig
-	Header    bool
+	// Header enables a header line before the first data row when true (default).
+	// See [WithHeader].
+	Header bool
 	// Set before the first write. Once names have been resolved for the current
 	// schema, later changes do not retroactively rewrite cached header names.
 	UnnamedFieldNamer spanvalue.UnnamedFieldNamer
 
-	columnNames         []string
+	schema              columnSchema
 	resolvedColumnNames []string
 	out                 io.Writer
 	writer              *csv.Writer
@@ -296,7 +381,7 @@ func NewDelimitedWriterWithOptions(out io.Writer, delimiter rune, options ...Del
 	return NewDelimitedWriter(out, delimiter, options...)
 }
 
-// WriteRow writes one delimited row, initializing the schema from row metadata if needed.
+// WriteRow writes one delimited row; see package doc "Column names and field types".
 func (w *DelimitedWriter) WriteRow(row *spanner.Row) error {
 	columnNames, values, err := rowData(row)
 	if err != nil {
@@ -306,17 +391,48 @@ func (w *DelimitedWriter) WriteRow(row *spanner.Row) error {
 }
 
 // Prepare initializes the delimited schema from result-set metadata before the first
-// row is written. If a schema is already initialized, Prepare verifies that the
-// metadata column names match the existing schema.
+// row is written.
+//
+// Deprecated: Use [DelimitedWriter.PrepareRowType] or [DelimitedWriter.PrepareColumnNames].
 func (w *DelimitedWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
-	columnNames, err := prepareColumnNames(metadata)
+	return w.PrepareRowType(rowTypeFromMetadata(metadata))
+}
+
+// PrepareRowType registers column names and field types; same as [WithRowType].
+func (w *DelimitedWriter) PrepareRowType(rowType *sppb.StructType) error {
+	return w.prepareRowType(rowType)
+}
+
+// PrepareColumnNames registers column names only; same as [WithColumnNames].
+func (w *DelimitedWriter) PrepareColumnNames(names []string) error {
+	return w.prepareColumnNames(names)
+}
+
+func (w *DelimitedWriter) prepareRowType(rowType *sppb.StructType) error {
+	columnNames, err := prepareRowType(rowType)
 	if err != nil {
 		return err
 	}
-	return w.initOrValidateColumnNames(columnNames)
+	if err := w.initOrValidateColumnNames(columnNames); err != nil {
+		return err
+	}
+	w.setRowType(rowType)
+	return nil
 }
 
-// WriteHeader writes the delimited header once using the initialized column names.
+func (w *DelimitedWriter) prepareColumnNames(names []string) error {
+	if len(names) == 0 {
+		return ErrMissingColumnNames
+	}
+	if err := w.initOrValidateColumnNames(names); err != nil {
+		return err
+	}
+	w.setColumnNames(names)
+	return nil
+}
+
+// WriteHeader writes the CSV/TSV header once; column names must already be registered.
+// When [DelimitedWriter.Header] is true, [DelimitedWriter.Flush] also writes a pending header.
 func (w *DelimitedWriter) WriteHeader() error {
 	if w.wroteHeader {
 		return nil
@@ -329,7 +445,7 @@ func (w *DelimitedWriter) WriteHeader() error {
 	if err != nil {
 		return err
 	}
-	if len(w.columnNames) == 0 {
+	if len(w.schema.names) == 0 {
 		return ErrMissingColumnNames
 	}
 
@@ -344,6 +460,7 @@ func (w *DelimitedWriter) WriteHeader() error {
 	return nil
 }
 
+// WriteValues writes one row from column names and GCVs.
 func (w *DelimitedWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
 	if err := w.initOrValidateColumnNames(columnNames); err != nil {
 		return err
@@ -351,16 +468,17 @@ func (w *DelimitedWriter) WriteValues(columnNames []string, values []spanner.Gen
 	return w.WriteGCVs(values)
 }
 
+// WriteGCVs writes one row from GCVs; see package doc "Column names and field types".
 func (w *DelimitedWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	csvWriter, err := w.csvWriter()
 	if err != nil {
 		return err
 	}
-	if len(w.columnNames) == 0 {
+	if len(w.schema.names) == 0 {
 		return ErrMissingColumnNames
 	}
 
-	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.columnNames, values)
+	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.schema.names, values)
 	if err != nil {
 		return err
 	}
@@ -378,17 +496,32 @@ func (w *DelimitedWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	return nil
 }
 
-func (w *DelimitedWriter) setMetadata(metadata *sppb.ResultSetMetadata) {
-	w.columnNames = metadataColumnNames(metadata)
+// WriteStructValues writes one row from []*structpb.Value; see package doc
+// "Column names and field types".
+func (w *DelimitedWriter) WriteStructValues(values []*structpb.Value) error {
+	gcvs, err := gcvsFromStructValues(w.schema.types, values)
+	if err != nil {
+		return err
+	}
+	return w.WriteGCVs(gcvs)
+}
+
+func (w *DelimitedWriter) setRowType(rowType *sppb.StructType) {
+	w.schema.applyRowType(rowType)
+	w.resolvedColumnNames = nil
+}
+
+func (w *DelimitedWriter) setColumnNames(names []string) {
+	w.schema.applyNamesOnly(names)
 	w.resolvedColumnNames = nil
 }
 
 func (w *DelimitedWriter) initOrValidateColumnNames(columnNames []string) error {
-	initialized := len(w.columnNames) == 0
-	if err := initOrValidateColumnNames(&w.columnNames, columnNames); err != nil {
+	initialized := len(w.schema.names) == 0
+	if err := initOrValidateColumnNames(&w.schema.names, columnNames); err != nil {
 		return err
 	}
-	if initialized && len(w.columnNames) > 0 {
+	if initialized && len(w.schema.names) > 0 {
 		w.resolvedColumnNames = nil
 	}
 	return nil
@@ -427,9 +560,18 @@ func validDelimiter(delimiter rune) bool {
 		delimiter != utf8.RuneError
 }
 
-// Flush flushes buffered delimited data to the underlying writer. It does not
-// close the underlying writer.
+// Flush flushes buffered delimited data to the underlying writer. When [DelimitedWriter.Header]
+// is true, column names are registered, and no header was written yet, Flush writes the
+// header first (including zero-row exports). Flush does not close the underlying writer.
 func (w *DelimitedWriter) Flush() error {
+	if w.Header && !w.wroteHeader {
+		if len(w.schema.names) == 0 {
+			return ErrMissingColumnNames
+		}
+		if err := w.WriteHeader(); err != nil {
+			return err
+		}
+	}
 	if w.writer == nil {
 		return nil
 	}
@@ -438,13 +580,13 @@ func (w *DelimitedWriter) Flush() error {
 }
 
 func (w *DelimitedWriter) resolvedNames() ([]string, error) {
-	if len(w.resolvedColumnNames) != 0 || len(w.columnNames) == 0 {
+	if len(w.resolvedColumnNames) != 0 || len(w.schema.names) == 0 {
 		return w.resolvedColumnNames, nil
 	}
 	if w.UnnamedFieldNamer == nil {
-		return w.columnNames, nil
+		return w.schema.names, nil
 	}
-	resolvedNames, err := internal.ResolveColumnNames(w.columnNames, w.UnnamedFieldNamer)
+	resolvedNames, err := internal.ResolveColumnNames(w.schema.names, w.UnnamedFieldNamer)
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +601,7 @@ type JSONLWriter struct {
 	// schema, later changes do not retroactively rewrite cached object keys.
 	UnnamedFieldNamer spanvalue.UnnamedFieldNamer
 
-	columnNames         []string
+	schema              columnSchema
 	resolvedColumnNames []string
 	marshaledKeys       [][]byte
 	out                 io.Writer
@@ -491,6 +633,7 @@ func newJSONLWriter(out io.Writer) *JSONLWriter {
 	}
 }
 
+// WriteRow writes one JSONL row. Does not require With* or Prepare*; see [DelimitedWriter.WriteRow].
 func (w *JSONLWriter) WriteRow(row *spanner.Row) error {
 	columnNames, values, err := rowData(row)
 	if err != nil {
@@ -502,14 +645,47 @@ func (w *JSONLWriter) WriteRow(row *spanner.Row) error {
 // Prepare initializes the JSONL schema from result-set metadata before the first
 // row is written. If a schema is already initialized, Prepare verifies that the
 // metadata column names match the existing schema.
+//
+// Deprecated: Use [JSONLWriter.PrepareRowType], [JSONLWriter.PrepareColumnNames],
+// [WithRowType], [WithColumnNames], or [WithMetadata].
 func (w *JSONLWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
-	columnNames, err := prepareColumnNames(metadata)
+	return w.PrepareRowType(rowTypeFromMetadata(metadata))
+}
+
+// PrepareRowType registers names and field types; see [DelimitedWriter.PrepareRowType].
+func (w *JSONLWriter) PrepareRowType(rowType *sppb.StructType) error {
+	return w.prepareRowType(rowType)
+}
+
+// PrepareColumnNames registers column names; see [DelimitedWriter.PrepareColumnNames].
+func (w *JSONLWriter) PrepareColumnNames(names []string) error {
+	return w.prepareColumnNames(names)
+}
+
+func (w *JSONLWriter) prepareRowType(rowType *sppb.StructType) error {
+	columnNames, err := prepareRowType(rowType)
 	if err != nil {
 		return err
 	}
-	return w.initOrValidateColumnNames(columnNames)
+	if err := w.initOrValidateColumnNames(columnNames); err != nil {
+		return err
+	}
+	w.setRowType(rowType)
+	return nil
 }
 
+func (w *JSONLWriter) prepareColumnNames(names []string) error {
+	if len(names) == 0 {
+		return ErrMissingColumnNames
+	}
+	if err := w.initOrValidateColumnNames(names); err != nil {
+		return err
+	}
+	w.setColumnNames(names)
+	return nil
+}
+
+// WriteValues writes one row; see [DelimitedWriter.WriteValues].
 func (w *JSONLWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
 	if err := w.initOrValidateColumnNames(columnNames); err != nil {
 		return err
@@ -517,14 +693,24 @@ func (w *JSONLWriter) WriteValues(columnNames []string, values []spanner.Generic
 	return w.WriteGCVs(values)
 }
 
+// WriteStructValues writes one row; see [DelimitedWriter.WriteStructValues].
+func (w *JSONLWriter) WriteStructValues(values []*structpb.Value) error {
+	gcvs, err := gcvsFromStructValues(w.schema.types, values)
+	if err != nil {
+		return err
+	}
+	return w.WriteGCVs(gcvs)
+}
+
+// WriteGCVs writes one row; see [DelimitedWriter.WriteGCVs].
 func (w *JSONLWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	if w.out == nil {
 		return ErrNilOutputWriter
 	}
-	if len(w.columnNames) == 0 {
+	if len(w.schema.names) == 0 {
 		return ErrMissingColumnNames
 	}
-	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.columnNames, values)
+	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.schema.names, values)
 	if err != nil {
 		return err
 	}
@@ -549,18 +735,24 @@ func (w *JSONLWriter) Flush() error {
 	return nil
 }
 
-func (w *JSONLWriter) setMetadata(metadata *sppb.ResultSetMetadata) {
-	w.columnNames = metadataColumnNames(metadata)
+func (w *JSONLWriter) setRowType(rowType *sppb.StructType) {
+	w.schema.applyRowType(rowType)
+	w.resolvedColumnNames = nil
+	w.marshaledKeys = nil
+}
+
+func (w *JSONLWriter) setColumnNames(names []string) {
+	w.schema.applyNamesOnly(names)
 	w.resolvedColumnNames = nil
 	w.marshaledKeys = nil
 }
 
 func (w *JSONLWriter) initOrValidateColumnNames(columnNames []string) error {
-	initialized := len(w.columnNames) == 0
-	if err := initOrValidateColumnNames(&w.columnNames, columnNames); err != nil {
+	initialized := len(w.schema.names) == 0
+	if err := initOrValidateColumnNames(&w.schema.names, columnNames); err != nil {
 		return err
 	}
-	if initialized && len(w.columnNames) > 0 {
+	if initialized && len(w.schema.names) > 0 {
 		w.resolvedColumnNames = nil
 		w.marshaledKeys = nil
 	}
@@ -575,13 +767,13 @@ func (w *JSONLWriter) formatter() *spanvalue.FormatConfig {
 }
 
 func (w *JSONLWriter) resolvedNames() ([]string, error) {
-	if len(w.resolvedColumnNames) != 0 || len(w.columnNames) == 0 {
+	if len(w.resolvedColumnNames) != 0 || len(w.schema.names) == 0 {
 		return w.resolvedColumnNames, nil
 	}
 	if w.UnnamedFieldNamer == nil {
-		return w.columnNames, nil
+		return w.schema.names, nil
 	}
-	resolvedNames, err := internal.ResolveColumnNames(w.columnNames, w.UnnamedFieldNamer)
+	resolvedNames, err := internal.ResolveColumnNames(w.schema.names, w.UnnamedFieldNamer)
 	if err != nil {
 		return nil, err
 	}
@@ -607,7 +799,7 @@ type SQLInsertWriter struct {
 	Formatter *spanvalue.FormatConfig
 
 	insertKind        SQLInsertKind
-	columnNames       []string
+	schema            columnSchema
 	quotedColumnNames string
 	quotedTable       string
 	quotedTableInput  string
@@ -651,13 +843,47 @@ func (w *SQLInsertWriter) WriteRow(row *spanner.Row) error {
 // Prepare initializes the SQL INSERT schema from result-set metadata before the
 // first row is written. If a schema is already initialized, Prepare verifies
 // that the metadata column names match the existing schema.
+//
+// Deprecated: Use [SQLInsertWriter.PrepareRowType], [SQLInsertWriter.PrepareColumnNames],
+// [WithRowType], [WithColumnNames], or [WithMetadata].
 func (w *SQLInsertWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
-	columnNames, err := prepareColumnNames(metadata)
+	return w.PrepareRowType(rowTypeFromMetadata(metadata))
+}
+
+// PrepareRowType initializes the SQL INSERT schema from a row type before the first row is written.
+// When the row type comes from a [cloud.google.com/go/spanner.RowIterator], use
+// iter.Metadata.GetRowType after the first Next.
+func (w *SQLInsertWriter) PrepareRowType(rowType *sppb.StructType) error {
+	return w.prepareRowType(rowType)
+}
+
+// PrepareColumnNames initializes the SQL INSERT schema from column names before the first row is written.
+func (w *SQLInsertWriter) PrepareColumnNames(names []string) error {
+	return w.prepareColumnNames(names)
+}
+
+func (w *SQLInsertWriter) prepareRowType(rowType *sppb.StructType) error {
+	columnNames, err := prepareRowType(rowType)
 	if err != nil {
 		return err
 	}
-	_, err = w.initOrValidateQuotedColumns(columnNames)
-	return err
+	if _, err := w.initOrValidateQuotedColumns(columnNames); err != nil {
+		return err
+	}
+	w.schema.names = columnNamesFromRowType(rowType)
+	w.schema.types = fieldTypesFromRowType(rowType)
+	return nil
+}
+
+func (w *SQLInsertWriter) prepareColumnNames(names []string) error {
+	if len(names) == 0 {
+		return ErrMissingColumnNames
+	}
+	if _, err := w.initOrValidateQuotedColumns(names); err != nil {
+		return err
+	}
+	w.schema.types = nil
+	return nil
 }
 
 func (w *SQLInsertWriter) WriteValues(columnNames []string, values []spanner.GenericColumnValue) error {
@@ -666,6 +892,16 @@ func (w *SQLInsertWriter) WriteValues(columnNames []string, values []spanner.Gen
 		return err
 	}
 	return w.writeGCVs(values, quotedColumns)
+}
+
+// WriteStructValues writes one row from structpb values using the field-type schema
+// registered by [WithRowType], [WithMetadata], or [PrepareRowType].
+func (w *SQLInsertWriter) WriteStructValues(values []*structpb.Value) error {
+	gcvs, err := gcvsFromStructValues(w.schema.types, values)
+	if err != nil {
+		return err
+	}
+	return w.WriteGCVs(gcvs)
 }
 
 func (w *SQLInsertWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
@@ -693,7 +929,7 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 	if err != nil {
 		return err
 	}
-	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.columnNames, values)
+	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.schema.names, values)
 	if err != nil {
 		return err
 	}
@@ -715,8 +951,13 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 	return err
 }
 
-func (w *SQLInsertWriter) setMetadata(metadata *sppb.ResultSetMetadata) {
-	w.columnNames = metadataColumnNames(metadata)
+func (w *SQLInsertWriter) setRowType(rowType *sppb.StructType) {
+	w.schema.applyRowType(rowType)
+	w.quotedColumnNames = ""
+}
+
+func (w *SQLInsertWriter) setColumnNames(names []string) {
+	w.schema.applyNamesOnly(names)
 	w.quotedColumnNames = ""
 }
 
@@ -731,7 +972,7 @@ func (w *SQLInsertWriter) initOrValidateQuotedColumns(columnNames []string) (str
 	if len(columnNames) == 0 && w.quotedColumnNames != "" {
 		return w.quotedColumnNames, nil
 	}
-	names, err := validatedColumnNames(w.columnNames, columnNames)
+	names, err := validatedColumnNames(w.schema.names, columnNames)
 	if err != nil {
 		return "", err
 	}
@@ -739,8 +980,8 @@ func (w *SQLInsertWriter) initOrValidateQuotedColumns(columnNames []string) (str
 	if err != nil {
 		return "", err
 	}
-	if len(w.columnNames) == 0 {
-		w.columnNames = names
+	if len(w.schema.names) == 0 {
+		w.schema.names = names
 	}
 	w.quotedColumnNames = strings.Join(quotedColumns, ", ")
 	return w.quotedColumnNames, nil
@@ -847,24 +1088,72 @@ func jsonFormatter(fc *spanvalue.FormatConfig) *spanvalue.FormatConfig {
 	return spanvalue.JSONFormatConfig()
 }
 
-func prepareColumnNames(metadata *sppb.ResultSetMetadata) ([]string, error) {
-	columnNames := metadataColumnNames(metadata)
+func prepareRowType(rowType *sppb.StructType) ([]string, error) {
+	columnNames := columnNamesFromRowType(rowType)
 	if len(columnNames) == 0 {
 		return nil, ErrMissingColumnNames
 	}
 	return columnNames, nil
 }
 
-func metadataColumnNames(metadata *sppb.ResultSetMetadata) []string {
-	if metadata == nil || metadata.GetRowType() == nil {
+func rowTypeFromMetadata(metadata *sppb.ResultSetMetadata) *sppb.StructType {
+	if metadata == nil {
 		return nil
 	}
-	fields := metadata.GetRowType().GetFields()
+	return metadata.GetRowType()
+}
+
+func columnNamesFromRowType(rowType *sppb.StructType) []string {
+	if rowType == nil {
+		return nil
+	}
+	fields := rowType.GetFields()
 	names := make([]string, len(fields))
 	for i, field := range fields {
-		names[i] = field.GetName()
+		if field != nil {
+			names[i] = field.GetName()
+		}
 	}
 	return names
+}
+
+func fieldTypesFromRowType(rowType *sppb.StructType) []*sppb.Type {
+	if rowType == nil {
+		return nil
+	}
+	fields := rowType.GetFields()
+	types := make([]*sppb.Type, len(fields))
+	for i, field := range fields {
+		if field != nil {
+			types[i] = field.GetType()
+		}
+	}
+	return types
+}
+
+func gcvFromTypeValue(typ *sppb.Type, value *structpb.Value) (spanner.GenericColumnValue, error) {
+	if typ == nil {
+		return spanner.GenericColumnValue{}, spanvalue.ErrNilStructField
+	}
+	return spanner.GenericColumnValue{Type: typ, Value: value}, nil
+}
+
+func gcvsFromStructValues(types []*sppb.Type, values []*structpb.Value) ([]spanner.GenericColumnValue, error) {
+	if len(types) == 0 {
+		return nil, ErrMissingFieldTypes
+	}
+	if len(values) != len(types) {
+		return nil, fmt.Errorf("%w: got %d values for %d fields", ErrMismatchedStructValueCount, len(values), len(types))
+	}
+	gcvs := make([]spanner.GenericColumnValue, len(values))
+	for i, value := range values {
+		gcv, err := gcvFromTypeValue(types[i], value)
+		if err != nil {
+			return nil, fmt.Errorf("column %d: %w", i, err)
+		}
+		gcvs[i] = gcv
+	}
+	return gcvs, nil
 }
 
 // initOrValidateColumnNames initializes dst from the first non-empty
