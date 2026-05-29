@@ -168,6 +168,13 @@ func BytesBasedValueOf(typ *sppb.Type, v []byte) spanner.GenericColumnValue {
 
 // StringBasedValueFromCode constructs a GenericColumnValue for a simple scalar type code
 // with a string wire payload.
+//
+// For [sppb.TypeCode_NUMERIC] and NUMERIC with [sppb.TypeAnnotationCode_PG_NUMERIC], v must
+// already be the canonical wire string Spanner uses (for GoogleSQL NUMERIC, the same form as
+// [cloud.google.com/go/spanner.NumericString] on a [*big.Rat]). spanvalue formatters read the
+// wire string as-is and do not re-normalize. Prefer [NumericValue], [PGNumericValue], or values
+// from the Spanner client (including the emulator and Spanner Omni) over passing arbitrary
+// decimals here.
 func StringBasedValueFromCode(code sppb.TypeCode, v string) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(code),
@@ -205,7 +212,8 @@ func TimestampStringValue(v string) (spanner.GenericColumnValue, error) {
 	return TimestampValue(ts.UTC()), nil
 }
 
-// NumericValue returns a NUMERIC GenericColumnValue.
+// NumericValue returns a NUMERIC GenericColumnValue with a canonical wire string from
+// [cloud.google.com/go/spanner.NumericString].
 // A nil v returns a typed SQL NULL NUMERIC for backward compatibility; use
 // [NumericValueChecked] to reject nil input with [ErrNilNumeric].
 func NumericValue(v *big.Rat) spanner.GenericColumnValue {
@@ -254,7 +262,8 @@ func JSONValue(v any) (spanner.GenericColumnValue, error) {
 }
 
 // PGNumericValue returns a PostgreSQL-dialect NUMERIC GenericColumnValue
-// ([sppb.TypeAnnotationCode_PG_NUMERIC]).
+// ([sppb.TypeAnnotationCode_PG_NUMERIC]) with a canonical wire string from
+// [cloud.google.com/go/spanner.NumericString].
 // A nil v returns a typed SQL NULL PG NUMERIC for backward compatibility; use
 // [PGNumericValueChecked] to reject nil input with [ErrNilNumeric].
 func PGNumericValue(v *big.Rat) spanner.GenericColumnValue {

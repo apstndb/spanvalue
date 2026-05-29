@@ -15,6 +15,9 @@ func SimpleFormatConfig() *FormatConfig {
 			FormatStructParen: FormatTupleStruct,
 		},
 		FormatNullable: formatNullableValueSimple,
+		FormatComplexPlugins: []FormatComplexFunc{
+			FormatSimpleValue,
+		},
 	}
 }
 
