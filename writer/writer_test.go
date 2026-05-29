@@ -1062,6 +1062,51 @@ func TestFormatDelimitedValuesInvalidDelimiter(t *testing.T) {
 	}
 }
 
+func TestDelimitedWriterFlushWritesHeaderWithNoRows(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewDelimitedWriter(&out, ',', WithColumnNames([]string{"id", "name"}), WithHeader(true))
+	if err := w.Flush(); err != nil {
+		t.Fatalf("Flush() error = %v", err)
+	}
+
+	want := "id,name\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestDelimitedWriterFlushDoesNotDuplicateHeader(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewDelimitedWriter(&out, ',', WithColumnNames([]string{"id", "name"}), WithHeader(true))
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.Int64Value(1),
+		gcvctor.StringValue("a"),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	if err := w.Flush(); err != nil {
+		t.Fatalf("Flush() error = %v", err)
+	}
+
+	want := "id,name\n1,a\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestDelimitedWriterFlushWithoutColumnNames(t *testing.T) {
+	t.Parallel()
+
+	err := NewDelimitedWriter(&bytes.Buffer{}, ',', WithHeader(true)).Flush()
+	if !errors.Is(err, ErrMissingColumnNames) {
+		t.Fatalf("Flush() error = %v, want ErrMissingColumnNames", err)
+	}
+}
+
 func TestWithColumnNamesHeaderlessDelimited(t *testing.T) {
 	t.Parallel()
 

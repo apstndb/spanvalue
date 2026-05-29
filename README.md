@@ -76,9 +76,10 @@ Call `Flush` after the final row when using `writer.FlushWriter`; see the
 contract.
 
 With the [Spanner client](https://pkg.go.dev/cloud.google.com/go/spanner#section-readme),
-stream `Query` or `Read` results with `WriteRow` (no `With*` / `Prepare*` when rows
-are present; `WithHeader(true)` writes the CSV/TSV header from the first row—see
-`go doc writer` for zero-row header exports):
+export through a `RowIterator` with `WriteRow` and `writer.WithHeader(true)` (default).
+
+When every query returns at least one row, `iter.Do` is enough—`WriteRow` picks up
+column names from the first row and writes the header before the first data row:
 
 ```go
 iter := txn.Query(ctx, stmt)
@@ -93,6 +94,51 @@ if err := iter.Do(func(row *spanner.Row) error {
 	return w.WriteRow(row)
 }); err != nil {
 	return err
+}
+return w.Flush()
+```
+
+When the result may be empty but you still want a CSV/TSV header, use `iter.Next`.
+After the first `Next`, Spanner sets `iter.Metadata` (row or `iterator.Done`);
+register names with `PrepareRowType`, then stream rows. `Flush` writes a pending
+header when no data row was emitted:
+
+```go
+iter := txn.Query(ctx, stmt)
+defer iter.Stop()
+
+w := writer.NewDelimitedWriter(
+	out,
+	'\t',
+	writer.WithFormatter(cfg),
+	writer.WithHeader(true),
+)
+
+row, err := iter.Next()
+if err != nil && err != iterator.Done {
+	return err
+}
+if iter.Metadata != nil {
+	if err := w.PrepareRowType(iter.Metadata.GetRowType()); err != nil {
+		return err
+	}
+}
+if err == nil {
+	if err := w.WriteRow(row); err != nil {
+		return err
+	}
+	for {
+		row, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if err := w.WriteRow(row); err != nil {
+			return err
+		}
+	}
 }
 return w.Flush()
 ```

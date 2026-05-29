@@ -34,9 +34,9 @@
 // [cloud.google.com/go/spanner.RowIterator], Metadata is set after the first Next.
 // [DelimitedWriter.Prepare] is deprecated.
 //
-// [DelimitedWriter] defaults to a CSV/TSV header before the first data row once names
-// are known ([WithHeader]). With no data rows, register names then [DelimitedWriter.WriteHeader].
-// [WithHeader](false) omits the automatic header.
+// [DelimitedWriter] defaults to a CSV/TSV header once column names are known ([WithHeader]):
+// before the first data row, or on [DelimitedWriter.Flush] when no data row was written.
+// [WithHeader](false) omits the header. [DelimitedWriter.WriteHeader] forces the header earlier.
 //
 // Delimited, JSONL, and SQL encodings differ after spanvalue formats each column.
 //
@@ -299,8 +299,9 @@ func (o unnamedFieldNamerOption) applyJSONLOption(w *JSONLWriter) {
 	w.UnnamedFieldNamer = o.namer
 }
 
-// WithHeader sets whether [DelimitedWriter] writes a header before the first data row
-// (default true). With no data rows, register column names then call [DelimitedWriter.WriteHeader].
+// WithHeader sets whether [DelimitedWriter] emits a CSV/TSV header (default true).
+// The header is written before the first data row, or on [DelimitedWriter.Flush] if only
+// names were registered. See [DelimitedWriter.WriteHeader] to emit it earlier.
 func WithHeader(header bool) DelimitedOption {
 	return delimitedOptionFunc(func(w *DelimitedWriter) {
 		w.Header = header
@@ -431,6 +432,7 @@ func (w *DelimitedWriter) prepareColumnNames(names []string) error {
 }
 
 // WriteHeader writes the CSV/TSV header once; column names must already be registered.
+// When [DelimitedWriter.Header] is true, [DelimitedWriter.Flush] also writes a pending header.
 func (w *DelimitedWriter) WriteHeader() error {
 	if w.wroteHeader {
 		return nil
@@ -558,9 +560,18 @@ func validDelimiter(delimiter rune) bool {
 		delimiter != utf8.RuneError
 }
 
-// Flush flushes buffered delimited data to the underlying writer. It does not
-// close the underlying writer.
+// Flush flushes buffered delimited data to the underlying writer. When [DelimitedWriter.Header]
+// is true, column names are registered, and no header was written yet, Flush writes the
+// header first (including zero-row exports). Flush does not close the underlying writer.
 func (w *DelimitedWriter) Flush() error {
+	if w.Header && !w.wroteHeader {
+		if len(w.schema.names) == 0 {
+			return ErrMissingColumnNames
+		}
+		if err := w.WriteHeader(); err != nil {
+			return err
+		}
+	}
 	if w.writer == nil {
 		return nil
 	}
