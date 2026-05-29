@@ -1170,6 +1170,18 @@ func TestDelimitedWriterPrepareColumnNames(t *testing.T) {
 	}
 }
 
+func TestSQLInsertWriterPrepareRowTypeCachesQuotedColumns(t *testing.T) {
+	t.Parallel()
+
+	w := NewSQLInsertWriter(&bytes.Buffer{}, "users")
+	if err := w.PrepareRowType(rowTypeWithColumnNames("id", "name")); err != nil {
+		t.Fatalf("PrepareRowType() error = %v", err)
+	}
+	if w.quotedColumnNames == "" {
+		t.Fatal("quotedColumnNames not cached after PrepareRowType")
+	}
+}
+
 func TestPrepareRowTypeConsistentAcrossWriters(t *testing.T) {
 	t.Parallel()
 
