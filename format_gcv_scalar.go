@@ -1,7 +1,6 @@
 package spanvalue
 
 import (
-	"encoding/base64"
 	"fmt"
 	"math"
 	"reflect"
@@ -136,29 +135,18 @@ func formatGCVScalarSimple(gcv spanner.GenericColumnValue) (string, error) {
 	switch gcv.Type.GetCode() {
 	case sppb.TypeCode_BOOL:
 		return strconv.FormatBool(gcv.Value.GetBoolValue()), nil
-	case sppb.TypeCode_INT64, sppb.TypeCode_ENUM:
+	case sppb.TypeCode_INT64, sppb.TypeCode_ENUM, sppb.TypeCode_STRING,
+		sppb.TypeCode_TIMESTAMP, sppb.TypeCode_DATE, sppb.TypeCode_JSON,
+		sppb.TypeCode_INTERVAL, sppb.TypeCode_UUID:
 		return gcv.Value.GetStringValue(), nil
 	case sppb.TypeCode_FLOAT32:
 		return formatFloatSimple(gcv, 32)
 	case sppb.TypeCode_FLOAT64:
 		return formatFloatSimple(gcv, 64)
-	case sppb.TypeCode_STRING:
-		return gcv.Value.GetStringValue(), nil
 	case sppb.TypeCode_BYTES, sppb.TypeCode_PROTO:
-		return readableStringFromBytesWire(gcv)
-	case sppb.TypeCode_TIMESTAMP:
-		return gcv.Value.GetStringValue(), nil
-	case sppb.TypeCode_DATE:
-		return gcv.Value.GetStringValue(), nil
+		return internal.ReadableStringFromBase64Wire(gcv.Value.GetStringValue())
 	case sppb.TypeCode_NUMERIC:
 		return numericWireString(gcv), nil
-	case sppb.TypeCode_JSON:
-		if gcv.Type.GetTypeAnnotation() == sppb.TypeAnnotationCode_PG_JSONB {
-			return pgJSONBString(gcv)
-		}
-		return gcv.Value.GetStringValue(), nil
-	case sppb.TypeCode_INTERVAL, sppb.TypeCode_UUID:
-		return gcv.Value.GetStringValue(), nil
 	case sppb.TypeCode_TYPE_CODE_UNSPECIFIED:
 		fallthrough
 	default:
@@ -194,7 +182,7 @@ func formatGCVScalarLiteral(gcv spanner.GenericColumnValue) (string, error) {
 	case sppb.TypeCode_STRING:
 		return internal.ToStringLiteral(gcv.Value.GetStringValue()), nil
 	case sppb.TypeCode_BYTES, sppb.TypeCode_PROTO:
-		b, err := bytesFromGCVString(gcv)
+		b, err := internal.DecodeBase64Wire(gcv.Value.GetStringValue())
 		if err != nil {
 			return "", err
 		}
@@ -206,14 +194,8 @@ func formatGCVScalarLiteral(gcv spanner.GenericColumnValue) (string, error) {
 	case sppb.TypeCode_NUMERIC:
 		return stringBasedLiteral("NUMERIC", numericWireString(gcv)), nil
 	case sppb.TypeCode_JSON:
-		if gcv.Type.GetTypeAnnotation() == sppb.TypeAnnotationCode_PG_JSONB {
-			s, err := pgJSONBString(gcv)
-			if err != nil {
-				return "", err
-			}
-			return stringBasedLiteral("JSON", s), nil
-		}
-		return stringBasedLiteral("JSON", gcv.Value.GetStringValue()), nil
+		s := gcv.Value.GetStringValue()
+		return stringBasedLiteral("JSON", s), nil
 	case sppb.TypeCode_INTERVAL:
 		return stringLiteralCast("INTERVAL", gcv.Value.GetStringValue()), nil
 	case sppb.TypeCode_UUID:
@@ -232,29 +214,18 @@ func formatGCVScalarSpannerCLI(gcv spanner.GenericColumnValue) (string, error) {
 	switch gcv.Type.GetCode() {
 	case sppb.TypeCode_BOOL:
 		return strconv.FormatBool(gcv.Value.GetBoolValue()), nil
-	case sppb.TypeCode_INT64, sppb.TypeCode_ENUM:
+	case sppb.TypeCode_INT64, sppb.TypeCode_ENUM, sppb.TypeCode_STRING,
+		sppb.TypeCode_BYTES, sppb.TypeCode_PROTO,
+		sppb.TypeCode_TIMESTAMP, sppb.TypeCode_DATE,
+		sppb.TypeCode_INTERVAL, sppb.TypeCode_UUID:
 		return gcv.Value.GetStringValue(), nil
 	case sppb.TypeCode_FLOAT32:
 		return formatFloatSpannerCLI(gcv, 32)
 	case sppb.TypeCode_FLOAT64:
 		return formatFloatSpannerCLI(gcv, 64)
-	case sppb.TypeCode_STRING:
-		return gcv.Value.GetStringValue(), nil
-	case sppb.TypeCode_BYTES, sppb.TypeCode_PROTO:
-		// Wire is base64; Spanner CLI output is the same encoding.
-		return gcv.Value.GetStringValue(), nil
-	case sppb.TypeCode_TIMESTAMP:
-		return gcv.Value.GetStringValue(), nil
-	case sppb.TypeCode_DATE:
-		return gcv.Value.GetStringValue(), nil
 	case sppb.TypeCode_NUMERIC:
 		return trimSpannerCLINumericFraction(numericWireString(gcv)), nil
 	case sppb.TypeCode_JSON:
-		if gcv.Type.GetTypeAnnotation() == sppb.TypeAnnotationCode_PG_JSONB {
-			return pgJSONBString(gcv)
-		}
-		return gcv.Value.GetStringValue(), nil
-	case sppb.TypeCode_INTERVAL, sppb.TypeCode_UUID:
 		return gcv.Value.GetStringValue(), nil
 	case sppb.TypeCode_TYPE_CODE_UNSPECIFIED:
 		fallthrough
@@ -336,21 +307,9 @@ func gcvFloat32(v *structpb.Value) (float32, error) {
 	}
 }
 
-func readableStringFromBytesWire(gcv spanner.GenericColumnValue) (string, error) {
-	return internal.ReadableStringFromBase64Wire(gcv.Value.GetStringValue())
-}
-
-func bytesFromGCVString(gcv spanner.GenericColumnValue) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(gcv.Value.GetStringValue())
-}
-
 // numericWireString returns the NUMERIC string wire payload as-is. Spanner, Spanner Omni, and the
 // emulator already emit canonical decimal strings; [gcvctor.NumericValue] and friends store the
 // same shape. Normalizing via big.Rat is the constructor's job, not spanvalue formatting.
 func numericWireString(gcv spanner.GenericColumnValue) string {
 	return gcv.Value.GetStringValue()
-}
-
-func pgJSONBString(gcv spanner.GenericColumnValue) (string, error) {
-	return gcv.Value.GetStringValue(), nil
 }

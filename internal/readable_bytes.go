@@ -75,11 +75,11 @@ func base64WireInput(wire string) []byte {
 	return unsafe.Slice(unsafe.StringData(wire), len(wire))
 }
 
-// ReadableStringFromBase64Wire decodes a Spanner BYTES/PROTO base64 wire string and
-// formats the payload with [ReadableBytesString].
-func ReadableStringFromBase64Wire(wire string) (string, error) {
+// DecodeBase64Wire decodes a Spanner BYTES/PROTO base64 wire string.
+// The returned slice is owned by the caller (not pooled).
+func DecodeBase64Wire(wire string) ([]byte, error) {
 	if wire == "" {
-		return "", nil
+		return nil, nil
 	}
 
 	n := base64.StdEncoding.DecodedLen(len(wire))
@@ -90,22 +90,21 @@ func ReadableStringFromBase64Wire(wire string) (string, error) {
 	} else {
 		buf = buf[:n]
 	}
+	defer putDecodeBuf(bp, buf)
 
 	nw, err := base64.StdEncoding.Decode(buf, base64WireInput(wire))
 	if err != nil {
-		putDecodeBuf(bp, buf)
+		return nil, err
+	}
+	return append([]byte(nil), buf[:nw]...), nil
+}
+
+// ReadableStringFromBase64Wire decodes a Spanner BYTES/PROTO base64 wire string and
+// formats the payload with [ReadableBytesString].
+func ReadableStringFromBase64Wire(wire string) (string, error) {
+	b, err := DecodeBase64Wire(wire)
+	if err != nil {
 		return "", err
 	}
-	decoded := buf[:nw]
-
-	if isReadableASCII(decoded) {
-		out := string(decoded)
-		putDecodeBuf(bp, buf)
-		return out, nil
-	}
-
-	out := make([]byte, 0, nw)
-	out = appendReadableEscaped(out, decoded)
-	putDecodeBuf(bp, buf)
-	return string(out), nil
+	return ReadableBytesString(b), nil
 }
