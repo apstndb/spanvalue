@@ -66,6 +66,15 @@ a registered field-type schema (spannerpb + structpb at the boundary), and
 `WriteGCVs` when values are already `GenericColumnValue`. Use `writer.Writer`
 when an adapter only needs `WriteRow`. Use `writer.FlushWriter` when an adapter
 owns both row streaming and finalization.
+
+**Production streaming (Spanner client):** register schema once with
+`writer.WithMetadata(iter.Metadata)` (equivalent to `WithRowType(metadata.GetRowType())`—do
+not pass both), then `WriteRow` on each `Next()`, and `Flush` in a defer. You do not
+need to build `[]GenericColumnValue` per row or call `WriteStructValues` on that path.
+
+**In-memory fixtures:** after `WithMetadata` or `WithRowType`, prefer `WriteStructValues`
+with `[]*structpb.Value` cells (or `WriteGCVs` with `gcvctor` helpers). Do not zip
+`RowType` field types with `ListValue` cells manually when types are already registered.
 `DelimitedWriter` and `JSONLWriter` preserve explicit duplicate column names.
 Empty column names are the only names passed to `UnnamedFieldNamer`, and
 generated names avoid collisions with existing explicit names. Set
@@ -138,17 +147,41 @@ for {
 return w.Flush()
 ```
 
-Which schema to pre-register depends on the write API (names only vs names and types).
+### Schema registration
+
+| Goal | API |
+|------|-----|
+| Streaming `RowIterator` | `WithMetadata(iter.Metadata)` once, then `WriteRow` |
+| Known column names only | `WithColumnNames` / `PrepareColumnNames` (at least one name) |
+| Names and types from metadata | `WithRowType` / `PrepareRowType` / `WithMetadata` |
+| Zero columns (e.g. DML without `THEN RETURN`) | `PrepareRowType(nil)` or `PrepareRowType(GetRowType())` when fields are empty—**not** `PrepareColumnNames` |
+| Zero-row `SELECT` (columns in metadata, no rows) | `PrepareRowType` after first `Next`, then `Flush` for header-only CSV |
+
 Registration is not the same as having zero columns: without `Prepare*` / `With*` and
 with no row written, `Flush` or `WriteHeader` returns `writer.ErrMissingColumnNames`.
-`PrepareRowType(nil)` or a zero-field `GetRowType()` registers an empty schema (DML
-without `THEN RETURN`: `Flush` writes nothing). `PrepareColumnNames` with an empty
-slice returns `writer.ErrMissingColumnNames`; `WithColumnNames([])` at construction is
-ignored (the writer stays unregistered, same as omitting the option). Use
-`PrepareRowType` for zero-column result sets. A zero-row `SELECT` has column names
-in metadata, so `PrepareRowType` plus `Flush` can emit a header-only file. See
+`PrepareColumnNames` with an empty slice returns `writer.ErrMissingColumnNames`;
+`WithColumnNames([])` at construction is ignored (writer stays unregistered). See
 `go doc writer`, sections "Column names and field types" and
 "Registered schema vs missing schema".
+
+### Result-set shape vs CSV output
+
+| Metadata | Rows | `Flush` with `Header=true` |
+|----------|------|----------------------------|
+| Zero fields (partitioned DML, etc.) | 0 | Empty file (no header line) |
+| Normal `SELECT` row type | 0 | Header row only |
+| Normal `SELECT` row type | ≥1 | Header then data rows |
+
+DML or other statements with no result columns: call `PrepareRowType` on
+`iter.Metadata.GetRowType()` (possibly nil or zero fields), then `Flush`—do not rely on
+`PrepareColumnNames` with an empty name list.
+
+### ENUM and PROTO in CSV
+
+Delimited output uses [`SimpleFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#SimpleFormatConfig)
+by default. Build cells with [`gcvctor.EnumValue`](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor#EnumValue)
+and [`gcvctor.ProtoValue`](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor#ProtoValue),
+then `WriteGCVs` (see `TestDelimitedWriterWriteGCVsEnumProto` in the `writer` package).
 Delimited, JSONL, and SQL encodings differ after
 spanvalue formats each column; see the `writer` package documentation. For
 non-streaming paths, use

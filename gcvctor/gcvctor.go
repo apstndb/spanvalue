@@ -291,11 +291,15 @@ func PGJSONBValue(v any) (spanner.GenericColumnValue, error) {
 }
 
 // ProtoValue returns a non-null PROTO GenericColumnValue for the fully qualified message name fqn.
+// The value is the raw message bytes; delimited export uses SimpleFormatConfig string form (see
+// writer.TestDelimitedWriterWriteGCVsEnumProto).
 func ProtoValue(fqn string, b []byte) spanner.GenericColumnValue {
 	return BytesBasedValueOf(typector.FQNToProtoType(fqn), b)
 }
 
 // EnumValue returns a non-null ENUM GenericColumnValue for the fully qualified enum name fqn.
+// The structpb value is the enum number as a decimal string; delimited export prints that
+// string (see writer.TestDelimitedWriterWriteGCVsEnumProto).
 func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.FQNToEnumType(fqn),

@@ -48,11 +48,17 @@
 //     columns). [DelimitedWriter.Flush] succeeds and writes no output; [DelimitedWriter.WriteHeader]
 //     is a no-op because there are no column names. A later [WriteRow] still initializes
 //     names from the row if one arrives.
-//   - [PrepareColumnNames] with an empty name list returns [ErrMissingColumnNames].
+//   - [PrepareColumnNames] requires at least one column name and returns [ErrMissingColumnNames]
+//     for an empty list. Do not use it when metadata has zero columns; use [PrepareRowType] or
+//     [WithRowType] with nil or an empty fields slice instead (for example DML without THEN RETURN).
 //   - [WithColumnNames] with an empty name list is ignored at construction (the writer stays
-//     unregistered); it does not return an error because options cannot report one. For a
-//     zero-column result set, use [PrepareRowType] or [WithRowType] instead (for example after
-//     iter.Metadata.GetRowType() on DML without THEN RETURN).
+//     unregistered); it does not return an error because options cannot report one (#95 tracks
+//     error-returning options). Prefer [PrepareRowType] for zero-column metadata.
+//
+// [WithMetadata] registers the same names and types as [WithRowType](metadata.GetRowType()); call
+// one or the other, not both. For [cloud.google.com/go/spanner.RowIterator] streaming, prefer
+// [WithMetadata](iter.Metadata) once at construction and [WriteRow] per [RowIterator.Next]; defer
+// [DelimitedWriter.Flush] so a zero-row SELECT still emits a header when [WithHeader] is true.
 //
 // [DelimitedWriter] defaults to a CSV/TSV header once column names are known ([WithHeader]):
 // before the first data row, or on [DelimitedWriter.Flush] when no data row was written
