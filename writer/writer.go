@@ -9,10 +9,13 @@
 // names avoid collisions with existing names. DelimitedWriter buffers through
 // encoding/csv, so callers must call Flush after the final write.
 //
-// Use Writer when an adapter only needs row streaming, and FlushWriter when it
-// owns the full write lifecycle. DelimitedWriter, JSONLWriter, and SQLInsertWriter
-// implement FlushWriter. If an adapter exposes a Close method, that Close
-// method should call Flush; Flush does not close the underlying io.Writer.
+// Use [Writer] when an adapter only streams [cloud.google.com/go/spanner.Row]
+// values from the Spanner client. Use [DelimitedWriter.WriteStructValues] on a concrete writer
+// when the row is already represented as []*structpb.Value plus a registered
+// field-type schema (spannerpb + structpb only at the writer boundary). Use
+// [DelimitedWriter.WriteGCVs] when each cell is already a GenericColumnValue.
+// [FlushWriter] covers writers that need finalization; call Flush after the
+// last row. Flush does not close the underlying io.Writer.
 //
 // # Primary API
 //
@@ -29,33 +32,33 @@
 // # Schema registration and row input
 //
 // Writers need column names for labeling output (CSV headers, JSON keys, INSERT
-// column lists). Some call paths also need a Spanner row type (field types) to
-// build rows from []*structpb.Value without pre-built GCVs.
+// column lists). Some paths also register per-column *sppb.Type values so rows
+// can be streamed as []*structpb.Value without fabricating metadata wrappers.
 //
 // Prefer registering schema with [WithRowType], [WithColumnNames], or
 // [WithMetadata] at construction. When schema is known only after construction,
-// call [DelimitedWriter.PrepareRowType] or [DelimitedWriter.PrepareColumnNames]
-// (the same two shapes as the With options). There is no separate Prepare API
-// for metadata: use [WithMetadata] or PrepareRowType(metadata.GetRowType()).
+// call [DelimitedWriter.PrepareRowType] or [DelimitedWriter.PrepareColumnNames].
+// For metadata only: PrepareRowType(metadata.GetRowType()).
 //
-//   - [WithRowType] / PrepareRowType: column names plus per-column field types
-//     (stored as names and types slices). Required for WriteProtoValues.
-//   - [WithColumnNames] / PrepareColumnNames: names only; GCV rows supply types.
-//   - [WithMetadata]: metadata.GetRowType() (other metadata fields ignored).
+//   - [WithRowType] / PrepareRowType: names plus field types (internal columnSchema).
+//     Required for [WriteStructValues].
+//   - [WithColumnNames] / PrepareColumnNames: names only; types come from each GCV.
+//   - [WithMetadata]: metadata.GetRowType(); other metadata fields are ignored.
 //
-// [DelimitedWriter.Prepare] remains as a deprecated alias for
-// PrepareRowType(metadata.GetRowType()).
+// [DelimitedWriter.Prepare] is deprecated; use PrepareRowType or PrepareColumnNames.
 //
-// Per-row writes:
+// Row write layers (high to low):
 //
-//   - WriteRow / WriteValues: full *spanner.Row or explicit names plus GCVs.
-//   - WriteGCVs: column names must be set; each GCV supplies Type and Value.
-//   - WriteProtoValues: row type must be set; values are []*structpb.Value
-//     paired with fields[i].Type (nil type is an error).
+//   - [Writer.WriteRow]: Spanner client row (*spanner.Row).
+//   - WriteValues: explicit column names plus GCVs (may initialize names per row).
+//   - [WriteGCVs]: registered column names; each GCV carries Type and Value.
+//   - [DelimitedWriter.WriteStructValues]: registered field types; []*structpb.Value per row.
 //
-// Formatting always uses GCV Type and Value at format time. ResultSetMetadata is
-// not consulted while formatting a row; it is only a convenient carrier for
-// RowType when callers already have query metadata.
+// Delimited, JSONL, and SQL writers use different output encodings after spanvalue
+// formats each column; there is no shared "formatted row" interface.
+//
+// spanvalue formats cells from Type+Value pairs internally. ResultSetMetadata is
+// only a carrier for RowType when registering schema, not used while formatting.
 //
 // DelimitedWriter defaults to emitting a header row. Use [WithHeader] with false
 // for headerless CSV/TSV when names are registered but must not appear as the
@@ -109,10 +112,10 @@ var (
 	ErrHeaderAfterData = errors.New("header after data")
 	// ErrInvalidDelimiter reports that DelimitedWriter received an invalid delimiter.
 	ErrInvalidDelimiter = errors.New("invalid delimiter")
-	// ErrMissingRowType reports that WriteProtoValues requires a row type schema.
-	ErrMissingRowType = errors.New("missing row type schema")
-	// ErrMismatchedProtoValueCount reports that WriteProtoValues value count does not match the row type.
-	ErrMismatchedProtoValueCount = errors.New("mismatched proto value count")
+	// ErrMissingFieldTypes reports that WriteStructValues requires registered field types.
+	ErrMissingFieldTypes = errors.New("missing field types schema")
+	// ErrMismatchedStructValueCount reports that WriteStructValues value count does not match the schema.
+	ErrMismatchedStructValueCount = errors.New("mismatched struct value count")
 )
 
 // Writer writes Spanner rows to an output stream.
@@ -222,7 +225,7 @@ type metadataOption struct {
 }
 
 // WithMetadata initializes a writer schema from metadata.GetRowType(), including
-// field types for WriteProtoValues. Other metadata fields are ignored.
+// field types for WriteStructValues. Other metadata fields are ignored.
 // Prefer [WithRowType] when metadata is not available.
 func WithMetadata(metadata *sppb.ResultSetMetadata) Option {
 	return metadataOption{metadata: metadata}
@@ -329,7 +332,7 @@ func WithHeader(header bool) DelimitedOption {
 }
 
 // columnSchema holds column names for output labeling and optional field types for
-// WriteProtoValues. When types is non-empty, len(types) equals len(names).
+// WriteStructValues. When types is non-empty, len(types) equals len(names).
 type columnSchema struct {
 	names []string
 	types []*sppb.Type
@@ -479,10 +482,10 @@ func (w *DelimitedWriter) WriteValues(columnNames []string, values []spanner.Gen
 	return w.WriteGCVs(values)
 }
 
-// WriteProtoValues writes one row from protobuf values using the row type schema
+// WriteStructValues writes one row from structpb values using the field-type schema
 // registered by [WithRowType], [WithMetadata], or [PrepareRowType].
-func (w *DelimitedWriter) WriteProtoValues(values []*structpb.Value) error {
-	gcvs, err := gcvsFromFieldTypes(w.schema.types, values)
+func (w *DelimitedWriter) WriteStructValues(values []*structpb.Value) error {
+	gcvs, err := gcvsFromStructValues(w.schema.types, values)
 	if err != nil {
 		return err
 	}
@@ -684,10 +687,10 @@ func (w *JSONLWriter) WriteValues(columnNames []string, values []spanner.Generic
 	return w.WriteGCVs(values)
 }
 
-// WriteProtoValues writes one row from protobuf values using the row type schema
+// WriteStructValues writes one row from structpb values using the field-type schema
 // registered by [WithRowType], [WithMetadata], or [PrepareRowType].
-func (w *JSONLWriter) WriteProtoValues(values []*structpb.Value) error {
-	gcvs, err := gcvsFromFieldTypes(w.schema.types, values)
+func (w *JSONLWriter) WriteStructValues(values []*structpb.Value) error {
+	gcvs, err := gcvsFromStructValues(w.schema.types, values)
 	if err != nil {
 		return err
 	}
@@ -876,10 +879,10 @@ func (w *SQLInsertWriter) WriteValues(columnNames []string, values []spanner.Gen
 	return w.writeGCVs(values, quotedColumns)
 }
 
-// WriteProtoValues writes one row from protobuf values using the row type schema
+// WriteStructValues writes one row from structpb values using the field-type schema
 // registered by [WithRowType], [WithMetadata], or [PrepareRowType].
-func (w *SQLInsertWriter) WriteProtoValues(values []*structpb.Value) error {
-	gcvs, err := gcvsFromFieldTypes(w.schema.types, values)
+func (w *SQLInsertWriter) WriteStructValues(values []*structpb.Value) error {
+	gcvs, err := gcvsFromStructValues(w.schema.types, values)
 	if err != nil {
 		return err
 	}
@@ -1113,20 +1116,23 @@ func fieldTypesFromRowType(rowType *sppb.StructType) []*sppb.Type {
 	return types
 }
 
-func gcvsFromFieldTypes(types []*sppb.Type, values []*structpb.Value) ([]spanner.GenericColumnValue, error) {
+func gcvFromTypeValue(typ *sppb.Type, value *structpb.Value) (spanner.GenericColumnValue, error) {
+	if typ == nil {
+		return spanner.GenericColumnValue{}, spanvalue.ErrNilStructField
+	}
+	return spanner.GenericColumnValue{Type: typ, Value: value}, nil
+}
+
+func gcvsFromStructValues(types []*sppb.Type, values []*structpb.Value) ([]spanner.GenericColumnValue, error) {
 	if len(types) == 0 {
-		return nil, ErrMissingRowType
+		return nil, ErrMissingFieldTypes
 	}
 	if len(values) != len(types) {
-		return nil, fmt.Errorf("%w: got %d values for %d fields", ErrMismatchedProtoValueCount, len(values), len(types))
+		return nil, fmt.Errorf("%w: got %d values for %d fields", ErrMismatchedStructValueCount, len(values), len(types))
 	}
 	gcvs := make([]spanner.GenericColumnValue, len(values))
 	for i, value := range values {
-		typ := types[i]
-		if typ == nil {
-			return nil, fmt.Errorf("column %d: %w", i, spanvalue.ErrNilStructField)
-		}
-		gcv, err := spanvalue.GenericColumnValueOf(typ, value)
+		gcv, err := gcvFromTypeValue(types[i], value)
 		if err != nil {
 			return nil, fmt.Errorf("column %d: %w", i, err)
 		}

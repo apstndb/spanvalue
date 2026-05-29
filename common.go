@@ -70,15 +70,6 @@ func typeValueToGCV(typ *sppb.Type, value *structpb.Value) spanner.GenericColumn
 	return spanner.GenericColumnValue{Type: typ, Value: value}
 }
 
-// GenericColumnValueOf builds a GenericColumnValue from a type and protobuf value.
-// typ must be non-nil.
-func GenericColumnValueOf(typ *sppb.Type, value *structpb.Value) (spanner.GenericColumnValue, error) {
-	if typ == nil {
-		return spanner.GenericColumnValue{}, ErrNilStructField
-	}
-	return typeValueToGCV(typ, value), nil
-}
-
 func simpleGCVToNullable(value spanner.GenericColumnValue) (NullableValue, error) {
 	switch value.Type.GetCode() {
 	case sppb.TypeCode_BOOL:

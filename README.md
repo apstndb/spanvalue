@@ -60,9 +60,12 @@ return w.Flush()
 
 ## Streaming row exports
 
-The `writer` package accepts `*spanner.Row` values directly through `WriteRow`.
-Use `writer.Writer` when an adapter only needs row streaming. Use
-`writer.FlushWriter` when an adapter owns both row streaming and finalization.
+The `writer` package streams rows at several levels: `WriteRow` for
+`*spanner.Row` (Spanner client), `WriteStructValues` for `[]*structpb.Value` with
+a registered field-type schema (spannerpb + structpb at the boundary), and
+`WriteGCVs` when values are already `GenericColumnValue`. Use `writer.Writer`
+when an adapter only needs `WriteRow`. Use `writer.FlushWriter` when an adapter
+owns both row streaming and finalization.
 `DelimitedWriter` and `JSONLWriter` preserve explicit duplicate column names.
 Empty column names are the only names passed to `UnnamedFieldNamer`, and
 generated names avoid collisions with existing explicit names. Set
@@ -86,11 +89,13 @@ w := writer.NewDelimitedWriter(
 ```
 
 Register schema with `WithRowType`, `WithColumnNames`, or `WithMetadata` (stores
-`metadata.GetRowType()`, including field types for `WriteProtoValues`; other
-metadata fields are unused). Stream rows with `WriteGCVs`, `WriteProtoValues`, or
-`WriteRow`. Prefer registering schema at construction; when it is known later,
-use `PrepareRowType` or `PrepareColumnNames` (or `PrepareRowType(meta.GetRowType())`
-when you only have metadata). See the `writer` package documentation. For non-streaming paths, use
+`metadata.GetRowType()` as column names plus field types; other metadata fields
+are unused). Stream rows with `WriteGCVs`, `WriteStructValues`, or `WriteRow`.
+Prefer registering schema at construction; when it is known later, use
+`PrepareRowType` or `PrepareColumnNames` (or `PrepareRowType(meta.GetRowType())`
+when you only have metadata). Delimited, JSONL, and SQL encodings differ after
+spanvalue formats each column; see the `writer` package documentation. For
+non-streaming paths, use
 `writer.RowData`, `writer.FormatDelimitedRow`, or `writer.FormatJSONLRow`
 directly. Pass the JSON field-name policy explicitly, for example:
 

@@ -1100,16 +1100,16 @@ func TestWithColumnNamesWriteGCVs(t *testing.T) {
 	}
 }
 
-func TestWithRowTypeWriteProtoValues(t *testing.T) {
+func TestWithRowTypeWriteStructValues(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
 	w := NewJSONLWriter(&out, WithRowType(rowTypeWithColumnNames("id", "name")))
-	if err := w.WriteProtoValues([]*structpb.Value{
+	if err := w.WriteStructValues([]*structpb.Value{
 		structpb.NewStringValue("42"),
 		structpb.NewStringValue("Alice"),
 	}); err != nil {
-		t.Fatalf("WriteProtoValues() error = %v", err)
+		t.Fatalf("WriteStructValues() error = %v", err)
 	}
 
 	want := "{\"id\":42,\"name\":\"Alice\"}\n"
@@ -1118,17 +1118,17 @@ func TestWithRowTypeWriteProtoValues(t *testing.T) {
 	}
 }
 
-func TestWriteProtoValuesMissingRowType(t *testing.T) {
+func TestWriteStructValuesMissingFieldTypes(t *testing.T) {
 	t.Parallel()
 
 	w := NewDelimitedWriter(&bytes.Buffer{}, ',')
-	err := w.WriteProtoValues([]*structpb.Value{structpb.NewStringValue("1")})
-	if !errors.Is(err, ErrMissingRowType) {
-		t.Fatalf("WriteProtoValues() error = %v, want ErrMissingRowType", err)
+	err := w.WriteStructValues([]*structpb.Value{structpb.NewStringValue("1")})
+	if !errors.Is(err, ErrMissingFieldTypes) {
+		t.Fatalf("WriteStructValues() error = %v, want ErrMissingFieldTypes", err)
 	}
 }
 
-func TestWriteProtoValuesNilFieldType(t *testing.T) {
+func TestWriteStructValuesNilFieldType(t *testing.T) {
 	t.Parallel()
 
 	rowType := &sppb.StructType{
@@ -1137,9 +1137,9 @@ func TestWriteProtoValuesNilFieldType(t *testing.T) {
 		},
 	}
 	w := NewSQLInsertWriter(&bytes.Buffer{}, "users", WithRowType(rowType))
-	err := w.WriteProtoValues([]*structpb.Value{structpb.NewStringValue("1")})
+	err := w.WriteStructValues([]*structpb.Value{structpb.NewStringValue("1")})
 	if !errors.Is(err, spanvalue.ErrNilStructField) {
-		t.Fatalf("WriteProtoValues() error = %v, want ErrNilStructField", err)
+		t.Fatalf("WriteStructValues() error = %v, want ErrNilStructField", err)
 	}
 }
 
