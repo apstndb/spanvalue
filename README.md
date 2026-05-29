@@ -93,8 +93,9 @@ Register schema with `WithRowType`, `WithColumnNames`, or `WithMetadata` (stores
 are unused). Stream rows with `WriteGCVs`, `WriteStructValues`, or `WriteRow`.
 Register schema at construction with `WithRowType`, `WithColumnNames`, or
 `WithMetadata`, or call `PrepareRowType` / `PrepareColumnNames` after the query
-when the writer was created first. Deprecated `Prepare(metadata)` delegates to
-`PrepareRowType(metadata.GetRowType())`.
+when the writer was created first (`PrepareRowType(metadata.GetRowType())` when you
+have metadata). `Prepare(metadata)` is deprecated; prefer `PrepareRowType` or
+`With*` options.
 Delimited, JSONL, and SQL encodings differ after
 spanvalue formats each column; see the `writer` package documentation. For
 non-streaming paths, use
