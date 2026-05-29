@@ -1144,6 +1144,22 @@ func TestDelimitedWriterPrepareRowTypeNilRegistersEmptySchema(t *testing.T) {
 	}
 }
 
+func TestDelimitedWriterPrepareRowTypeEmptyAfterNonEmptyErrors(t *testing.T) {
+	t.Parallel()
+
+	w := NewDelimitedWriter(&bytes.Buffer{}, ',')
+	if err := w.PrepareRowType(rowTypeWithColumnNames("id")); err != nil {
+		t.Fatalf("PrepareRowType() error = %v", err)
+	}
+	err := w.PrepareRowType(emptyRowType())
+	if !errors.Is(err, ErrColumnNamesMismatch) {
+		t.Fatalf("PrepareRowType(empty) error = %v, want ErrColumnNamesMismatch", err)
+	}
+	if len(w.schema.names) != 1 || w.schema.names[0] != "id" {
+		t.Fatalf("schema.names = %v, want [id]", w.schema.names)
+	}
+}
+
 func TestDelimitedWriterPrepareColumnNamesEmptyErrors(t *testing.T) {
 	t.Parallel()
 

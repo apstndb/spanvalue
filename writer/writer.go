@@ -448,10 +448,8 @@ func (w *DelimitedWriter) PrepareColumnNames(names []string) error {
 func (w *DelimitedWriter) prepareRowType(rowType *sppb.StructType) error {
 	rowType = normalizeRowType(rowType)
 	columnNames := columnNamesFromRowType(rowType)
-	if len(columnNames) > 0 {
-		if err := w.initOrValidateColumnNames(columnNames); err != nil {
-			return err
-		}
+	if err := validatePrepareRowTypeTransition(&w.schema, columnNames); err != nil {
+		return err
 	}
 	w.setRowType(rowType)
 	return nil
@@ -724,10 +722,8 @@ func (w *JSONLWriter) PrepareColumnNames(names []string) error {
 func (w *JSONLWriter) prepareRowType(rowType *sppb.StructType) error {
 	rowType = normalizeRowType(rowType)
 	columnNames := columnNamesFromRowType(rowType)
-	if len(columnNames) > 0 {
-		if err := w.initOrValidateColumnNames(columnNames); err != nil {
-			return err
-		}
+	if err := validatePrepareRowTypeTransition(&w.schema, columnNames); err != nil {
+		return err
 	}
 	w.setRowType(rowType)
 	return nil
@@ -939,15 +935,15 @@ func (w *SQLInsertWriter) PrepareColumnNames(names []string) error {
 func (w *SQLInsertWriter) prepareRowType(rowType *sppb.StructType) error {
 	rowType = normalizeRowType(rowType)
 	columnNames := columnNamesFromRowType(rowType)
-	if len(columnNames) == 0 {
-		w.setRowType(rowType)
-		return nil
-	}
-	if _, err := w.initOrValidateQuotedColumns(columnNames); err != nil {
+	if err := validatePrepareRowTypeTransition(&w.schema, columnNames); err != nil {
 		return err
 	}
-	w.schema.types = fieldTypesFromRowType(rowType)
-	return nil
+	w.setRowType(rowType)
+	if len(columnNames) == 0 {
+		return nil
+	}
+	_, err := w.initOrValidateQuotedColumns(columnNames)
+	return err
 }
 
 func (w *SQLInsertWriter) prepareColumnNames(names []string) error {
@@ -1268,6 +1264,19 @@ func validatedColumnNames(existing []string, columnNames []string) ([]string, er
 		return nil, fmt.Errorf("%w: got %v want %v", ErrColumnNamesMismatch, columnNames, existing)
 	}
 	return existing, nil
+}
+
+// validatePrepareRowTypeTransition checks a PrepareRowType call against the current schema
+// before setRowType mutates names, types, or cached derived fields.
+func validatePrepareRowTypeTransition(schema *columnSchema, columnNames []string) error {
+	if len(columnNames) == 0 {
+		if schema.registered && len(schema.names) > 0 {
+			return fmt.Errorf("%w: got empty row type, want %v", ErrColumnNamesMismatch, schema.names)
+		}
+		return nil
+	}
+	_, err := validatedColumnNames(schema.names, columnNames)
+	return err
 }
 
 // quoteIdentifiers quotes GoogleSQL identifiers and rejects empty names.
