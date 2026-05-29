@@ -1264,6 +1264,30 @@ func TestWithColumnNamesHeaderlessDelimited(t *testing.T) {
 	}
 }
 
+func TestDelimitedWriterWriteGCVsEnumProto(t *testing.T) {
+	t.Parallel()
+
+	const (
+		enumFQN  = "my.proto.Status"
+		protoFQN = "examples.spanner.music.SingerInfo"
+	)
+	var out bytes.Buffer
+	w := NewDelimitedWriter(&out, ',', WithColumnNames([]string{"status", "payload"}))
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.EnumValue(enumFQN, 1),
+		gcvctor.ProtoValue(protoFQN, []byte("abcd")),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	flushDelimitedWriter(t, w)
+
+	// ENUM is the stored INT64 string; PROTO is base64 on the wire but decoded for SimpleFormatConfig CSV.
+	want := "status,payload\n1,abcd\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestWithColumnNamesWriteGCVs(t *testing.T) {
 	t.Parallel()
 
