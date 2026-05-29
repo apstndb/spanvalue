@@ -32,17 +32,19 @@
 // column lists). Some call paths also need a Spanner row type (field types) to
 // build rows from []*structpb.Value without pre-built GCVs.
 //
-// Register schema at construction or with Prepare:
+// Prefer registering schema with [WithRowType], [WithColumnNames], or
+// [WithMetadata] at construction. When schema is known only after construction,
+// call [DelimitedWriter.PrepareRowType] or [DelimitedWriter.PrepareColumnNames]
+// (the same two shapes as the With options). There is no separate Prepare API
+// for metadata: use [WithMetadata] or PrepareRowType(metadata.GetRowType()).
 //
-//   - [WithRowType] / [DelimitedWriter.PrepareRowType]: stores *sppb.StructType
-//     (names plus field types). Required for [DelimitedWriter.WriteProtoValues]
-//     and the JSONL/SQL equivalents.
-//   - [WithColumnNames] / [DelimitedWriter.PrepareColumnNames]: stores names only.
-//     Row types come from each GCV when using WriteGCVs.
-//   - [WithMetadata] / [DelimitedWriter.PrepareMetadata]: stores
-//     metadata.GetRowType() (same as WithRowType). Other ResultSetMetadata
-//     fields are ignored. [DelimitedWriter.Prepare] is deprecated; prefer
-//     PrepareMetadata, PrepareRowType, or PrepareColumnNames.
+//   - [WithRowType] / PrepareRowType: *sppb.StructType (names and field types).
+//     Required for WriteProtoValues.
+//   - [WithColumnNames] / PrepareColumnNames: names only; GCV rows supply types.
+//   - [WithMetadata]: metadata.GetRowType() (other metadata fields ignored).
+//
+// [DelimitedWriter.Prepare] remains as a deprecated alias for
+// PrepareRowType(metadata.GetRowType()).
 //
 // Per-row writes:
 //
@@ -393,16 +395,9 @@ func (w *DelimitedWriter) WriteRow(row *spanner.Row) error {
 // row is written. If a schema is already initialized, Prepare verifies that the
 // metadata column names match the existing schema.
 //
-// Deprecated: Use [DelimitedWriter.PrepareMetadata], [DelimitedWriter.PrepareRowType],
-// or [DelimitedWriter.PrepareColumnNames].
+// Deprecated: Prefer [WithRowType], [WithColumnNames], or [WithMetadata] at
+// construction, or [DelimitedWriter.PrepareRowType] / [DelimitedWriter.PrepareColumnNames].
 func (w *DelimitedWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
-	return w.PrepareMetadata(metadata)
-}
-
-// PrepareMetadata initializes the delimited schema from result-set metadata before
-// the first row is written. Only metadata.GetRowType() is used; other metadata
-// fields are ignored. If a schema is already initialized, column names must match.
-func (w *DelimitedWriter) PrepareMetadata(metadata *sppb.ResultSetMetadata) error {
 	return w.PrepareRowType(rowTypeFromMetadata(metadata))
 }
 
@@ -469,7 +464,7 @@ func (w *DelimitedWriter) WriteValues(columnNames []string, values []spanner.Gen
 }
 
 // WriteProtoValues writes one row from protobuf values using the row type schema
-// registered by [WithRowType], [WithMetadata], [PrepareRowType], or [PrepareMetadata].
+// registered by [WithRowType], [WithMetadata], or [PrepareRowType].
 func (w *DelimitedWriter) WriteProtoValues(values []*structpb.Value) error {
 	gcvs, err := gcvsFromRowType(w.rowType, values)
 	if err != nil {
@@ -638,15 +633,9 @@ func (w *JSONLWriter) WriteRow(row *spanner.Row) error {
 // row is written. If a schema is already initialized, Prepare verifies that the
 // metadata column names match the existing schema.
 //
-// Deprecated: Use [JSONLWriter.PrepareMetadata], [JSONLWriter.PrepareRowType],
-// or [JSONLWriter.PrepareColumnNames].
+// Deprecated: Prefer [WithRowType], [WithColumnNames], or [WithMetadata] at
+// construction, or [JSONLWriter.PrepareRowType] / [JSONLWriter.PrepareColumnNames].
 func (w *JSONLWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
-	return w.PrepareMetadata(metadata)
-}
-
-// PrepareMetadata initializes the JSONL schema from result-set metadata before the
-// first row is written. Only metadata.GetRowType() is used.
-func (w *JSONLWriter) PrepareMetadata(metadata *sppb.ResultSetMetadata) error {
 	return w.PrepareRowType(rowTypeFromMetadata(metadata))
 }
 
@@ -683,7 +672,7 @@ func (w *JSONLWriter) WriteValues(columnNames []string, values []spanner.Generic
 }
 
 // WriteProtoValues writes one row from protobuf values using the row type schema
-// registered by [WithRowType], [WithMetadata], [PrepareRowType], or [PrepareMetadata].
+// registered by [WithRowType], [WithMetadata], or [PrepareRowType].
 func (w *JSONLWriter) WriteProtoValues(values []*structpb.Value) error {
 	gcvs, err := gcvsFromRowType(w.rowType, values)
 	if err != nil {
@@ -836,15 +825,9 @@ func (w *SQLInsertWriter) WriteRow(row *spanner.Row) error {
 // first row is written. If a schema is already initialized, Prepare verifies
 // that the metadata column names match the existing schema.
 //
-// Deprecated: Use [SQLInsertWriter.PrepareMetadata], [SQLInsertWriter.PrepareRowType],
-// or [SQLInsertWriter.PrepareColumnNames].
+// Deprecated: Prefer [WithRowType], [WithColumnNames], or [WithMetadata] at
+// construction, or [SQLInsertWriter.PrepareRowType] / [SQLInsertWriter.PrepareColumnNames].
 func (w *SQLInsertWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
-	return w.PrepareMetadata(metadata)
-}
-
-// PrepareMetadata initializes the SQL INSERT schema from result-set metadata before
-// the first row is written. Only metadata.GetRowType() is used.
-func (w *SQLInsertWriter) PrepareMetadata(metadata *sppb.ResultSetMetadata) error {
 	return w.PrepareRowType(rowTypeFromMetadata(metadata))
 }
 
@@ -879,7 +862,7 @@ func (w *SQLInsertWriter) WriteValues(columnNames []string, values []spanner.Gen
 }
 
 // WriteProtoValues writes one row from protobuf values using the row type schema
-// registered by [WithRowType], [WithMetadata], [PrepareRowType], or [PrepareMetadata].
+// registered by [WithRowType], [WithMetadata], or [PrepareRowType].
 func (w *SQLInsertWriter) WriteProtoValues(values []*structpb.Value) error {
 	gcvs, err := gcvsFromRowType(w.rowType, values)
 	if err != nil {

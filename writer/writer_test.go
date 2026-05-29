@@ -1170,7 +1170,7 @@ func TestDelimitedWriterPrepareColumnNames(t *testing.T) {
 	}
 }
 
-func TestPrepareRowTypeMatchesPrepareMetadata(t *testing.T) {
+func TestPrepareRowTypeConsistentAcrossWriters(t *testing.T) {
 	t.Parallel()
 
 	meta := metadataWithColumnNames("id", "name")
@@ -1180,8 +1180,8 @@ func TestPrepareRowTypeMatchesPrepareMetadata(t *testing.T) {
 	if err := dw.PrepareRowType(meta.GetRowType()); err != nil {
 		t.Fatalf("DelimitedWriter.PrepareRowType() error = %v", err)
 	}
-	if err := jw.PrepareMetadata(meta); err != nil {
-		t.Fatalf("JSONLWriter.PrepareMetadata() error = %v", err)
+	if err := jw.PrepareRowType(meta.GetRowType()); err != nil {
+		t.Fatalf("JSONLWriter.PrepareRowType() error = %v", err)
 	}
 	if err := dw.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.StringValue("a")}); err != nil {
 		t.Fatalf("WriteGCVs() error = %v", err)
