@@ -1069,9 +1069,18 @@ func (w *SQLInsertWriter) Flush() error {
 	if w.sqlBatchSize() <= 1 || w.batchPending == 0 {
 		return nil
 	}
-	_, err := io.WriteString(w.out, ";\n")
+	return w.closePendingBatch()
+}
+
+func (w *SQLInsertWriter) closePendingBatch() error {
+	if w.batchPending == 0 {
+		return nil
+	}
+	if _, err := io.WriteString(w.out, ";\n"); err != nil {
+		return err
+	}
 	w.batchPending = 0
-	return err
+	return nil
 }
 
 func (w *SQLInsertWriter) sqlBatchSize() int {
@@ -1118,9 +1127,7 @@ func (w *SQLInsertWriter) flushPendingBatchOnTableChange() error {
 	if w.batchPending == 0 || w.quotedTableInput == "" || w.Table == w.quotedTableInput {
 		return nil
 	}
-	_, err := io.WriteString(w.out, ";\n")
-	w.batchPending = 0
-	return err
+	return w.closePendingBatch()
 }
 
 func (w *SQLInsertWriter) appendBatchedInsert(quotedColumns string, formattedValues []string) error {
@@ -1147,9 +1154,7 @@ func (w *SQLInsertWriter) appendBatchedInsert(quotedColumns string, formattedVal
 	}
 	w.batchPending++
 	if w.batchPending >= w.sqlBatchSize() {
-		_, err := io.WriteString(w.out, ";\n")
-		w.batchPending = 0
-		return err
+		return w.closePendingBatch()
 	}
 	return nil
 }
