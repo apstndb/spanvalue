@@ -1114,7 +1114,19 @@ func (w *SQLInsertWriter) writeSingleInsert(quotedColumns string, formattedValue
 	return err
 }
 
+func (w *SQLInsertWriter) flushPendingBatchOnTableChange() error {
+	if w.batchPending == 0 || w.quotedTableInput == "" || w.Table == w.quotedTableInput {
+		return nil
+	}
+	_, err := io.WriteString(w.out, ";\n")
+	w.batchPending = 0
+	return err
+}
+
 func (w *SQLInsertWriter) appendBatchedInsert(quotedColumns string, formattedValues []string) error {
+	if err := w.flushPendingBatchOnTableChange(); err != nil {
+		return err
+	}
 	if w.batchPending == 0 {
 		quotedTable, err := w.quotedQualifiedTable()
 		if err != nil {
