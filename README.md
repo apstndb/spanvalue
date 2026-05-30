@@ -205,7 +205,8 @@ func writeCSV(out io.Writer, rows []*spanner.Row) error {
 }
 ```
 
-TSV output uses the same CSV-style writer with a tab delimiter. `NewCSVWriter`
+Quoted TSV uses the same CSV-style writer with a tab delimiter (`encoding/csv`
+quoting: embedded tabs, quotes, and newlines in a field are escaped). `NewCSVWriter`
 is a thin helper for `NewDelimitedWriter(out, writer.Comma)`. Pass
 `writer.Comma` when using the generic delimited constructor for CSV output.
 Delimiters must be non-zero valid runes other than `"`, `\r`, `\n`, or
@@ -222,6 +223,15 @@ func writeTSV(out io.Writer, rows []*spanner.Row) error {
 	return w.Flush()
 }
 ```
+
+Some CLIs expose a legacy **TAB** format that joins pre-formatted column strings
+with `\t` and does not apply CSV-style quoting. That is not what
+`NewDelimitedWriter(out, '\t')` emits. To keep raw tab-separated output while
+still using spanvalue formatters and [`WriteRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WriteRowIterator),
+implement [`writer.Writer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#Writer)
+(and [`RowIteratorWriter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorWriter)
+when streaming from a `RowIterator`): format each column, `strings.Join(fields, "\t")`,
+then write the line.
 
 JSONL output:
 
