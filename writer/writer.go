@@ -19,7 +19,7 @@
 // Downstream tools that must preserve legacy TAB output (for example tab-separated
 // CLI export without CSV escaping) can implement [Writer] and format each column with
 // spanvalue, then join with '\t'. For [WriteRowIterator], implement [RowIteratorWriter]
-// ([FlushWriter] plus [PrepareRowType]); [Flush] may be a no-op when no header is needed.
+// ([FlushWriter] plus [RowIteratorWriter.PrepareRowType]); [Flusher.Flush] may be a no-op when no header is needed.
 //
 // [Writer] streams *spanner.Row values; concrete writers also offer WriteValues,
 // WriteGCVs, and WriteStructValues. [FlushWriter] adds Flush (required for buffered
@@ -419,12 +419,12 @@ func newDelimitedWriter(out io.Writer) *DelimitedWriter {
 }
 
 // NewDelimitedWriter returns a CSV-style writer using delimiter as the field
-// delimiter and configured by options. Pass Comma for CSV output or '\t' for TSV
-// output. Delimiter must be non-zero and a valid encoding/csv delimiter.
-// NewDelimitedWriter returns a delimited writer for CSV (delimiter [Comma]), quoted
-// TSV (delimiter '\t'), or other single-rune delimiters. Output follows encoding/csv
-// quoting rules, not raw field joins. See package doc "Quoted delimited text vs raw
-// tab-separated".
+// delimiter and configured by options.
+//
+// It supports CSV (delimiter [Comma]), quoted TSV (delimiter '\t'), or other
+// single-rune delimiters. Output follows encoding/csv quoting rules, not raw
+// field joins. Delimiter must be non-zero and a valid encoding/csv delimiter.
+// See package doc "Quoted delimited text vs raw tab-separated".
 func NewDelimitedWriter(out io.Writer, delimiter rune, options ...DelimitedOption) *DelimitedWriter {
 	w := newDelimitedWriter(out)
 	w.delimiter = delimiter
