@@ -206,8 +206,8 @@ func writeCSV(out io.Writer, rows []*spanner.Row) error {
 ```
 
 Quoted TSV uses the same CSV-style writer with a tab delimiter (`encoding/csv`
-quoting: embedded tabs, quotes, and newlines in a field are escaped). `NewCSVWriter`
-is a thin helper for `NewDelimitedWriter(out, writer.Comma)`. Pass
+quoting: embedded tabs, quotes, and newlines in a field are escaped). For CSV output,
+`NewCSVWriter` is a thin helper for `NewDelimitedWriter(out, writer.Comma)`. Pass
 `writer.Comma` when using the generic delimited constructor for CSV output.
 Delimiters must be non-zero valid runes other than `"`, `\r`, `\n`, or
 `utf8.RuneError`.
