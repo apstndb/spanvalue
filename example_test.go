@@ -9,9 +9,8 @@ import (
 	"github.com/apstndb/spanvalue/gcvctor"
 )
 
-func ExampleSpannerCLICompatibleFormatConfig_tupleStruct() {
-	fc := spanvalue.SpannerCLICompatibleFormatConfig().Clone()
-	fc.FormatStruct.FormatStructParen = spanvalue.FormatTupleStruct
+func ExampleSpannerCLICompatibleTupleStructFormatConfig() {
+	fc := spanvalue.SpannerCLICompatibleTupleStructFormatConfig()
 
 	structElem, err := gcvctor.StructValueOf(
 		[]string{"id", "region"},

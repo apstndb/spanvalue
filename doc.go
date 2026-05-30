@@ -6,7 +6,8 @@
 // # Primary API
 //
 // Configure output with [FormatConfig]. Use the constructors [LiteralFormatConfig],
-// [SimpleFormatConfig], [SpannerCLICompatibleFormatConfig], and [JSONFormatConfig] to pick
+// [SimpleFormatConfig], [SpannerCLICompatibleFormatConfig],
+// [SpannerCLICompatibleTupleStructFormatConfig], and [JSONFormatConfig] to pick
 // a preset. Scalar plugins ([FormatSimpleValue], [FormatLiteralValue],
 // [FormatSpannerCLIValue], [FormatJSONSimpleValue]) format GenericColumnValue directly
 // without Decode; remove them with [FormatConfigWithoutScalarPlugins] or from

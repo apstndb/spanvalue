@@ -32,6 +32,17 @@ func SpannerCLICompatibleFormatConfig() *FormatConfig {
 	}
 }
 
+// SpannerCLICompatibleTupleStructFormatConfig returns a [FormatConfig] like
+// [SpannerCLICompatibleFormatConfig] but renders STRUCT values with
+// [FormatTupleStruct] parentheses instead of [FormatBracketStruct] brackets.
+// Use it for GoogleSQL-style table output such as [(1, foo)] rather than
+// [[1, foo]] for ARRAY<STRUCT<...>>.
+func SpannerCLICompatibleTupleStructFormatConfig() *FormatConfig {
+	fc := SpannerCLICompatibleFormatConfig()
+	fc.FormatStruct.FormatStructParen = FormatTupleStruct
+	return fc
+}
+
 func FormatRowSpannerCLICompatible(row *spanner.Row) ([]string, error) {
 	return spannerCLICompatibleFormatConfig.FormatRow(row)
 }

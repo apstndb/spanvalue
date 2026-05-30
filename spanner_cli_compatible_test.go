@@ -525,3 +525,30 @@ func TestDecodeRow(t *testing.T) {
 		})
 	}
 }
+
+func TestSpannerCLICompatibleTupleStructFormatConfig(t *testing.T) {
+	t.Parallel()
+
+	value := []struct {
+		X int64
+		Y spanner.NullString
+	}{
+		{
+			X: 10,
+			Y: spanner.NullString{StringVal: "Hello", Valid: true},
+		},
+		{
+			X: 20,
+			Y: spanner.NullString{StringVal: "", Valid: false},
+		},
+	}
+
+	got, err := SpannerCLICompatibleTupleStructFormatConfig().FormatToplevelColumn(createColumnValue(t, value))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = "[(10, Hello), (20, NULL)]"
+	if got != want {
+		t.Fatalf("FormatToplevelColumn() = %q, want %q", got, want)
+	}
+}
