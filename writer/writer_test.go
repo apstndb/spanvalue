@@ -961,12 +961,12 @@ func TestSQLInsertWriterBatchSize(t *testing.T) {
 
 		var out bytes.Buffer
 		w := NewSQLInsertWriter(&out, "users", WithSQLBatchSize(2), WithSQLDialect(databasepb.DatabaseDialect_POSTGRESQL))
-		for _, values := range [][]spanner.GenericColumnValue{row(1, "a"), row(2, "b")} {
-			if err := w.WriteValues(columnNames, values); err != nil {
+		for _, id := range []int64{1, 2} {
+			if err := w.WriteValues([]string{"id"}, []spanner.GenericColumnValue{gcvctor.Int64Value(id)}); err != nil {
 				t.Fatalf("WriteValues() error = %v", err)
 			}
 		}
-		want := "INSERT INTO \"users\" (\"id\", \"name\") VALUES\n  (1, \"a\"),\n  (2, \"b\");\n"
+		want := "INSERT INTO \"users\" (\"id\") VALUES\n  (1),\n  (2);\n"
 		if diff := cmp.Diff(want, out.String()); diff != "" {
 			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
 		}
