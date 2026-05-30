@@ -802,9 +802,9 @@ func TestSQLInsertWriterSQLDialect(t *testing.T) {
 			columnNames: []string{"id", `na"me`},
 			values: []spanner.GenericColumnValue{
 				gcvctor.Int64Value(42),
-				gcvctor.StringValue("Alice"),
+				gcvctor.Int64Value(7),
 			},
-			want: `INSERT INTO "user""table" ("id", "na""me") VALUES (42, "Alice");` + "\n",
+			want: `INSERT INTO "user""table" ("id", "na""me") VALUES (42, 7);` + "\n",
 		},
 		{
 			name:        "PostgreSQL qualified table name escaping",

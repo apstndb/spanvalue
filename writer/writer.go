@@ -230,7 +230,9 @@ type sqlDialectOption struct {
 }
 
 // WithSQLDialect sets identifier quoting for table and column names in SQL INSERT
-// output. The default is GoogleSQL ([databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL]).
+// output. It does not change INSERT statement prefixes ([WithSQLInsertKind]) or
+// value literal formatting ([WithFormatter]). The default is GoogleSQL
+// ([cloud.google.com/go/spanner/admin/database/apiv1/databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL]).
 func WithSQLDialect(dialect databasepb.DatabaseDialect) SQLInsertOption {
 	return sqlDialectOption{dialect: dialect}
 }
