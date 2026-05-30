@@ -22,11 +22,15 @@ type stubRowIterator struct {
 	md       *sppb.ResultSetMetadata
 	wantStat RowIteratorStats
 	rows     []*spanner.Row
+	err      error
 	i        int
 	stopped  bool
 }
 
 func (s *stubRowIterator) next() (*spanner.Row, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
 	if s.i < len(s.rows) {
 		row := s.rows[s.i]
 		s.i++
@@ -44,6 +48,9 @@ func (s *stubRowIterator) metadata() *sppb.ResultSetMetadata {
 }
 
 func (s *stubRowIterator) stats() RowIteratorStats {
+	if !s.stopped {
+		return RowIteratorStats{}
+	}
 	return s.wantStat
 }
 
@@ -217,6 +224,40 @@ func TestWriteRowIterator_writeErrorStillReturnsOutcome(t *testing.T) {
 	}
 	if got.Metadata != md {
 		t.Fatal("metadata not returned on error")
+	}
+	if !stub.stopped {
+		t.Fatal("stop not called")
+	}
+}
+
+func TestWriteRowIterator_nilWriter(t *testing.T) {
+	t.Parallel()
+
+	_, err := WriteRowIterator(&spanner.RowIterator{}, nil)
+	if !errors.Is(err, ErrNilWriter) {
+		t.Fatalf("error = %v, want ErrNilWriter", err)
+	}
+}
+
+func TestRunRowIterator_queryErrorDoesNotPrepare(t *testing.T) {
+	t.Parallel()
+
+	queryErr := errors.New("query failed")
+	stub := &stubRowIterator{err: queryErr}
+
+	var prepared bool
+	hooks := RowIteratorHooks{
+		PrepareMetadata: func(*sppb.ResultSetMetadata) error {
+			prepared = true
+			return nil
+		},
+	}
+	_, err := runRowIterator(stub, hooks)
+	if !errors.Is(err, queryErr) {
+		t.Fatalf("error = %v, want %v", err, queryErr)
+	}
+	if prepared {
+		t.Fatal("PrepareMetadata should not be called on query error")
 	}
 	if !stub.stopped {
 		t.Fatal("stop not called")

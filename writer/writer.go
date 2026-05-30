@@ -930,7 +930,7 @@ func (w *SQLInsertWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
 
 // PrepareRowType initializes the SQL INSERT schema from a row type before the first row is written.
 // When the row type comes from a [cloud.google.com/go/spanner.RowIterator], use [RunRowIterator]
-// or iter.Metadata after the first Next. Nil rowType registers an empty schema;
+// or [PrepareRowType] with iter.Metadata.GetRowType() after the first Next. Nil rowType registers an empty schema;
 // [SQLInsertWriter.WriteGCVs] still requires at least one column to emit SQL.
 func (w *SQLInsertWriter) PrepareRowType(rowType *sppb.StructType) error {
 	return w.prepareRowType(rowType)

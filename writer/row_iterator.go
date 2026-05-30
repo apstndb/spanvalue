@@ -9,7 +9,10 @@ import (
 )
 
 // ErrNilRowIterator reports that [RunRowIterator] or [WriteRowIterator] was called with a nil iterator.
-var ErrNilRowIterator = errors.New("nil RowIterator")
+var ErrNilRowIterator = errors.New("nil row iterator")
+
+// ErrNilWriter reports that [WriteRowIterator] was called with a nil writer.
+var ErrNilWriter = errors.New("nil row iterator writer")
 
 // RowIteratorStats holds execution information populated on a
 // [cloud.google.com/go/spanner.RowIterator] after iteration completes.
@@ -36,7 +39,8 @@ type RowIteratorResult struct {
 // PrepareMetadata runs once after the first [spanner.RowIterator.Next], with
 // whatever [cloud.google.com/go/spanner.RowIterator.Metadata] holds at that point
 // (including nil for DML or stats-only iterators, and including when the only
-// result is iterator.Done).
+// result is iterator.Done). It is not called when the first Next returns a query
+// error other than iterator.Done.
 //
 // Finish runs only after all rows are consumed without error. If PrepareMetadata
 // or WriteRow returns an error, the loop aborts and Finish is not called. The
@@ -61,7 +65,11 @@ type RowIteratorWriter interface {
 // RowIteratorHooksFromWriter returns hooks that register metadata via
 // [RowIteratorWriter.PrepareRowType], write each row, and call [Flusher.Flush]
 // in Finish. Flush is not called when PrepareRowType or WriteRow returns an error.
+// A nil writer returns empty hooks.
 func RowIteratorHooksFromWriter(w RowIteratorWriter) RowIteratorHooks {
+	if w == nil {
+		return RowIteratorHooks{}
+	}
 	return RowIteratorHooks{
 		PrepareMetadata: func(md *sppb.ResultSetMetadata) error {
 			return w.PrepareRowType(rowTypeFromMetadata(md))
@@ -77,8 +85,8 @@ func RowIteratorHooksFromWriter(w RowIteratorWriter) RowIteratorHooks {
 // [spanner.RowIterator.Stop] on return.
 //
 // The returned [RowIteratorResult] reflects iter.Metadata and iter stats fields
-// after the loop (including when no data rows were written). When hooks.Finish is
-// set, it receives the same pointer that is returned.
+// after Stop and the loop (including when no data rows were written). When
+// hooks.Finish is set, it receives the same pointer that is returned.
 func RunRowIterator(iter *spanner.RowIterator, hooks RowIteratorHooks) (*RowIteratorResult, error) {
 	if iter == nil {
 		return nil, ErrNilRowIterator
@@ -89,6 +97,12 @@ func RunRowIterator(iter *spanner.RowIterator, hooks RowIteratorHooks) (*RowIter
 // WriteRowIterator streams all rows from iter into w using [RowIteratorHooksFromWriter].
 // See [RunRowIterator] for iterator metadata, stats, and zero-row behavior.
 func WriteRowIterator(iter *spanner.RowIterator, w RowIteratorWriter) (*RowIteratorResult, error) {
+	if iter == nil {
+		return nil, ErrNilRowIterator
+	}
+	if w == nil {
+		return nil, ErrNilWriter
+	}
 	return RunRowIterator(iter, RowIteratorHooksFromWriter(w))
 }
 
@@ -124,37 +138,50 @@ func (f spannerRowIteratorFacade) stats() RowIteratorStats {
 }
 
 func runRowIterator(fac rowIteratorFacade, hooks RowIteratorHooks) (*RowIteratorResult, error) {
-	defer fac.stop()
+	stopped := false
+	stopOnce := func() {
+		if !stopped {
+			stopped = true
+			fac.stop()
+		}
+	}
+	defer stopOnce()
+
 	outcome := func() *RowIteratorResult {
 		return &RowIteratorResult{
 			Metadata: fac.metadata(),
 			Stats:    fac.stats(),
 		}
 	}
+	abort := func(err error) (*RowIteratorResult, error) {
+		stopOnce()
+		return outcome(), err
+	}
 
 	first := true
 	for {
 		row, err := fac.next()
+		if err != nil && !errors.Is(err, iterator.Done) {
+			return abort(err)
+		}
 		if first {
 			first = false
 			if hooks.PrepareMetadata != nil {
 				if err := hooks.PrepareMetadata(fac.metadata()); err != nil {
-					return outcome(), err
+					return abort(err)
 				}
 			}
 		}
 		if errors.Is(err, iterator.Done) {
 			break
 		}
-		if err != nil {
-			return outcome(), err
-		}
 		if hooks.WriteRow != nil {
 			if err := hooks.WriteRow(row); err != nil {
-				return outcome(), err
+				return abort(err)
 			}
 		}
 	}
+	stopOnce()
 	result := outcome()
 	if hooks.Finish != nil {
 		if err := hooks.Finish(result); err != nil {
