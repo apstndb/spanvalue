@@ -846,6 +846,111 @@ func TestSQLInsertWriterSQLDialect(t *testing.T) {
 	}
 }
 
+func TestSQLInsertWriterBatchSize(t *testing.T) {
+	t.Parallel()
+
+	columnNames := []string{"id", "name"}
+	row := func(id int64, name string) []spanner.GenericColumnValue {
+		return []spanner.GenericColumnValue{
+			gcvctor.Int64Value(id),
+			gcvctor.StringValue(name),
+		}
+	}
+
+	t.Run("default one row per statement", func(t *testing.T) {
+		t.Parallel()
+
+		var out bytes.Buffer
+		w := NewSQLInsertWriter(&out, "users")
+		for _, values := range [][]spanner.GenericColumnValue{row(1, "a"), row(2, "b")} {
+			if err := w.WriteValues(columnNames, values); err != nil {
+				t.Fatalf("WriteValues() error = %v", err)
+			}
+		}
+		want := "" +
+			"INSERT INTO `users` (`id`, `name`) VALUES (1, \"a\");\n" +
+			"INSERT INTO `users` (`id`, `name`) VALUES (2, \"b\");\n"
+		if diff := cmp.Diff(want, out.String()); diff != "" {
+			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("batch size two", func(t *testing.T) {
+		t.Parallel()
+
+		var out bytes.Buffer
+		w := NewSQLInsertWriter(&out, "users", WithSQLBatchSize(2))
+		for _, values := range [][]spanner.GenericColumnValue{row(1, "a"), row(2, "b"), row(3, "c")} {
+			if err := w.WriteValues(columnNames, values); err != nil {
+				t.Fatalf("WriteValues() error = %v", err)
+			}
+		}
+		want := "" +
+			"INSERT INTO `users` (`id`, `name`) VALUES\n" +
+			"  (1, \"a\"),\n" +
+			"  (2, \"b\");\n" +
+			"INSERT INTO `users` (`id`, `name`) VALUES\n" +
+			"  (3, \"c\")"
+		if diff := cmp.Diff(want, out.String()); diff != "" {
+			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("flush remainder", func(t *testing.T) {
+		t.Parallel()
+
+		var out bytes.Buffer
+		w := NewSQLInsertWriter(&out, "users", WithSQLBatchSize(2))
+		for _, values := range [][]spanner.GenericColumnValue{row(1, "a"), row(2, "b"), row(3, "c")} {
+			if err := w.WriteValues(columnNames, values); err != nil {
+				t.Fatalf("WriteValues() error = %v", err)
+			}
+		}
+		if err := w.Flush(); err != nil {
+			t.Fatalf("Flush() error = %v", err)
+		}
+		want := "" +
+			"INSERT INTO `users` (`id`, `name`) VALUES\n" +
+			"  (1, \"a\"),\n" +
+			"  (2, \"b\");\n" +
+			"INSERT INTO `users` (`id`, `name`) VALUES\n" +
+			"  (3, \"c\");\n"
+		if diff := cmp.Diff(want, out.String()); diff != "" {
+			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("batch size zero same as one", func(t *testing.T) {
+		t.Parallel()
+
+		var out bytes.Buffer
+		w := NewSQLInsertWriter(&out, "users", WithSQLBatchSize(0))
+		if err := w.WriteValues(columnNames, row(1, "a")); err != nil {
+			t.Fatalf("WriteValues() error = %v", err)
+		}
+		want := "INSERT INTO `users` (`id`, `name`) VALUES (1, \"a\");\n"
+		if diff := cmp.Diff(want, out.String()); diff != "" {
+			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("insert or ignore batched", func(t *testing.T) {
+		t.Parallel()
+
+		var out bytes.Buffer
+		w := NewSQLInsertWriter(&out, "users", WithSQLBatchSize(2), WithSQLInsertKind(SQLInsertOrIgnore))
+		for _, values := range [][]spanner.GenericColumnValue{row(1, "a"), row(2, "b")} {
+			if err := w.WriteValues(columnNames, values); err != nil {
+				t.Fatalf("WriteValues() error = %v", err)
+			}
+		}
+		want := "INSERT OR IGNORE INTO `users` (`id`, `name`) VALUES\n  (1, \"a\"),\n  (2, \"b\");\n"
+		if diff := cmp.Diff(want, out.String()); diff != "" {
+			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
+
 func TestSQLInsertWriterInsertKind(t *testing.T) {
 	t.Parallel()
 

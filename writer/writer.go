@@ -31,8 +31,9 @@
 // accept [WithFormatter] and schema options below. [WithSQLInsertKind] selects the
 // INSERT prefix (see Spanner INSERT DML syntax). [WithSQLDialect] selects identifier
 // quoting for table and column names in SQL INSERT output (GoogleSQL by default).
-// [RowData], [FormatDelimitedRow], and
-// [FormatJSONLRow] format a single row without a writer.
+// [WithSQLBatchSize] groups rows into multi-row INSERT statements; call
+// [SQLInsertWriter.Flush] after the last row when batching.
+// [RowData], [FormatDelimitedRow], and [FormatJSONLRow] format a single row without a writer.
 //
 // # Column names and field types
 //
@@ -159,8 +160,8 @@ type Writer interface {
 
 // Flusher finalizes any buffered output. Flush does not close the underlying
 // io.Writer. DelimitedWriter uses Flush to forward buffered CSV-style data;
-// JSONLWriter and SQLInsertWriter implement it as a no-op so adapters can use
-// one finalize path for all writer implementations.
+// JSONLWriter implements Flush as a no-op. [SQLInsertWriter.Flush] closes a
+// partial multi-row INSERT when [WithSQLBatchSize] is greater than 1.
 type Flusher interface {
 	Flush() error
 }
@@ -251,6 +252,26 @@ func WithSQLDialect(dialect databasepb.DatabaseDialect) SQLInsertOption {
 
 func (o sqlDialectOption) applySQLInsertOption(w *SQLInsertWriter) {
 	w.sqlDialect = o.dialect
+}
+
+// WithSQLBatchSize sets how many rows [SQLInsertWriter] combines into one INSERT
+// statement. Values 0 or 1 keep the default of one row per statement. Values greater
+// than 1 emit multi-row INSERT ... VALUES (...), (...); up to n rows per statement.
+// Call [SQLInsertWriter.Flush] after the final row to close a partial batch.
+//
+// Batching applies the same [SQLInsertKind] prefix once per batched statement. Multi-row
+// INSERT OR IGNORE and INSERT OR UPDATE follow Spanner GoogleSQL DML rules. Identifier
+// quoting follows [WithSQLDialect]; value literals still use [WithFormatter].
+func WithSQLBatchSize(n int) SQLInsertOption {
+	return sqlBatchSizeOption{batchSize: n}
+}
+
+type sqlBatchSizeOption struct {
+	batchSize int
+}
+
+func (o sqlBatchSizeOption) applySQLInsertOption(w *SQLInsertWriter) {
+	w.batchSize = o.batchSize
 }
 
 // SQLInsertOption configures a SQLInsertWriter created by [NewSQLInsertWriter].
@@ -912,6 +933,8 @@ type SQLInsertWriter struct {
 
 	insertKind        SQLInsertKind
 	sqlDialect        databasepb.DatabaseDialect
+	batchSize         int
+	batchPending      int
 	schema            columnSchema
 	quotedColumnNames string
 	quotedTable       string
@@ -1040,10 +1063,22 @@ func (w *SQLInsertWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	return w.writeGCVs(values, quotedColumns)
 }
 
-// Flush finalizes SQL INSERT output. SQLInsertWriter is unbuffered, so this is
-// a no-op.
+// Flush finalizes a partial multi-row INSERT batch started by [WithSQLBatchSize].
+// When batch size is 0 or 1, Flush is a no-op.
 func (w *SQLInsertWriter) Flush() error {
-	return nil
+	if w.sqlBatchSize() <= 1 || w.batchPending == 0 {
+		return nil
+	}
+	_, err := io.WriteString(w.out, ";\n")
+	w.batchPending = 0
+	return err
+}
+
+func (w *SQLInsertWriter) sqlBatchSize() int {
+	if w.batchSize <= 1 {
+		return 1
+	}
+	return w.batchSize
 }
 
 func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedColumns string) error {
@@ -1053,11 +1088,18 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 	if w.Table == "" {
 		return ErrEmptyTableName
 	}
-	quotedTable, err := w.quotedQualifiedTable()
+	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.schema.names, values)
 	if err != nil {
 		return err
 	}
-	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.schema.names, values)
+	if w.sqlBatchSize() <= 1 {
+		return w.writeSingleInsert(quotedColumns, formattedValues)
+	}
+	return w.appendBatchedInsert(quotedColumns, formattedValues)
+}
+
+func (w *SQLInsertWriter) writeSingleInsert(quotedColumns string, formattedValues []string) error {
+	quotedTable, err := w.quotedQualifiedTable()
 	if err != nil {
 		return err
 	}
@@ -1065,6 +1107,42 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 	if _, err := fmt.Fprintf(w.out, "%s INTO %s (%s) VALUES (", prefix, quotedTable, quotedColumns); err != nil {
 		return err
 	}
+	if err := w.writeFormattedValues(formattedValues); err != nil {
+		return err
+	}
+	_, err = io.WriteString(w.out, ");\n")
+	return err
+}
+
+func (w *SQLInsertWriter) appendBatchedInsert(quotedColumns string, formattedValues []string) error {
+	if w.batchPending == 0 {
+		quotedTable, err := w.quotedQualifiedTable()
+		if err != nil {
+			return err
+		}
+		prefix := w.insertKind.String()
+		if _, err := fmt.Fprintf(w.out, "%s INTO %s (%s) VALUES\n  (", prefix, quotedTable, quotedColumns); err != nil {
+			return err
+		}
+	} else if _, err := io.WriteString(w.out, ",\n  ("); err != nil {
+		return err
+	}
+	if err := w.writeFormattedValues(formattedValues); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w.out, ")"); err != nil {
+		return err
+	}
+	w.batchPending++
+	if w.batchPending >= w.sqlBatchSize() {
+		_, err := io.WriteString(w.out, ";\n")
+		w.batchPending = 0
+		return err
+	}
+	return nil
+}
+
+func (w *SQLInsertWriter) writeFormattedValues(formattedValues []string) error {
 	for i, val := range formattedValues {
 		if i > 0 {
 			if _, err := io.WriteString(w.out, ", "); err != nil {
@@ -1075,8 +1153,7 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 			return err
 		}
 	}
-	_, err = io.WriteString(w.out, ");\n")
-	return err
+	return nil
 }
 
 func (w *SQLInsertWriter) setRowType(rowType *sppb.StructType) {
