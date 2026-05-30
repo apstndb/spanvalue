@@ -115,13 +115,13 @@ return w.Flush()
 ```
 
 When a `SELECT` may return zero rows but metadata still lists result columns, use
-`iter.Next`. Spanner sets `iter.Metadata` after the first `Next` (row or
-`iterator.Done`); register names with `PrepareRowType` on that pass, then stream rows.
-`Flush` writes a pending header when no data row was emitted:
+`writer.WriteRowIterator` (or the generic `writer.RunRowIterator` with hooks). It
+registers `iter.Metadata` on the first `Next`, streams rows, and finishes with
+`Flush` (header-only when no data rows were written). It returns `iter.Metadata`
+and query stats even when the iterator is empty:
 
 ```go
-iter := txn.Query(ctx, stmt)
-defer iter.Stop()
+iter := txn.QueryWithStats(ctx, stmt) // WriteRowIterator stops iter for us
 
 w := writer.NewDelimitedWriter(
 	out,
@@ -129,36 +129,24 @@ w := writer.NewDelimitedWriter(
 	writer.WithFormatter(cfg),
 	writer.WithHeader(true),
 )
-
-first := true
-for {
-	row, err := iter.Next()
-	if first {
-		first = false
-		if iter.Metadata != nil {
-			if err := w.PrepareRowType(iter.Metadata.GetRowType()); err != nil {
-				return err
-			}
-		}
-	}
-	if err == iterator.Done {
-		break
-	}
-	if err != nil {
-		return err
-	}
-	if err := w.WriteRow(row); err != nil {
-		return err
-	}
+result, err := writer.WriteRowIterator(iter, w)
+if err != nil {
+	return err
 }
-return w.Flush()
+_ = result.Metadata
+_ = result.Stats.QueryStats
 ```
+
+An equivalent manual loop — call `PrepareRowType(iter.Metadata.GetRowType())`
+after the first `Next`, write each row, then `Flush` — is still supported;
+prefer `WriteRowIterator` when you also need metadata or query stats from an
+empty result.
 
 ### Schema registration
 
 | Goal | API |
 |------|-----|
-| Streaming `RowIterator` | `PrepareRowType(iter.Metadata.GetRowType())` after first `Next`, then `WriteRow` (or `iter.Do` when every query has ≥1 row) |
+| Streaming `RowIterator` | [`WriteRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WriteRowIterator) / [`RunRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RunRowIterator), or `PrepareRowType` after first `Next` then `WriteRow` (or `iter.Do` when every query has ≥1 row) |
 | Known column names only | `WithColumnNames` / `PrepareColumnNames` (at least one name) |
 | Names and types from metadata | `WithRowType` / `PrepareRowType` / `WithMetadata` (when `md` is already available) |
 | Zero columns (e.g. DML without `THEN RETURN`) | `PrepareRowType(nil)` or `PrepareRowType(metadata.GetRowType())` when fields are empty—**not** `PrepareColumnNames` |

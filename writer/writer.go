@@ -60,9 +60,10 @@
 // [cloud.google.com/go/spanner.RowIterator] before the first Next). For streaming, call
 // [PrepareRowType] with iter.Metadata.GetRowType() after the first Next when the result may be empty
 // but still has columns (including when Next returns iterator.Done); call [DelimitedWriter.Flush]
-// after the loop and propagate its error (do not defer Flush—it returns an error). When every query
-// returns at least one row, [WriteRow] registers names from
-// the first row.
+// after the loop and propagate its error (do not defer Flush—it returns an error).
+// [RunRowIterator] and [WriteRowIterator] run that loop, call Finish (Flush for writers),
+// and return metadata and stats (including for zero-row results).
+// When every query returns at least one row, [WriteRow] registers names from the first row.
 //
 // [DelimitedWriter] defaults to a CSV/TSV header once column names are known ([WithHeader]):
 // before the first data row, or on [DelimitedWriter.Flush] when no data row was written
@@ -928,8 +929,8 @@ func (w *SQLInsertWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
 }
 
 // PrepareRowType initializes the SQL INSERT schema from a row type before the first row is written.
-// When the row type comes from a [cloud.google.com/go/spanner.RowIterator], use
-// iter.Metadata.GetRowType after the first Next. Nil rowType registers an empty schema;
+// When the row type comes from a [cloud.google.com/go/spanner.RowIterator], use [RunRowIterator]
+// or [PrepareRowType] with iter.Metadata.GetRowType() after the first Next. Nil rowType registers an empty schema;
 // [SQLInsertWriter.WriteGCVs] still requires at least one column to emit SQL.
 func (w *SQLInsertWriter) PrepareRowType(rowType *sppb.StructType) error {
 	return w.prepareRowType(rowType)
