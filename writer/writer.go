@@ -424,7 +424,7 @@ func newDelimitedWriter(out io.Writer) *DelimitedWriter {
 // It supports CSV (delimiter [Comma]), quoted TSV (delimiter '\t'), or other
 // single-rune delimiters. Output follows encoding/csv quoting rules, not raw
 // field joins. Delimiter must be non-zero and a valid encoding/csv delimiter.
-// See package doc "Quoted delimited text vs raw tab-separated".
+// See the package-level documentation section [#Quoted delimited text vs raw tab-separated].
 func NewDelimitedWriter(out io.Writer, delimiter rune, options ...DelimitedOption) *DelimitedWriter {
 	w := newDelimitedWriter(out)
 	w.delimiter = delimiter
