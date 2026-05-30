@@ -69,7 +69,7 @@ func TestWriteRowIterator_emptyWithMetadata(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithColumnNames("id", "name")
-	wantStats := RowIteratorStats{RowCount: 0, QueryStats: map[string]interface{}{"elapsed_ms": 1.0}}
+	wantStats := RowIteratorStats{RowCount: 0, QueryStats: map[string]any{"elapsed_ms": 1.0}}
 	stub := &stubRowIterator{md: md, wantStat: wantStats}
 
 	var out bytes.Buffer
@@ -217,5 +217,8 @@ func TestWriteRowIterator_writeErrorStillReturnsOutcome(t *testing.T) {
 	}
 	if got.Metadata != md {
 		t.Fatal("metadata not returned on error")
+	}
+	if !stub.stopped {
+		t.Fatal("stop not called")
 	}
 }

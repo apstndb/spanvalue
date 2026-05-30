@@ -450,12 +450,6 @@ func (w *DelimitedWriter) PrepareRowType(rowType *sppb.StructType) error {
 	return w.prepareRowType(rowType)
 }
 
-// PrepareMetadata registers names and types from metadata.GetRowType(); same as
-// [WithMetadata]. Prefer this from [RunRowIterator] when streaming a RowIterator.
-func (w *DelimitedWriter) PrepareMetadata(metadata *sppb.ResultSetMetadata) error {
-	return w.PrepareRowType(rowTypeFromMetadata(metadata))
-}
-
 // PrepareColumnNames registers column names only; same as [WithColumnNames] for non-empty
 // names. Unlike [WithColumnNames], an empty names slice returns [ErrMissingColumnNames];
 // for zero-column result sets use [DelimitedWriter.PrepareRowType] instead.
@@ -731,11 +725,6 @@ func (w *JSONLWriter) PrepareRowType(rowType *sppb.StructType) error {
 	return w.prepareRowType(rowType)
 }
 
-// PrepareMetadata registers names and types from metadata.GetRowType(); see [DelimitedWriter.PrepareMetadata].
-func (w *JSONLWriter) PrepareMetadata(metadata *sppb.ResultSetMetadata) error {
-	return w.PrepareRowType(rowTypeFromMetadata(metadata))
-}
-
 // PrepareColumnNames registers column names; see [DelimitedWriter.PrepareColumnNames].
 func (w *JSONLWriter) PrepareColumnNames(names []string) error {
 	return w.prepareColumnNames(names)
@@ -936,11 +925,6 @@ func (w *SQLInsertWriter) WriteRow(row *spanner.Row) error {
 // Deprecated: Use [SQLInsertWriter.PrepareRowType], [SQLInsertWriter.PrepareColumnNames],
 // [WithRowType], [WithColumnNames], or [WithMetadata].
 func (w *SQLInsertWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
-	return w.PrepareRowType(rowTypeFromMetadata(metadata))
-}
-
-// PrepareMetadata registers names and types from metadata.GetRowType(); see [DelimitedWriter.PrepareMetadata].
-func (w *SQLInsertWriter) PrepareMetadata(metadata *sppb.ResultSetMetadata) error {
 	return w.PrepareRowType(rowTypeFromMetadata(metadata))
 }
 

@@ -17,12 +17,15 @@ var ErrNilRowIterator = errors.New("nil RowIterator")
 // RowCount is set for DML after iterator.Done.
 type RowIteratorStats struct {
 	QueryPlan  *sppb.QueryPlan
-	QueryStats map[string]interface{}
+	QueryStats map[string]any
 	RowCount   int64
 }
 
 // RowIteratorResult is the metadata and stats available from a
-// [cloud.google.com/go/spanner.RowIterator] after [RunRowIterator] finishes.
+// [cloud.google.com/go/spanner.RowIterator] after [RunRowIterator] returns.
+// On the error path, stats fields reflect whatever the iterator had populated at
+// the abort point and may be zero until [iterator.Done] (QueryStats and RowCount
+// are only fully populated after a successful run).
 type RowIteratorResult struct {
 	Metadata *sppb.ResultSetMetadata
 	Stats    RowIteratorStats
@@ -30,10 +33,16 @@ type RowIteratorResult struct {
 
 // RowIteratorHooks drives [RunRowIterator]. Nil function fields are skipped.
 //
-// PrepareMetadata runs after the first [spanner.RowIterator.Next] when
-// [cloud.google.com/go/spanner.RowIterator.Metadata] is non-nil (including when the
-// only result is iterator.Done). Finish runs after all rows are consumed; Stats is
-// fully populated at that point. QueryPlan and QueryStats require QueryWithStats.
+// PrepareMetadata runs once after the first [spanner.RowIterator.Next], with
+// whatever [cloud.google.com/go/spanner.RowIterator.Metadata] holds at that point
+// (including nil for DML or stats-only iterators, and including when the only
+// result is iterator.Done).
+//
+// Finish runs only after all rows are consumed without error. If PrepareMetadata
+// or WriteRow returns an error, the loop aborts and Finish is not called. The
+// returned [RowIteratorResult] is still populated with whatever iter.Metadata and
+// stats are available at the abort point. Stats is fully populated when Finish
+// runs successfully. QueryPlan and QueryStats require QueryWithStats.
 // Finish may read Metadata again for end-of-stream processing.
 type RowIteratorHooks struct {
 	PrepareMetadata func(*sppb.ResultSetMetadata) error
@@ -46,15 +55,18 @@ type RowIteratorHooks struct {
 // [SQLInsertWriter] implement it.
 type RowIteratorWriter interface {
 	FlushWriter
-	PrepareMetadata(*sppb.ResultSetMetadata) error
+	PrepareRowType(*sppb.StructType) error
 }
 
-// RowIteratorHooksFromWriter returns hooks that register metadata, write each row,
-// and call [Flusher.Flush] in Finish (ignoring the result).
+// RowIteratorHooksFromWriter returns hooks that register metadata via
+// [RowIteratorWriter.PrepareRowType], write each row, and call [Flusher.Flush]
+// in Finish. Flush is not called when PrepareRowType or WriteRow returns an error.
 func RowIteratorHooksFromWriter(w RowIteratorWriter) RowIteratorHooks {
 	return RowIteratorHooks{
-		PrepareMetadata: w.PrepareMetadata,
-		WriteRow:        w.WriteRow,
+		PrepareMetadata: func(md *sppb.ResultSetMetadata) error {
+			return w.PrepareRowType(rowTypeFromMetadata(md))
+		},
+		WriteRow: w.WriteRow,
 		Finish: func(*RowIteratorResult) error {
 			return w.Flush()
 		},
@@ -71,9 +83,7 @@ func RunRowIterator(iter *spanner.RowIterator, hooks RowIteratorHooks) (*RowIter
 	if iter == nil {
 		return nil, ErrNilRowIterator
 	}
-	fac := spannerRowIteratorFacade{iter}
-	defer fac.stop()
-	return runRowIterator(fac, hooks)
+	return runRowIterator(spannerRowIteratorFacade{iter}, hooks)
 }
 
 // WriteRowIterator streams all rows from iter into w using [RowIteratorHooksFromWriter].
@@ -114,6 +124,7 @@ func (f spannerRowIteratorFacade) stats() RowIteratorStats {
 }
 
 func runRowIterator(fac rowIteratorFacade, hooks RowIteratorHooks) (*RowIteratorResult, error) {
+	defer fac.stop()
 	outcome := func() *RowIteratorResult {
 		return &RowIteratorResult{
 			Metadata: fac.metadata(),
@@ -127,14 +138,12 @@ func runRowIterator(fac rowIteratorFacade, hooks RowIteratorHooks) (*RowIterator
 		if first {
 			first = false
 			if hooks.PrepareMetadata != nil {
-				if md := fac.metadata(); md != nil {
-					if err := hooks.PrepareMetadata(md); err != nil {
-						return outcome(), err
-					}
+				if err := hooks.PrepareMetadata(fac.metadata()); err != nil {
+					return outcome(), err
 				}
 			}
 		}
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
 		if err != nil {
