@@ -227,10 +227,9 @@ func writeTSV(out io.Writer, rows []*spanner.Row) error {
 Some CLIs expose a legacy **TAB** format that joins pre-formatted column strings
 with `\t` and does not apply CSV-style quoting. That is not what
 `NewDelimitedWriter(out, '\t')` emits. To keep raw tab-separated output while
-still using spanvalue formatters and [`WriteRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WriteRowIterator),
-implement [`writer.Writer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#Writer)
-(and [`RowIteratorWriter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorWriter)
-when streaming from a `RowIterator`): format each column, `strings.Join(fields, "\t")`,
+still using spanvalue formatters, implement [`writer.Writer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#Writer)
+(or [`RowIteratorWriter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorWriter)
+when streaming via [`WriteRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WriteRowIterator)): format each column, `strings.Join(fields, "\t")`,
 then write the line.
 
 JSONL output:
