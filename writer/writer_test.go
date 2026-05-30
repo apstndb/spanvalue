@@ -956,6 +956,22 @@ func TestSQLInsertWriterBatchSize(t *testing.T) {
 		}
 	})
 
+	t.Run("PostgreSQL dialect batched", func(t *testing.T) {
+		t.Parallel()
+
+		var out bytes.Buffer
+		w := NewSQLInsertWriter(&out, "users", WithSQLBatchSize(2), WithSQLDialect(databasepb.DatabaseDialect_POSTGRESQL))
+		for _, values := range [][]spanner.GenericColumnValue{row(1, "a"), row(2, "b")} {
+			if err := w.WriteValues(columnNames, values); err != nil {
+				t.Fatalf("WriteValues() error = %v", err)
+			}
+		}
+		want := "INSERT INTO \"users\" (\"id\", \"name\") VALUES\n  (1, \"a\"),\n  (2, \"b\");\n"
+		if diff := cmp.Diff(want, out.String()); diff != "" {
+			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("insert or ignore batched", func(t *testing.T) {
 		t.Parallel()
 
