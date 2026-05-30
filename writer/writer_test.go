@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"cloud.google.com/go/spanner"
+	databasepb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/spanvalue"
 	"github.com/apstndb/spanvalue/gcvctor"
@@ -773,6 +774,68 @@ func TestSQLInsertWriterWriteValues(t *testing.T) {
 
 			err := w.WriteValues(tt.columnNames, tt.values)
 			if err != nil {
+				t.Fatalf("WriteValues() error = %v", err)
+			}
+
+			if diff := cmp.Diff(tt.want, out.String()); diff != "" {
+				t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestSQLInsertWriterSQLDialect(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		dialect     databasepb.DatabaseDialect
+		table       string
+		columnNames []string
+		values      []spanner.GenericColumnValue
+		want        string
+	}{
+		{
+			name:        "PostgreSQL identifier escaping",
+			dialect:     databasepb.DatabaseDialect_POSTGRESQL,
+			table:       `user"table`,
+			columnNames: []string{"id", `na"me`},
+			values: []spanner.GenericColumnValue{
+				gcvctor.Int64Value(42),
+				gcvctor.Int64Value(7),
+			},
+			want: `INSERT INTO "user""table" ("id", "na""me") VALUES (42, 7);` + "\n",
+		},
+		{
+			name:        "PostgreSQL qualified table name escaping",
+			dialect:     databasepb.DatabaseDialect_POSTGRESQL,
+			table:       `my"db.users`,
+			columnNames: []string{"id"},
+			values: []spanner.GenericColumnValue{
+				gcvctor.Int64Value(42),
+			},
+			want: `INSERT INTO "my""db"."users" ("id") VALUES (42);` + "\n",
+		},
+		{
+			name:        "default GoogleSQL unchanged",
+			dialect:     databasepb.DatabaseDialect_DATABASE_DIALECT_UNSPECIFIED,
+			table:       "users",
+			columnNames: []string{"id"},
+			values: []spanner.GenericColumnValue{
+				gcvctor.Int64Value(42),
+			},
+			want: "INSERT INTO `users` (`id`) VALUES (42);\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var out bytes.Buffer
+			w := NewSQLInsertWriter(&out, tt.table, WithSQLDialect(tt.dialect))
+
+			if err := w.WriteValues(tt.columnNames, tt.values); err != nil {
 				t.Fatalf("WriteValues() error = %v", err)
 			}
 

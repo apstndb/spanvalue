@@ -17,7 +17,9 @@
 //
 // [NewDelimitedWriter], [NewCSVWriter], [NewJSONLWriter], and [NewSQLInsertWriter]
 // accept [WithFormatter] and schema options below. [WithSQLInsertKind] selects the
-// INSERT prefix (see Spanner INSERT DML syntax). [RowData], [FormatDelimitedRow], and
+// INSERT prefix (see Spanner INSERT DML syntax). [WithSQLDialect] selects identifier
+// quoting for table and column names in SQL INSERT output (GoogleSQL by default).
+// [RowData], [FormatDelimitedRow], and
 // [FormatJSONLRow] format a single row without a writer.
 //
 // # Column names and field types
@@ -221,6 +223,22 @@ type sqlInsertKindOption struct {
 
 func (o sqlInsertKindOption) applySQLInsertOption(w *SQLInsertWriter) {
 	w.insertKind = o.kind
+}
+
+type sqlDialectOption struct {
+	dialect databasepb.DatabaseDialect
+}
+
+// WithSQLDialect sets identifier quoting for table and column names in SQL INSERT
+// output. It does not change INSERT statement prefixes ([WithSQLInsertKind]) or
+// value literal formatting ([WithFormatter]). The default is GoogleSQL
+// ([databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL]).
+func WithSQLDialect(dialect databasepb.DatabaseDialect) SQLInsertOption {
+	return sqlDialectOption{dialect: dialect}
+}
+
+func (o sqlDialectOption) applySQLInsertOption(w *SQLInsertWriter) {
+	w.sqlDialect = o.dialect
 }
 
 // SQLInsertOption configures a SQLInsertWriter created by [NewSQLInsertWriter].
@@ -871,12 +889,13 @@ func (w *JSONLWriter) marshalResolvedNames(resolvedNames []string) ([][]byte, er
 	return marshaledKeys, nil
 }
 
-// SQLInsertWriter writes rows as GoogleSQL INSERT statements.
+// SQLInsertWriter writes rows as SQL INSERT statements with dialect-aware identifier quoting.
 type SQLInsertWriter struct {
 	Table     string
 	Formatter *spanvalue.FormatConfig
 
 	insertKind        SQLInsertKind
+	sqlDialect        databasepb.DatabaseDialect
 	schema            columnSchema
 	quotedColumnNames string
 	quotedTable       string
@@ -904,9 +923,10 @@ func NewSQLInsertWriterWithOptions(out io.Writer, table string, options ...SQLIn
 
 func newSQLInsertWriter(out io.Writer, table string) *SQLInsertWriter {
 	return &SQLInsertWriter{
-		Table:     table,
-		Formatter: spanvalue.LiteralFormatConfig(),
-		out:       out,
+		Table:      table,
+		Formatter:  spanvalue.LiteralFormatConfig(),
+		sqlDialect: databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL,
+		out:        out,
 	}
 }
 
@@ -952,7 +972,7 @@ func (w *SQLInsertWriter) prepareRowType(rowType *sppb.StructType) error {
 		w.setRowType(rowType)
 		return nil
 	}
-	quotedColumns, err := quoteIdentifiers(columnNames)
+	quotedColumns, err := quoteIdentifiers(columnNames, w.sqlDialect)
 	if err != nil {
 		return err
 	}
@@ -1071,7 +1091,7 @@ func (w *SQLInsertWriter) initOrValidateQuotedColumns(columnNames []string) (str
 	if err != nil {
 		return "", err
 	}
-	quotedColumns, err := quoteIdentifiers(names)
+	quotedColumns, err := quoteIdentifiers(names, w.sqlDialect)
 	if err != nil {
 		return "", err
 	}
@@ -1087,7 +1107,7 @@ func (w *SQLInsertWriter) quotedQualifiedTable() (string, error) {
 	if w.quotedTable != "" && w.quotedTableInput == w.Table {
 		return w.quotedTable, nil
 	}
-	quotedTable, err := quoteQualifiedIdentifier(w.Table)
+	quotedTable, err := quoteQualifiedIdentifier(w.Table, w.sqlDialect)
 	if err != nil {
 		return "", err
 	}
@@ -1294,26 +1314,26 @@ func validatePrepareRowTypeTransition(schema *columnSchema, columnNames []string
 	return err
 }
 
-// quoteIdentifiers quotes GoogleSQL identifiers and rejects empty names.
-func quoteIdentifiers(names []string) ([]string, error) {
+// quoteIdentifiers quotes identifiers for dialect and rejects empty names.
+func quoteIdentifiers(names []string, dialect databasepb.DatabaseDialect) ([]string, error) {
 	quoted := make([]string, len(names))
 	for i, name := range names {
 		if name == "" {
 			return nil, ErrEmptyColumnName
 		}
-		quoted[i] = spanvalue.QuoteIdentifier(databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, name)
+		quoted[i] = spanvalue.QuoteIdentifier(dialect, name)
 	}
 	return quoted, nil
 }
 
-// quoteQualifiedIdentifier quotes each identifier segment in a dotted path.
-func quoteQualifiedIdentifier(name string) (string, error) {
+// quoteQualifiedIdentifier quotes each identifier segment in a dotted path for dialect.
+func quoteQualifiedIdentifier(name string, dialect databasepb.DatabaseDialect) (string, error) {
 	parts := strings.Split(name, ".")
 	for i, part := range parts {
 		if part == "" {
 			return "", fmt.Errorf("%w: qualified table name contains empty segment", ErrEmptyTableName)
 		}
-		parts[i] = spanvalue.QuoteIdentifier(databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, part)
+		parts[i] = spanvalue.QuoteIdentifier(dialect, part)
 	}
 	return strings.Join(parts, "."), nil
 }
