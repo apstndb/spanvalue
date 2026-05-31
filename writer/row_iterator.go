@@ -96,6 +96,10 @@ func RunRowIterator(iter *spanner.RowIterator, hooks RowIteratorHooks) (*RowIter
 
 // WriteRowIterator streams all rows from iter into w using [RowIteratorHooksFromWriter].
 // See [RunRowIterator] for iterator metadata, stats, and zero-row behavior.
+//
+// When an application skips row bodies but still needs a header-only delimited finish,
+// call [RowIteratorWriter.PrepareRowType] with iter.Metadata.GetRowType() after the Next
+// loop, then [Flusher.Flush]; see README "Metadata-only finish after skipping rows".
 func WriteRowIterator(iter *spanner.RowIterator, w RowIteratorWriter) (*RowIteratorResult, error) {
 	if iter == nil {
 		return nil, ErrNilRowIterator
