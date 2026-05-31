@@ -43,6 +43,8 @@ func rowTypeWithColumnNames(names ...string) *sppb.StructType {
 		switch name {
 		case "name", "note", "payload", "full_name":
 			code = sppb.TypeCode_STRING
+		case "amount":
+			code = sppb.TypeCode_NUMERIC
 		}
 		fields[i] = &sppb.StructType_Field{
 			Name: name,
