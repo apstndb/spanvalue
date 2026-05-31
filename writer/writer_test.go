@@ -846,6 +846,217 @@ func TestSQLInsertWriterSQLDialect(t *testing.T) {
 	}
 }
 
+func TestSQLInsertWriterBatchSize(t *testing.T) {
+	t.Parallel()
+
+	columnNames := []string{"id", "name"}
+	row := func(id int64, name string) []spanner.GenericColumnValue {
+		return []spanner.GenericColumnValue{
+			gcvctor.Int64Value(id),
+			gcvctor.StringValue(name),
+		}
+	}
+
+	t.Run("default one row per statement", func(t *testing.T) {
+		t.Parallel()
+
+		var out bytes.Buffer
+		w := NewSQLInsertWriter(&out, "users")
+		for _, values := range [][]spanner.GenericColumnValue{row(1, "a"), row(2, "b")} {
+			if err := w.WriteValues(columnNames, values); err != nil {
+				t.Fatalf("WriteValues() error = %v", err)
+			}
+		}
+		want := "" +
+			"INSERT INTO `users` (`id`, `name`) VALUES (1, \"a\");\n" +
+			"INSERT INTO `users` (`id`, `name`) VALUES (2, \"b\");\n"
+		if diff := cmp.Diff(want, out.String()); diff != "" {
+			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("batch size two", func(t *testing.T) {
+		t.Parallel()
+
+		var out bytes.Buffer
+		w := NewSQLInsertWriter(&out, "users", WithSQLBatchSize(2))
+		for _, values := range [][]spanner.GenericColumnValue{row(1, "a"), row(2, "b"), row(3, "c")} {
+			if err := w.WriteValues(columnNames, values); err != nil {
+				t.Fatalf("WriteValues() error = %v", err)
+			}
+		}
+		// Intentionally no Flush(): the third row leaves a partial batch without a trailing semicolon.
+		want := "" +
+			"INSERT INTO `users` (`id`, `name`) VALUES\n" +
+			"  (1, \"a\"),\n" +
+			"  (2, \"b\");\n" +
+			"INSERT INTO `users` (`id`, `name`) VALUES\n" +
+			"  (3, \"c\")"
+		if diff := cmp.Diff(want, out.String()); diff != "" {
+			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("flush remainder", func(t *testing.T) {
+		t.Parallel()
+
+		var out bytes.Buffer
+		w := NewSQLInsertWriter(&out, "users", WithSQLBatchSize(2))
+		for _, values := range [][]spanner.GenericColumnValue{row(1, "a"), row(2, "b"), row(3, "c")} {
+			if err := w.WriteValues(columnNames, values); err != nil {
+				t.Fatalf("WriteValues() error = %v", err)
+			}
+		}
+		if err := w.Flush(); err != nil {
+			t.Fatalf("Flush() error = %v", err)
+		}
+		want := "" +
+			"INSERT INTO `users` (`id`, `name`) VALUES\n" +
+			"  (1, \"a\"),\n" +
+			"  (2, \"b\");\n" +
+			"INSERT INTO `users` (`id`, `name`) VALUES\n" +
+			"  (3, \"c\");\n"
+		if diff := cmp.Diff(want, out.String()); diff != "" {
+			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("batch size zero same as one", func(t *testing.T) {
+		t.Parallel()
+
+		var out bytes.Buffer
+		w := NewSQLInsertWriter(&out, "users", WithSQLBatchSize(0))
+		if err := w.WriteValues(columnNames, row(1, "a")); err != nil {
+			t.Fatalf("WriteValues() error = %v", err)
+		}
+		want := "INSERT INTO `users` (`id`, `name`) VALUES (1, \"a\");\n"
+		if diff := cmp.Diff(want, out.String()); diff != "" {
+			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("table change after batch boundary", func(t *testing.T) {
+		t.Parallel()
+
+		var out bytes.Buffer
+		w := NewSQLInsertWriter(&out, "db.users", WithSQLBatchSize(2))
+		for _, values := range [][]spanner.GenericColumnValue{row(1, "a"), row(2, "b")} {
+			if err := w.WriteValues(columnNames, values); err != nil {
+				t.Fatalf("WriteValues() error = %v", err)
+			}
+		}
+		w.Table = "archive.users"
+		if err := w.WriteValues(columnNames, row(3, "c")); err != nil {
+			t.Fatalf("WriteValues() after table change error = %v", err)
+		}
+		want := "" +
+			"INSERT INTO `db`.`users` (`id`, `name`) VALUES\n" +
+			"  (1, \"a\"),\n" +
+			"  (2, \"b\");\n" +
+			"INSERT INTO `archive`.`users` (`id`, `name`) VALUES\n" +
+			"  (3, \"c\")"
+		if diff := cmp.Diff(want, out.String()); diff != "" {
+			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("table change mid-batch flushes pending", func(t *testing.T) {
+		t.Parallel()
+
+		var out bytes.Buffer
+		w := NewSQLInsertWriter(&out, "db.users", WithSQLBatchSize(2))
+		if err := w.WriteValues(columnNames, row(1, "a")); err != nil {
+			t.Fatalf("WriteValues() error = %v", err)
+		}
+		// Legacy: mutating Table after writes; legacy behavior until Table is unexported.
+		w.Table = "archive.users"
+		if err := w.WriteValues(columnNames, row(2, "b")); err != nil {
+			t.Fatalf("WriteValues() after table change error = %v", err)
+		}
+		want := "" +
+			"INSERT INTO `db`.`users` (`id`, `name`) VALUES\n" +
+			"  (1, \"a\");\n" +
+			"INSERT INTO `archive`.`users` (`id`, `name`) VALUES\n" +
+			"  (2, \"b\")"
+		if diff := cmp.Diff(want, out.String()); diff != "" {
+			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("PostgreSQL dialect batched", func(t *testing.T) {
+		t.Parallel()
+
+		var out bytes.Buffer
+		w := NewSQLInsertWriter(&out, "users", WithSQLBatchSize(2), WithSQLDialect(databasepb.DatabaseDialect_POSTGRESQL))
+		for _, id := range []int64{1, 2} {
+			if err := w.WriteValues([]string{"id"}, []spanner.GenericColumnValue{gcvctor.Int64Value(id)}); err != nil {
+				t.Fatalf("WriteValues() error = %v", err)
+			}
+		}
+		want := "INSERT INTO \"users\" (\"id\") VALUES\n  (1),\n  (2);\n"
+		if diff := cmp.Diff(want, out.String()); diff != "" {
+			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("PostgreSQL identifiers with formatter value literals", func(t *testing.T) {
+		t.Parallel()
+
+		var out bytes.Buffer
+		w := NewSQLInsertWriter(&out, "users",
+			WithSQLDialect(databasepb.DatabaseDialect_POSTGRESQL),
+			WithFormatter(spanvalue.LiteralFormatConfig()),
+		)
+		if err := w.WriteValues([]string{"name"}, []spanner.GenericColumnValue{gcvctor.StringValue("Alice")}); err != nil {
+			t.Fatalf("WriteValues() error = %v", err)
+		}
+		want := `INSERT INTO "users" ("name") VALUES ("Alice");` + "\n"
+		if diff := cmp.Diff(want, out.String()); diff != "" {
+			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("insert or ignore batched", func(t *testing.T) {
+		t.Parallel()
+
+		var out bytes.Buffer
+		w := NewSQLInsertWriter(&out, "users", WithSQLBatchSize(2), WithSQLInsertKind(SQLInsertOrIgnore))
+		for _, values := range [][]spanner.GenericColumnValue{row(1, "a"), row(2, "b")} {
+			if err := w.WriteValues(columnNames, values); err != nil {
+				t.Fatalf("WriteValues() error = %v", err)
+			}
+		}
+		want := "INSERT OR IGNORE INTO `users` (`id`, `name`) VALUES\n  (1, \"a\"),\n  (2, \"b\");\n"
+		if diff := cmp.Diff(want, out.String()); diff != "" {
+			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
+
+func TestSQLInsertWriterPostgreSQLInsertOrKindsRejected(t *testing.T) {
+	t.Parallel()
+
+	kinds := []SQLInsertKind{SQLInsertOrIgnore, SQLInsertOrUpdate}
+	for _, kind := range kinds {
+		t.Run(kind.String(), func(t *testing.T) {
+			t.Parallel()
+
+			var out bytes.Buffer
+			w := NewSQLInsertWriter(&out, "users",
+				WithSQLDialect(databasepb.DatabaseDialect_POSTGRESQL),
+				WithSQLInsertKind(kind),
+			)
+			err := w.WriteValues([]string{"id"}, []spanner.GenericColumnValue{gcvctor.Int64Value(1)})
+			if !errors.Is(err, ErrInvalidSQLInsertKindForDialect) {
+				t.Fatalf("WriteValues() error = %v, want ErrInvalidSQLInsertKindForDialect", err)
+			}
+			if out.Len() != 0 {
+				t.Fatalf("WriteValues() wrote %q, want no output", out.String())
+			}
+		})
+	}
+}
+
 func TestSQLInsertWriterInsertKind(t *testing.T) {
 	t.Parallel()
 
@@ -987,6 +1198,7 @@ func TestSQLInsertWriterWriteValuesTableChangeAfterCache(t *testing.T) {
 		t.Fatalf("first WriteValues() error = %v", err)
 	}
 
+	// Legacy: mutating Table after writes; legacy behavior until Table is unexported.
 	w.Table = "archive.users"
 	err = w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(2)})
 	if err != nil {
