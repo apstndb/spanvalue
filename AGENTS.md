@@ -4,7 +4,7 @@ Go library: format `spanner.GenericColumnValue` / `*spanner.Row` to text; build 
 
 ## Commands
 
-Prefer **`make check`** (fmt, vet, build, test, golangci-lint). Also: `make build`, `make test`, `make test-v` (CI parity), `make lint`, `go test ./gcvctor -run '^TestName$'`.
+Prefer **`make check`** (fmt-check, vet, build, test, golangci-lint). Also: `make fmt`, `make build`, `make test`, `make test-v` (CI parity), `make lint`, `go test ./gcvctor -run '^TestName$'`.
 
 PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github.com/apstndb/spanpg) (`integration/pgtypeannotation`), not here.
 
@@ -20,7 +20,7 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 ## Formatting
 
 - `FormatColumn`: `FormatComplexPlugins` first (`ARRAY`/`STRUCT` included), then built-ins; plugins return **`ErrFallthrough`** to defer.
-- Presets (each returns fresh `*FormatConfig`): `LiteralFormatConfig`, `SimpleFormatConfig`, `SpannerCLICompatibleFormatConfig`, `JSONFormatConfig`. Convenience wrappers: `FormatRowLiteral`, `FormatColumnLiteral`, `FormatRowSpannerCLICompatible`, `FormatColumnSpannerCLICompatible`, `FormatRowJSONObject`.
+- Presets (each returns fresh `*FormatConfig`): `LiteralFormatConfig`, `SimpleFormatConfig`, `SpannerCLICompatibleFormatConfig`, `JSONFormatConfig`. Preset-backed convenience wrappers: `FormatRowLiteral`, `FormatColumnLiteral`, `FormatRowSpannerCLICompatible`, `FormatColumnSpannerCLICompatible`. `FormatRowJSONObject` takes an explicit JSON-emitting `*FormatConfig` (typically from `JSONFormatConfig()`), not a preset wrapper.
 - **v0.4.2+ scalar plugins** on presets: `FormatSimpleValue`, `FormatLiteralValue`, `FormatSpannerCLIValue`. Strip via `FormatConfigWithoutScalarPlugins` or edit `FormatComplexPlugins` on a **clone** (singleton configs used by convenience funcs are shared—do not mutate).
 - **NUMERIC output** (wire `"99.5"` example):
 
@@ -37,7 +37,7 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 
 ## Writer (`writer/`)
 
-- **Native client:** `WriteRow` / `WriteRowIterator` / `RunRowIterator` for `*spanner.RowIterator`. First `Next` supplies metadata; zero-row CSV needs `PrepareRowType` + **`Flush`** (not `defer Flush`—return `Flush()` error). Do not pass `iter.Metadata` at construction when still nil.
+- **Native client:** `WriteRow` / `WriteRowIterator` / `RunRowIterator` for `*spanner.RowIterator`. `WriteRowIterator`/`RunRowIterator` with `RowIteratorHooksFromWriter` register metadata and call **`Flush`** in hooks. Manual `RowIterator.Next` loops need first-`Next` metadata and zero-row **`PrepareRowType` + `Flush`** (not `defer Flush`—return `Flush()` error). Do not pass `iter.Metadata` at construction when still nil.
 - **GCV slice path:** `WriteGCVs` + `WithMetadata` / `WithFormatter` / `WithUnnamedFieldNamer`. Same namer for **out-of-band headers** via root `ColumnNames(fields, namer)`.
 - **Delimited:** `NewCSVWriter(out)`, `NewDelimitedWriter(out, '\t')` = **quoted TSV** (`encoding/csv`), not legacy raw TAB; raw TAB = custom `Writer` (README).
 - **SQL INSERT:** `WithSQLInsertKind`, `WithSQLDialect` (identifier quoting), `WithSQLBatchSize` (>1 multi-row `VALUES`; **`Flush`** ends partial batch). `ErrInvalidSQLInsertKindForDialect`: PostgreSQL + `INSERT OR IGNORE`/`UPDATE`. After any write error, discard writer (documented). **`Table` / `Formatter` fields deprecated**—set via constructor/`WithFormatter` only; unexport planned ([#107](https://github.com/apstndb/spanvalue/issues/107), `breaking-change` label).
@@ -56,7 +56,7 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 
 ## Releases & issues
 
-- **Per-version truth:** [GitHub Releases](https://github.com/apstndb/spanvalue/releases) (retroactive edits OK with date footnote). Optional repo CHANGELOG tracked in [#108](https://github.com/apstndb/spanvalue/issues/108).
+- **Per-version truth:** [GitHub Releases](https://github.com/apstndb/spanvalue/releases) only—no in-repo `CHANGELOG.md`. Retroactive release edits OK with date footnote.
 - **v0.4.2:** scalar plugins (#97), `WriteRowIterator` (#98). **v0.4.3+:** SQL dialect/batch, TAB/tuple docs, SQL field deprecations—not Simple NUMERIC behavior.
 - Open follow-ups: [#79](https://github.com/apstndb/spanvalue/issues/79) (INSERT fragments; batching done), [#95](https://github.com/apstndb/spanvalue/issues/95) (options return errors), [#107](https://github.com/apstndb/spanvalue/issues/107) (breaking unexport).
 
