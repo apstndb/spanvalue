@@ -928,6 +928,10 @@ func (w *JSONLWriter) marshalResolvedNames(resolvedNames []string) ([][]byte, er
 
 // SQLInsertWriter writes rows as SQL INSERT statements with dialect-aware identifier quoting.
 type SQLInsertWriter struct {
+	// Table is the qualified table name used in INSERT statements.
+	//
+	// Deprecated: Set only via [NewSQLInsertWriter]. Do not mutate Table after the
+	// first write; the field will be unexported in v0.6.
 	Table     string
 	Formatter *spanvalue.FormatConfig
 
