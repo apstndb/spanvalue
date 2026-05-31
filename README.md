@@ -172,7 +172,7 @@ defer iter.Stop()
 w := writer.NewDelimitedWriter(out, writer.Comma, writer.WithFormatter(cfg))
 for {
 	_, err := iter.Next()
-	if err == iterator.Done {
+	if errors.Is(err, iterator.Done) {
 		break
 	}
 	if err != nil {
