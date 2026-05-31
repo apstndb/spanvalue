@@ -29,9 +29,18 @@ type RowIteratorStats struct {
 // On the error path, stats fields reflect whatever the iterator had populated at
 // the abort point and may be zero until [iterator.Done] (QueryStats and RowCount
 // are only fully populated after a successful run).
+//
+// RowsRead counts data rows for which hooks.WriteRow returned nil during the
+// run, including on the error path when iteration aborts mid-stream. It stays
+// zero when WriteRow is nil (rows may still be consumed from the iterator).
+// Hook decorators that install a WriteRow wrapper only for ordinal or observe
+// side effects do not increment RowsRead unless the wrapped hooks already had
+// WriteRow set. RowsRead is distinct from [RowIteratorStats.RowCount], which
+// follows Spanner iterator semantics (DML row count after iterator.Done).
 type RowIteratorResult struct {
 	Metadata *sppb.ResultSetMetadata
 	Stats    RowIteratorStats
+	RowsRead int
 }
 
 // RowIteratorHooks drives [RunRowIterator]. Nil function fields are skipped.
@@ -52,6 +61,12 @@ type RowIteratorHooks struct {
 	PrepareMetadata func(*sppb.ResultSetMetadata) error
 	WriteRow        func(*spanner.Row) error
 	Finish          func(*RowIteratorResult) error
+
+	// omitRowsRead is set by hook decorators that add WriteRow only for side
+	// effects when the wrapped hooks had no WriteRow.
+	omitRowsRead bool
+	// onRunStart runs once at the beginning of each RunRowIterator call.
+	onRunStart func()
 }
 
 // RowIteratorWriter streams rows from a [cloud.google.com/go/spanner.RowIterator]
@@ -156,10 +171,16 @@ func runRowIterator(fac rowIteratorFacade, hooks RowIteratorHooks) (*RowIterator
 	}
 	defer stopOnce()
 
+	if hooks.onRunStart != nil {
+		hooks.onRunStart()
+	}
+
+	var rowsRead int
 	outcome := func() *RowIteratorResult {
 		return &RowIteratorResult{
 			Metadata: fac.metadata(),
 			Stats:    fac.stats(),
+			RowsRead: rowsRead,
 		}
 	}
 	abort := func(err error) (*RowIteratorResult, error) {
@@ -187,6 +208,9 @@ func runRowIterator(fac rowIteratorFacade, hooks RowIteratorHooks) (*RowIterator
 		if hooks.WriteRow != nil {
 			if err := hooks.WriteRow(row); err != nil {
 				return abort(err)
+			}
+			if !hooks.omitRowsRead {
+				rowsRead++
 			}
 		}
 	}
