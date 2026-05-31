@@ -173,9 +173,9 @@ that should stay outside spanvalue.
 [`RowIteratorHooks`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorHooks)
 godoc):
 
-- **`PrepareMetadata`** runs once after the first successful `Next` (including
-  when the only result is `iterator.Done`). It is skipped when the first `Next`
-  returns a non-`Done` error.
+- **`PrepareMetadata`** runs once after the first `Next`, including when that
+  call returns `iterator.Done` (zero data rows). It is not called when the first
+  `Next` returns any other error.
 - **`WriteRow`** runs for each data row.
 - **`Finish`** runs only after all rows are consumed **without error**. It is
   **not** a `defer`-style cleanup when `PrepareMetadata` or `WriteRow` fails.
