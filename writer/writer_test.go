@@ -968,7 +968,7 @@ func TestSQLInsertWriterBatchSize(t *testing.T) {
 		if err := w.WriteValues(columnNames, row(1, "a")); err != nil {
 			t.Fatalf("WriteValues() error = %v", err)
 		}
-		// Legacy: mutating Table after writes; supported until v0.6 unexports the field.
+		// Legacy: mutating Table after writes; legacy behavior until Table is unexported.
 		w.Table = "archive.users"
 		if err := w.WriteValues(columnNames, row(2, "b")); err != nil {
 			t.Fatalf("WriteValues() after table change error = %v", err)
@@ -1198,7 +1198,7 @@ func TestSQLInsertWriterWriteValuesTableChangeAfterCache(t *testing.T) {
 		t.Fatalf("first WriteValues() error = %v", err)
 	}
 
-	// Legacy: mutating Table after writes; supported until v0.6 unexports the field.
+	// Legacy: mutating Table after writes; legacy behavior until Table is unexported.
 	w.Table = "archive.users"
 	err = w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(2)})
 	if err != nil {

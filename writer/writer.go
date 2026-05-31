@@ -954,12 +954,12 @@ type SQLInsertWriter struct {
 	// Table is the qualified table name used in INSERT statements.
 	//
 	// Deprecated: Set only via [NewSQLInsertWriter]. Do not mutate Table after the
-	// first write; the field will be unexported in v0.6.
+	// first write; the field will be unexported in a future minor release.
 	Table string
 	// Formatter formats value literals in INSERT statements.
 	//
 	// Deprecated: Set only via [NewSQLInsertWriter] or [WithFormatter]. Do not mutate
-	// Formatter after the first write; the field will be unexported in v0.6.
+	// Formatter after the first write; the field will be unexported in a future minor release.
 	Formatter *spanvalue.FormatConfig
 
 	insertKind        SQLInsertKind
