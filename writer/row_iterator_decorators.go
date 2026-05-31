@@ -14,20 +14,19 @@ type RowOrdinal struct {
 }
 
 // WithRowOrdinal wraps base so ord.Current is set to the 1-based row index
-// immediately before each WriteRow attempt on base. PrepareMetadata and Finish
-// are forwarded unchanged. A nil ord is ignored and base is returned as-is.
+// immediately before each WriteRow attempt on base. Reset ord.Current to 0
+// before each RunRowIterator when reusing the returned hooks. PrepareMetadata
+// and Finish are forwarded unchanged. A nil ord is ignored and base is returned as-is.
 func WithRowOrdinal(base RowIteratorHooks, ord *RowOrdinal) RowIteratorHooks {
 	if ord == nil {
 		return base
 	}
-	next := 0
 	writeRow := base.WriteRow
 	if writeRow == nil {
 		return base
 	}
 	base.WriteRow = func(row *spanner.Row) error {
-		next++
-		ord.Current = next
+		ord.Current++
 		return writeRow(row)
 	}
 	return base
