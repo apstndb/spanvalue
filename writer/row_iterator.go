@@ -29,9 +29,16 @@ type RowIteratorStats struct {
 // On the error path, stats fields reflect whatever the iterator had populated at
 // the abort point and may be zero until [iterator.Done] (QueryStats and RowCount
 // are only fully populated after a successful run).
+//
+// RowsRead counts data rows successfully passed through hooks.WriteRow during
+// the run, including on the error path when iteration aborts mid-stream. It is
+// zero when WriteRow is nil or no row was written. RowsRead is distinct from
+// [RowIteratorStats.RowCount], which follows Spanner iterator semantics (DML
+// row count after iterator.Done).
 type RowIteratorResult struct {
 	Metadata *sppb.ResultSetMetadata
 	Stats    RowIteratorStats
+	RowsRead int
 }
 
 // RowIteratorHooks drives [RunRowIterator]. Nil function fields are skipped.
@@ -156,10 +163,12 @@ func runRowIterator(fac rowIteratorFacade, hooks RowIteratorHooks) (*RowIterator
 	}
 	defer stopOnce()
 
+	var rowsRead int
 	outcome := func() *RowIteratorResult {
 		return &RowIteratorResult{
 			Metadata: fac.metadata(),
 			Stats:    fac.stats(),
+			RowsRead: rowsRead,
 		}
 	}
 	abort := func(err error) (*RowIteratorResult, error) {
@@ -188,6 +197,7 @@ func runRowIterator(fac rowIteratorFacade, hooks RowIteratorHooks) (*RowIterator
 			if err := hooks.WriteRow(row); err != nil {
 				return abort(err)
 			}
+			rowsRead++
 		}
 	}
 	stopOnce()
