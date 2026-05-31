@@ -214,10 +214,14 @@ w := writer.NewCSVWriter(
 	writer.WithFormatter(spanvalue.SimpleFormatConfig()),
 	writer.WithUnnamedFieldNamer(namer),
 )
-for /* each scanned row */ {
+for rows.Next() {
+	// decode the scanned row into gcvs
 	if err := w.WriteGCVs(gcvs); err != nil {
 		return err
 	}
+}
+if err := rows.Err(); err != nil {
+	return err
 }
 return w.Flush()
 ```
