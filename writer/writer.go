@@ -10,7 +10,7 @@
 // Use [WithMetadata] when the app already holds metadata (for example proto decode).
 // Also set [WithFormatter] and [WithUnnamedFieldNamer].
 // Match out-of-band headers with [github.com/apstndb/spanvalue.ColumnNames] on the
-// same field list and [spanvalue.UnnamedFieldNamer] policy.
+// same field list and [github.com/apstndb/spanvalue.UnnamedFieldNamer] policy.
 // See the README section "go-sql-spanner and GenericColumnValue export".
 //
 // DelimitedWriter is the primary writer for CSV-style delimited text.

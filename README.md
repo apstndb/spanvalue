@@ -293,6 +293,7 @@ w := writer.NewCSVWriter(
 	writer.WithFormatter(spanvalue.SimpleFormatConfig()),
 	writer.WithUnnamedFieldNamer(namer),
 )
+defer rows.Close()
 for rows.Next() {
 	var gcvs []spanner.GenericColumnValue
 	// decode the scanned row into gcvs
