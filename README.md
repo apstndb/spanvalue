@@ -278,7 +278,7 @@ When the app already holds `*spannerpb.ResultSetMetadata` (for example proto dec
 is appropriate. For display headers outside the writer, use
 [`spanvalue.ColumnNames`](https://pkg.go.dev/github.com/apstndb/spanvalue#ColumnNames)
 on the **same** field list with the **same**
-[`UnnamedFieldNamer`](https://pkg.go.dev/github.com/apstndb/spanvalue#UnnamedFieldNamer)
+[`spanvalue.UnnamedFieldNamer`](https://pkg.go.dev/github.com/apstndb/spanvalue#UnnamedFieldNamer)
 as [`writer.WithUnnamedFieldNamer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithUnnamedFieldNamer).
 
 **CSV / JSONL:** register schema and formatting at construction, stream rows, then
