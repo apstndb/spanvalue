@@ -4,7 +4,7 @@ Go library: format `spanner.GenericColumnValue` / `*spanner.Row` to text; build 
 
 ## Commands
 
-Prefer **`make check`** (fmt-check, vet, build, test, golangci-lint). Also: `make fmt`, `make build`, `make test`, `make test-v` (CI parity), `make lint`, `go test ./gcvctor -run '^TestName$'`.
+Prefer **`make check`** (verifies formatting via `fmt-check`—does not rewrite files—plus vet, build, test, golangci-lint). Also: `make fmt` (rewrite), `make build`, `make test`, `make test-v` (CI parity), `make lint`, `go test ./gcvctor -run '^TestName$'`.
 
 PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github.com/apstndb/spanpg) (`integration/pgtypeannotation`), not here.
 
