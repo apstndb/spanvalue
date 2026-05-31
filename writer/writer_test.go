@@ -43,6 +43,8 @@ func rowTypeWithColumnNames(names ...string) *sppb.StructType {
 		switch name {
 		case "name", "note", "payload", "full_name":
 			code = sppb.TypeCode_STRING
+		case "amount":
+			code = sppb.TypeCode_NUMERIC
 		}
 		fields[i] = &sppb.StructType_Field{
 			Name: name,
@@ -345,6 +347,24 @@ func TestDelimitedWriterWriteGCVsWithMetadata(t *testing.T) {
 	flushDelimitedWriter(t, w)
 
 	want := "name,age\nAlice,42\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("CSV output mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestNewCSVWriter_numericWireAsIs(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := NewCSVWriter(&out, WithMetadata(metadataWithColumnNames("amount")))
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.StringBasedValueFromCode(sppb.TypeCode_NUMERIC, "99.5"),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	flushDelimitedWriter(t, w)
+
+	want := "amount\n99.5\n"
 	if diff := cmp.Diff(want, out.String()); diff != "" {
 		t.Fatalf("CSV output mismatch (-want +got):\n%s", diff)
 	}
