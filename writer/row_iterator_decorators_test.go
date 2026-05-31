@@ -70,6 +70,19 @@ func TestRunRowIterator_rowsRead(t *testing.T) {
 			t.Fatalf("RowsRead = %d, want 0", got.RowsRead)
 		}
 	})
+
+	t.Run("decorator nil WriteRow still counts ordinal", func(t *testing.T) {
+		t.Parallel()
+		var ord RowOrdinal
+		stub := &stubRowIterator{md: md, rows: []*spanner.Row{row}}
+		_, err := runRowIterator(stub, WithRowOrdinal(RowIteratorHooks{}, &ord))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ord.Current != 1 {
+			t.Fatalf("Current = %d, want 1", ord.Current)
+		}
+	})
 }
 
 func TestWithRowOrdinal(t *testing.T) {
@@ -137,22 +150,41 @@ func TestObserveWriteRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stub := &stubRowIterator{md: md, rows: []*spanner.Row{row}}
 
-	var seen []int
-	hooks := ObserveWriteRow(RowIteratorHooks{
-		WriteRow: func(*spanner.Row) error { return nil },
-	}, func(n int) error {
-		seen = append(seen, n)
-		return nil
+	t.Run("with WriteRow", func(t *testing.T) {
+		t.Parallel()
+		stub := &stubRowIterator{md: md, rows: []*spanner.Row{row}}
+		var seen []int
+		hooks := ObserveWriteRow(RowIteratorHooks{
+			WriteRow: func(*spanner.Row) error { return nil },
+		}, func(n int) error {
+			seen = append(seen, n)
+			return nil
+		})
+		_, err := runRowIterator(stub, hooks)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(seen) != 1 || seen[0] != 1 {
+			t.Fatalf("seen = %v, want [1]", seen)
+		}
 	})
-	_, err = runRowIterator(stub, hooks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(seen) != 1 || seen[0] != 1 {
-		t.Fatalf("seen = %v, want [1]", seen)
-	}
+
+	t.Run("nil WriteRow", func(t *testing.T) {
+		t.Parallel()
+		stub := &stubRowIterator{md: md, rows: []*spanner.Row{row}}
+		var seen []int
+		_, err := runRowIterator(stub, ObserveWriteRow(RowIteratorHooks{}, func(n int) error {
+			seen = append(seen, n)
+			return nil
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(seen) != 1 || seen[0] != 1 {
+			t.Fatalf("seen = %v, want [1]", seen)
+		}
+	})
 }
 
 func TestAfterEachSuccessfulWriteRow(t *testing.T) {
