@@ -41,12 +41,11 @@ quotedColumn := spanvalue.QuoteIdentifier(
 [SpannerCLICompatibleFormatConfig](https://pkg.go.dev/github.com/apstndb/spanvalue#SpannerCLICompatibleFormatConfig)
 matches official [spanner-cli](https://github.com/cloudspannerecosystem/spanner-cli)
 output, including bracket-style STRUCT in arrays (`[[1, east]]`). For tuple
-parentheses (`[(1, east)]`) while keeping CLI scalar rules, customize the config
-returned by the constructor and set
-[FormatTupleStruct](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatTupleStruct):
+parentheses (`[(1, east)]`) while keeping CLI scalar rules, clone the preset and
+set [FormatTupleStruct](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatTupleStruct):
 
 ```go
-fc := spanvalue.SpannerCLICompatibleFormatConfig()
+fc := spanvalue.SpannerCLICompatibleFormatConfig().Clone()
 fc.FormatStruct.FormatStructParen = spanvalue.FormatTupleStruct
 ```
 

@@ -21,9 +21,10 @@ var spannerCLICompatibleFormatConfig = SpannerCLICompatibleFormatConfig()
 //
 // Tuple-style STRUCT parentheses such as [(1, east)] are not spanner-cli output.
 // To keep Spanner CLI scalar formatting but render STRUCT with [FormatTupleStruct],
-// customize the returned config:
+// clone and customize (constructors return a new config; [FormatConfig.Clone] copies
+// [FormatConfig.FormatComplexPlugins] before you mutate):
 //
-//	fc := SpannerCLICompatibleFormatConfig()
+//	fc := SpannerCLICompatibleFormatConfig().Clone()
 //	fc.FormatStruct.FormatStructParen = FormatTupleStruct
 //
 // See the repository README for a tuple STRUCT example. Application-specific presets

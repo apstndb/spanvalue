@@ -12,9 +12,10 @@
 // without Decode; remove them with [FormatConfigWithoutScalarPlugins] or from
 // [FormatConfig.FormatComplexPlugins] to use Decode + [FormatNullable].
 // Scalar plugins fall through to that path when [FormatConfig.FormatNullable] is replaced.
-// Constructors return a new [FormatConfig]; use [FormatConfig.Clone] when sharing a config.
-// For tuple STRUCT with Spanner CLI scalars, set [FormatTupleStruct] on
-// [SpannerCLICompatibleFormatConfig] (see README).
+// Constructors return a new [FormatConfig]; call [FormatConfig.Clone] before mutating
+// a config you may reuse ([FormatConfig.Clone] copies [FormatConfig.FormatComplexPlugins]).
+// For tuple STRUCT with Spanner CLI scalars, clone [SpannerCLICompatibleFormatConfig]
+// and set [FormatTupleStruct] (see README).
 // [FormatConfig.FormatColumn] runs [FormatComplexFunc] plugins first, then built-in
 // ARRAY, STRUCT, and scalar formatting.
 // Convenience entry points include [FormatRowLiteral], [FormatColumnLiteral],

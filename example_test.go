@@ -11,7 +11,7 @@ import (
 
 // Tuple-style STRUCT in `ARRAY<STRUCT<...>>` while keeping Spanner CLI scalar formatting.
 func ExampleSpannerCLICompatibleFormatConfig_tupleStruct() {
-	fc := spanvalue.SpannerCLICompatibleFormatConfig()
+	fc := spanvalue.SpannerCLICompatibleFormatConfig().Clone()
 	fc.FormatStruct.FormatStructParen = spanvalue.FormatTupleStruct
 
 	structElem, err := gcvctor.StructValueOf(
