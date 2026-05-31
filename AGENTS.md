@@ -62,6 +62,7 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 
 ## Git & review
 
+- **Parallel PR work:** check out active PR branches in dedicated worktrees beside the main clone, e.g. `spanvalue-wt-<issue-or-pr>` (`git worktree add ../spanvalue-wt-124 <branch>`). Keep the main repo on docs or integration branches; run `make check` and push from the PR worktree.
 - **English only** on github.com (issues, PRs, review threads).
 - **Merge:** `squash and merge`; branch updates via **merge**, not rebase+force-push to `main`.
 - **During review response:** avoid **rebase** on the PR branch; squash merge cleans history.

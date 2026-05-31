@@ -71,16 +71,19 @@ func TestRunRowIterator_rowsRead(t *testing.T) {
 		}
 	})
 
-	t.Run("decorator nil WriteRow still counts ordinal", func(t *testing.T) {
+	t.Run("decorator nil WriteRow updates ordinal not RowsRead", func(t *testing.T) {
 		t.Parallel()
 		var ord RowOrdinal
 		stub := &stubRowIterator{md: md, rows: []*spanner.Row{row}}
-		_, err := runRowIterator(stub, WithRowOrdinal(RowIteratorHooks{}, &ord))
+		got, err := runRowIterator(stub, WithRowOrdinal(RowIteratorHooks{}, &ord))
 		if err != nil {
 			t.Fatal(err)
 		}
 		if ord.Current != 1 {
 			t.Fatalf("Current = %d, want 1", ord.Current)
+		}
+		if got.RowsRead != 0 {
+			t.Fatalf("RowsRead = %d, want 0 with nil base WriteRow", got.RowsRead)
 		}
 	})
 }
@@ -195,20 +198,107 @@ func TestAfterEachSuccessfulWriteRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stub := &stubRowIterator{md: md, rows: []*spanner.Row{row, row}}
-
-	var flushes int
-	hooks := AfterEachSuccessfulWriteRow(RowIteratorHooks{
-		WriteRow: func(*spanner.Row) error { return nil },
-	}, func() error {
-		flushes++
-		return nil
-	})
-	_, err = runRowIterator(stub, hooks)
+	row2, err := spanner.NewRow([]string{"id"}, []interface{}{int64(2)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if flushes != 2 {
-		t.Fatalf("flushes = %d, want 2", flushes)
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+		stub := &stubRowIterator{md: md, rows: []*spanner.Row{row, row}}
+		var flushes int
+		hooks := AfterEachSuccessfulWriteRow(RowIteratorHooks{
+			WriteRow: func(*spanner.Row) error { return nil },
+		}, func() error {
+			flushes++
+			return nil
+		})
+		_, err = runRowIterator(stub, hooks)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if flushes != 2 {
+			t.Fatalf("flushes = %d, want 2", flushes)
+		}
+	})
+
+	t.Run("WriteRow error skips after", func(t *testing.T) {
+		t.Parallel()
+		stub := &stubRowIterator{md: md, rows: []*spanner.Row{row, row2}}
+		var flushes int
+		var n int
+		hooks := AfterEachSuccessfulWriteRow(RowIteratorHooks{
+			WriteRow: func(*spanner.Row) error {
+				n++
+				if n == 2 {
+					return errors.New("write failed")
+				}
+				return nil
+			},
+		}, func() error {
+			flushes++
+			return nil
+		})
+		_, err = runRowIterator(stub, hooks)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if flushes != 1 {
+			t.Fatalf("flushes = %d, want 1", flushes)
+		}
+	})
+
+	t.Run("after error aborts", func(t *testing.T) {
+		t.Parallel()
+		stub := &stubRowIterator{md: md, rows: []*spanner.Row{row, row2}}
+		var flushes int
+		hooks := AfterEachSuccessfulWriteRow(RowIteratorHooks{
+			WriteRow: func(*spanner.Row) error { return nil },
+		}, func() error {
+			flushes++
+			if flushes == 2 {
+				return errors.New("flush failed")
+			}
+			return nil
+		})
+		_, err = runRowIterator(stub, hooks)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if flushes != 2 {
+			t.Fatalf("flushes = %d, want 2", flushes)
+		}
+	})
+}
+
+func TestDecoratorResetOnQueryErrorBeforeMetadata(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithColumnNames("id")
+	row, err := spanner.NewRow([]string{"id"}, []interface{}{int64(1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	queryErr := errors.New("query failed")
+
+	var ord RowOrdinal
+	hooks := WithRowOrdinal(RowIteratorHooks{}, &ord)
+
+	okStub := &stubRowIterator{md: md, rows: []*spanner.Row{row}}
+	_, err = runRowIterator(okStub, hooks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ord.Current != 1 {
+		t.Fatalf("after success Current = %d, want 1", ord.Current)
+	}
+
+	failStub := &stubRowIterator{err: queryErr}
+	_, err = runRowIterator(failStub, hooks)
+	if !errors.Is(err, queryErr) {
+		t.Fatalf("error = %v, want %v", err, queryErr)
+	}
+	if ord.Current != 0 {
+		t.Fatalf("after query error Current = %d, want 0", ord.Current)
 	}
 }

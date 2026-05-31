@@ -16,7 +16,8 @@ type RowOrdinal struct {
 
 // WithRowOrdinal wraps base so ord.Current is set to the 1-based row index
 // immediately before each WriteRow attempt on base. ord.Current resets to 0 at
-// the start of each run via PrepareMetadata. A nil ord is ignored and base is
+// the start of each [RunRowIterator] call (including when the first Next returns
+// a query error before PrepareMetadata). A nil ord is ignored and base is
 // returned as-is. When base.WriteRow is nil, the wrapper still runs so ord is
 // updated for each streamed row.
 func WithRowOrdinal(base RowIteratorHooks, ord *RowOrdinal) RowIteratorHooks {
@@ -24,7 +25,8 @@ func WithRowOrdinal(base RowIteratorHooks, ord *RowOrdinal) RowIteratorHooks {
 		return base
 	}
 	writeRow := base.WriteRow
-	base = resetOnPrepareMetadata(base, func() { ord.Current = 0 })
+	base = resetEachRun(base, func() { ord.Current = 0 })
+	base.omitRowsRead = base.omitRowsRead || writeRow == nil
 	base.WriteRow = func(row *spanner.Row) error {
 		ord.Current++
 		if writeRow != nil {
@@ -44,7 +46,8 @@ func ObserveWriteRow(base RowIteratorHooks, observe func(rowNum int) error) RowI
 	}
 	writeRow := base.WriteRow
 	var rowNum int
-	base = resetOnPrepareMetadata(base, func() { rowNum = 0 })
+	base = resetEachRun(base, func() { rowNum = 0 })
+	base.omitRowsRead = base.omitRowsRead || writeRow == nil
 	base.WriteRow = func(row *spanner.Row) error {
 		rowNum++
 		if err := observe(rowNum); err != nil {
@@ -68,6 +71,7 @@ func AfterEachSuccessfulWriteRow(base RowIteratorHooks, after func() error) RowI
 		return base
 	}
 	writeRow := base.WriteRow
+	base.omitRowsRead = base.omitRowsRead || writeRow == nil
 	base.WriteRow = func(row *spanner.Row) error {
 		if writeRow != nil {
 			if err := writeRow(row); err != nil {
@@ -79,7 +83,14 @@ func AfterEachSuccessfulWriteRow(base RowIteratorHooks, after func() error) RowI
 	return base
 }
 
-func resetOnPrepareMetadata(base RowIteratorHooks, reset func()) RowIteratorHooks {
+func resetEachRun(base RowIteratorHooks, reset func()) RowIteratorHooks {
+	prev := base.onRunStart
+	base.onRunStart = func() {
+		if prev != nil {
+			prev()
+		}
+		reset()
+	}
 	prep := base.PrepareMetadata
 	base.PrepareMetadata = func(md *sppb.ResultSetMetadata) error {
 		reset()
