@@ -1,46 +1,73 @@
 # Agent instructions for `spanvalue`
 
+Go library: format `spanner.GenericColumnValue` / `*spanner.Row` to text; build GCVs in `gcvctor/`; stream exports in `writer/`. Target **Go 1.23** (`go.mod`; toolchain `go1.23.2`). Alias **`sppb`** = `cloud.google.com/go/spanner/apiv1/spannerpb`.
+
 ## Commands
 
-- `make build` - compile all packages.
-- `make check` - run formatting, vet, build, tests, and lint in one go.
-- `make fmt` - format all Go files.
-- `make fmt-check` - fail if tracked Go files are not `gofmt`-clean.
-- `go build ./...` - compile the library packages.
-- `go test ./...` - run the full test suite.
-- `go test ./gcvctor -run '^TestName$'` - run tests matching a name in a specific package. Use `./...` to run matching tests across all packages.
-- `go test -v ./...` - matches the GitHub Actions test job.
-- `make test-v` - verbose test run, equivalent to the CI test command.
-- `golangci-lint run` - run lint locally.
-- `make test` and `make lint` - thin wrappers for the Go test and lint commands above.
-- `make vet` - run `go vet ./...`.
+Prefer **`make check`** (fmt, vet, build, test, golangci-lint). Also: `make build`, `make test`, `make test-v` (CI parity), `make lint`, `go test ./gcvctor -run '^TestName$'`.
 
-PostgreSQL-dialect Spanner **client integration probes** (TypeAnnotation on params and result metadata) live in [`github.com/apstndb/spanpg`](https://github.com/apstndb/spanpg) under `integration/pgtypeannotation`, not in this repo — see that module’s `README.md` and `Makefile`.
+PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github.com/apstndb/spanpg) (`integration/pgtypeannotation`), not here.
 
-## Architecture
+## Packages
 
-- The root package formats `cloud.google.com/go/spanner.GenericColumnValue` and `*spanner.Row` values into strings through `FormatConfig`.
-- `FormatConfig.FormatColumn` tries `FormatComplexPlugins` first, including for `ARRAY` and `STRUCT`, then falls back to the built-in array/struct handling and scalar formatting when plugins return `ErrFallthrough`.
-- `LiteralFormatConfig()`, `SimpleFormatConfig()`, `SpannerCLICompatibleFormatConfig()`, and `JSONFormatConfig()` are constructor functions that return fresh `*FormatConfig` values.
-- The exported helpers `FormatRowLiteral`, `FormatColumnLiteral`, `FormatRowSpannerCLICompatible`, `FormatColumnSpannerCLICompatible`, and `FormatRowJSONObject` are thin wrappers around those constructor-backed configs.
-- `gcvctor/` builds `spanner.GenericColumnValue` values from Go types, while `internal/` holds escape-sequence, literal, and iterator helpers used by both formatting and construction code.
-- JSON output is special-cased by `JSONFormatConfig()` plus `FormatJSONSimpleValue`, which keeps `INT64`, `ENUM`, and raw JSON columns in JSON-compatible forms.
+| Path | Role |
+|------|------|
+| Root | `FormatConfig`, presets, `ColumnNames`, `FormatRowColumns`, identifier quoting |
+| `gcvctor/` | Build `GenericColumnValue` from Go types (strict; no format) |
+| `writer/` | CSV/TSV/JSONL/SQL INSERT; `WriteGCVs`, `WriteRowIterator` |
+| `internal/` | Escape/literal/iterator helpers |
 
-## Conventions
+## Formatting
 
-- Target Go 1.23.0 (see `go.mod`), with toolchain `go1.23.2`; `iter.Seq`/range-over-func patterns are used throughout the codebase.
-- Keep `sppb` as the alias for `cloud.google.com/go/spanner/apiv1/spannerpb`.
-- Preserve copied-test attribution comments in `literal_test.go` and `spanner_cli_compatible_test.go`.
-- Use `ErrFallthrough` from `FormatComplexFunc` plugins to defer to the built-in array/struct/scalar logic.
-- `IsNull` treats a `spanner.GenericColumnValue` as NULL when its `Value` field is nil or a protobuf `NullValue`; `gcvctor.NullOf` returns a scalar `NullValue` for all types including `STRUCT` and `ARRAY`. Plugins should check it early when they need custom NULL handling.
-- `gcvctor.ArrayValue` and `gcvctor.StructValueOf` are strict: they do not coerce types, arrays must be homogeneous, and struct field names must line up with values. They return sentinel errors (`ErrTypeMismatch`, `ErrMismatchedCounts`, `ErrNilElementType` for a nil `ArrayValueOf` element type) on failure.
-- Empty variadic `ArrayValue` / `ArrayValueOf` builds an empty SQL array (length 0), not NULL; use `NullOf` with `typector.ElemTypeToArrayType` or `typector.ElemCodeToArrayType` (or `NullArrayFromCode` for simple element codes) for NULL ARRAYs.
-- `FormatColumn` and formatting functions return sentinel errors (`ErrUnknownType`, `ErrMismatchedFields`) on failure.
-- `gcvctor.Float32Value` and `Float64Value` encode `NaN` and `±Inf` as string values to match Spanner's wire format.
-- Tests commonly use `t.Parallel()`, `cmp.Diff`, and `protocmp.Transform()` when comparing protobuf-backed values.
-- In `gcvctor` tests, prefer building expected `spanner.GenericColumnValue` values with `typector` and `structpb` (plus literals) instead of other `gcvctor` helpers when those helpers share code with the function under test, so `want` stays an independent oracle.
-- For JSON row output, unnamed fields are handled through `UnnamedFieldNamer`/`IndexedUnnamedFieldNamer`; these must return non-empty unique names, otherwise an error is returned (replacing previous `panic` behavior). `nil` means keep empty JSON keys.
-- Prefer single quotes for shell commands. In double quotes, escape backticks (e.g., `` ` ``).
-- Use `merge` instead of `rebase & force push` for branch management; pull requests are merged using `squash and merge`.
-- After you push commits that address PR review feedback, request a fresh Copilot review with `gh copilot-review request <pr> --wait` (requires the [`gh-copilot-review`](https://github.com/apstndb/gh-copilot-review) `gh` extension), unless the user asks not to.
-- Write GitHub-facing text in **English** only: issue and PR titles and bodies, review threads, and inline review replies. Keep Japanese (or other languages) for local notes if needed, but not on github.com.
+- `FormatColumn`: `FormatComplexPlugins` first (`ARRAY`/`STRUCT` included), then built-ins; plugins return **`ErrFallthrough`** to defer.
+- Presets (each returns fresh `*FormatConfig`): `LiteralFormatConfig`, `SimpleFormatConfig`, `SpannerCLICompatibleFormatConfig`, `JSONFormatConfig`. Convenience wrappers: `FormatRowLiteral`, `FormatColumnLiteral`, `FormatRowSpannerCLICompatible`, `FormatColumnSpannerCLICompatible`, `FormatRowJSONObject`.
+- **v0.4.2+ scalar plugins** on presets: `FormatSimpleValue`, `FormatLiteralValue`, `FormatSpannerCLIValue`. Strip via `FormatConfigWithoutScalarPlugins` or edit `FormatComplexPlugins` on a **clone** (singleton configs used by convenience funcs are shared—do not mutate).
+- **NUMERIC output** (wire `"99.5"` example):
+
+  | Preset | Behavior |
+  |--------|----------|
+  | `SimpleFormatConfig` (CSV/JSONL default) | Wire string as-is (**since v0.4.2** / #97) |
+  | `LiteralFormatConfig` | SQL literal / `NumericString` padding |
+  | `SpannerCLICompatibleFormatConfig` | `trimSpannerCLINumericFraction` on wire |
+
+  Regolden downstream tests if upgrading from **v0.4.1** Simple export—not a v0.4.3-only change.
+
+- **Tuple STRUCT + CLI scalars:** no new preset constructor; `SpannerCLICompatibleFormatConfig().Clone()` then `FormatStruct.FormatStructParen = FormatTupleStruct` (README/example). Official spanner-cli uses bracket STRUCT `[[…]]`.
+- **JSON rows:** `UnnamedFieldNamer` / `IndexedUnnamedFieldNamer`—non-empty unique names required (`nil` = empty JSON keys).
+
+## Writer (`writer/`)
+
+- **Native client:** `WriteRow` / `WriteRowIterator` / `RunRowIterator` for `*spanner.RowIterator`. First `Next` supplies metadata; zero-row CSV needs `PrepareRowType` + **`Flush`** (not `defer Flush`—return `Flush()` error). Do not pass `iter.Metadata` at construction when still nil.
+- **GCV slice path:** `WriteGCVs` + `WithMetadata` / `WithFormatter` / `WithUnnamedFieldNamer`. Same namer for **out-of-band headers** via root `ColumnNames(fields, namer)`.
+- **Delimited:** `NewCSVWriter`, `NewDelimitedWriter('\t')` = **quoted TSV** (`encoding/csv`), not legacy raw TAB; raw TAB = custom `Writer` (README).
+- **SQL INSERT:** `WithSQLInsertKind`, `WithSQLDialect` (identifier quoting), `WithSQLBatchSize` (>1 multi-row `VALUES`; **`Flush`** ends partial batch). `ErrInvalidSQLInsertKindForDialect`: PostgreSQL + `INSERT OR IGNORE`/`UPDATE`. After any write error, discard writer (documented). **`Table` / `Formatter` fields deprecated**—set via constructor/`WithFormatter` only; unexport planned ([#107](https://github.com/apstndb/spanvalue/issues/107), `breaking-change` label).
+
+## Adoption boundaries (do not expand spanvalue into)
+
+- **No `database/sql` / `*sql.Rows` API** in this repo: apps own metadata pseudo-rows, scan loops, stats result sets (e.g. spannersh). Document recipes only ([#109](https://github.com/apstndb/spanvalue/issues/109), [#110](https://github.com/apstndb/spanvalue/issues/110)).
+- **No string→GCV parsing** in `FormatConfig` (`gcvctor` / app). PG table cells: **spanpg**, not spanvalue.
+
+## gcvctor & errors (short)
+
+- `IsNull`: nil `Value` or protobuf `NullValue`. `NullOf` for typed NULL; empty `ArrayValue` = length 0, not NULL.
+- Strict `ArrayValue` / `StructValueOf`: `ErrTypeMismatch`, `ErrMismatchedCounts`, `ErrNilElementType`. Format: `ErrUnknownType`, `ErrMismatchedFields`.
+- `Float32Value`/`Float64Value`: `NaN`/`±Inf` as strings (Spanner wire).
+- **Tests:** `t.Parallel()`, `cmp.Diff`, `protocmp.Transform()`. `gcvctor` tests: expected GCV via `typector`+`structpb`, not the helper under test. Keep attribution comments in `literal_test.go`, `spanner_cli_compatible_test.go`.
+
+## Releases & issues
+
+- **Per-version truth:** [GitHub Releases](https://github.com/apstndb/spanvalue/releases) (retroactive edits OK with date footnote). Optional repo CHANGELOG tracked in [#108](https://github.com/apstndb/spanvalue/issues/108).
+- **v0.4.2:** scalar plugins (#97), `WriteRowIterator` (#98). **v0.4.3+:** SQL dialect/batch, TAB/tuple docs, SQL field deprecations—not Simple NUMERIC behavior.
+- Open follow-ups: [#79](https://github.com/apstndb/spanvalue/issues/79) (INSERT fragments; batching done), [#95](https://github.com/apstndb/spanvalue/issues/95) (options return errors), [#107](https://github.com/apstndb/spanvalue/issues/107) (breaking unexport).
+
+## Git & review
+
+- **English only** on github.com (issues, PRs, review threads).
+- **Merge:** `squash and merge`; branch updates via **merge**, not rebase+force-push to `main`.
+- **During review response:** avoid **rebase** on the PR branch; squash merge cleans history.
+- After pushing fixes: `gh copilot-review request <pr> --wait` ([gh-copilot-review](https://github.com/apstndb/gh-copilot-review)); `/gemini review` on PR when needed. Local diff reviews: **review-router** (include Codex 5.5 + Antigravity when asked).
+- **Do not merge** unless the user asks. **Do not commit** unless asked.
+
+## Shell
+
+Prefer single-quoted commands; escape backticks inside double quotes.
