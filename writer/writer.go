@@ -1,9 +1,11 @@
 // Package writer provides small streaming helpers for exporting Spanner rows
 // using spanvalue formatters.
 //
-// For [database/sql] clients that decode rows into []spanner.GenericColumnValue
-// (for example go-sql-spanner), use WriteGCVs with WithMetadata, WithFormatter,
-// and WithUnnamedFieldNamer; match out-of-band headers with spanvalue.ColumnNames.
+// For [database/sql] clients that decode rows into
+// [][cloud.google.com/go/spanner.GenericColumnValue] (for example
+// [github.com/googleapis/go-sql-spanner]), use [DelimitedWriter.WriteGCVs] with
+// [WithMetadata], [WithFormatter], and [WithUnnamedFieldNamer]; match out-of-band
+// headers with [github.com/apstndb/spanvalue.ColumnNames].
 // See the README section "go-sql-spanner and GenericColumnValue export".
 //
 // DelimitedWriter is the primary writer for CSV-style delimited text.
