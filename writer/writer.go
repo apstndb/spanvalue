@@ -320,6 +320,10 @@ type metadataOption struct {
 
 // WithMetadata registers names and types from metadata.GetRowType(); same as
 // [WithRowType]. Other metadata fields are ignored.
+//
+// When printing table headers or other column labels outside the writer, use
+// [spanvalue.ColumnNames] with the same [spanvalue.UnnamedFieldNamer] as
+// [WithUnnamedFieldNamer] so export columns match displayed headers.
 func WithMetadata(metadata *sppb.ResultSetMetadata) Option {
 	return metadataOption{metadata: metadata}
 }
@@ -407,6 +411,8 @@ type unnamedFieldNamerOption struct {
 }
 
 // WithUnnamedFieldNamer sets the unnamed-field naming policy for delimited and JSONL writers.
+// The same namer must be passed to [spanvalue.ColumnNames] when resolving display headers
+// outside the writer (for example CLI table output alongside CSV export).
 func WithUnnamedFieldNamer(namer spanvalue.UnnamedFieldNamer) NameOption {
 	return unnamedFieldNamerOption{namer: namer}
 }

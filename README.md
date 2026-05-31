@@ -158,6 +158,80 @@ after the first `Next`, write each row, then `Flush` — is still supported;
 prefer `WriteRowIterator` when you also need metadata or query stats from an
 empty result.
 
+### `RunRowIterator` hooks (custom adapters)
+
+Use [`writer.WriteRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WriteRowIterator)
+when the sink is a built-in [`RowIteratorWriter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorWriter)
+(`DelimitedWriter`, `JSONLWriter`, `SQLInsertWriter`). Use
+[`writer.RunRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RunRowIterator)
+with [`RowIteratorHooks`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorHooks)
+when the sink is not one of those writers—for example a legacy formatter, a
+row transform into an app-owned type, or a presentation-specific export path
+that should stay outside spanvalue.
+
+`RunRowIterator` always calls `iter.Stop()`. Hook semantics (also on
+[`RowIteratorHooks`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorHooks)
+godoc):
+
+- **`PrepareMetadata`** runs once after the first `Next`, including when that
+  call returns `iterator.Done` (zero data rows). It is not called when the first
+  `Next` returns any other error.
+- **`WriteRow`** runs for each data row.
+- **`Finish`** runs only after all rows are consumed **without error**. It is
+  **not** a `defer`-style cleanup when `PrepareMetadata` or `WriteRow` fails.
+- On abort, `RunRowIterator` still returns `*RowIteratorResult` with whatever
+  metadata and stats were available at the abort point.
+
+Minimal adapter shape:
+
+```go
+result, err := writer.RunRowIterator(iter, writer.RowIteratorHooks{
+	PrepareMetadata: func(md *sppb.ResultSetMetadata) error {
+		return sink.Init(md)
+	},
+	WriteRow: func(row *spanner.Row) error {
+		return sink.Write(row)
+	},
+	Finish: func(res *writer.RowIteratorResult) error {
+		return sink.Close(res)
+	},
+})
+```
+
+Nil hook fields are skipped. For header-only or row-skip patterns, see
+[Metadata-only finish after skipping rows](#metadata-only-finish-after-skipping-rows).
+
+### Metadata-only finish after skipping rows
+
+When the application consumes a `RowIterator` but does not write every row body
+(for example a redacted or stats-only export path), metadata is still available
+after `iterator.Done`. Register the row type and call `Flush` so delimited
+writers emit a header-only CSV when columns were present but no data rows were
+written:
+
+```go
+defer iter.Stop()
+
+w := writer.NewDelimitedWriter(out, writer.Comma, writer.WithFormatter(cfg))
+for {
+	_, err := iter.Next()
+	if errors.Is(err, iterator.Done) {
+		break
+	}
+	if err != nil {
+		return err
+	}
+	// discard row body
+}
+if err := w.PrepareRowType(iter.Metadata.GetRowType()); err != nil {
+	return err
+}
+return w.Flush()
+```
+
+When every row is written normally, prefer [`WriteRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WriteRowIterator)
+instead of reimplementing the loop.
+
 ### Schema registration
 
 | Goal | API |
