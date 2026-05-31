@@ -20,7 +20,7 @@ Per-version details also appear on [GitHub Releases](https://github.com/apstndb/
 
 ### root (`spanvalue`)
 
-- Scalar `FormatComplexFunc` plugins on presets (`FormatSimpleValue`, `FormatLiteralValue`, `FormatSpannerCLIValue`) and `FormatConfigWithoutScalarPlugins ([#97](https://github.com/apstndb/spanvalue/pull/97))
+- Scalar `FormatComplexFunc` plugins on presets (`FormatSimpleValue`, `FormatLiteralValue`, `FormatSpannerCLIValue`) and `FormatConfigWithoutScalarPlugins` ([#97](https://github.com/apstndb/spanvalue/pull/97))
 - **NUMERIC on `SimpleFormatConfig`:** wire string as-is (e.g. `"99.5"` stays `99.5` in CSV/JSONL). Upgrading from **v0.4.1 or older** Simple export may require regolden tests; this is **not** a v0.4.3-only change.
 - BYTES fast paths on Simple/Literal/CLI presets (same PR)
 
