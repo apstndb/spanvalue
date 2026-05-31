@@ -9,6 +9,7 @@ import (
 	"github.com/apstndb/spanvalue/gcvctor"
 )
 
+// Tuple-style STRUCT in `ARRAY<STRUCT<...>>` while keeping Spanner CLI scalar formatting.
 func ExampleSpannerCLICompatibleFormatConfig_tupleStruct() {
 	fc := spanvalue.SpannerCLICompatibleFormatConfig().Clone()
 	fc.FormatStruct.FormatStructParen = spanvalue.FormatTupleStruct

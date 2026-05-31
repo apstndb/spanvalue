@@ -36,6 +36,22 @@ quotedColumn := spanvalue.QuoteIdentifier(
 // quotedColumn == "`select`"
 ```
 
+## Tuple-style STRUCT with Spanner CLI scalars
+
+[SpannerCLICompatibleFormatConfig](https://pkg.go.dev/github.com/apstndb/spanvalue#SpannerCLICompatibleFormatConfig)
+matches official [spanner-cli](https://github.com/cloudspannerecosystem/spanner-cli)
+output, including bracket-style STRUCT in arrays (`[[1, east]]`). For tuple
+parentheses (`[(1, east)]`) while keeping CLI scalar rules, clone the preset and
+set [FormatTupleStruct](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatTupleStruct):
+
+```go
+fc := spanvalue.SpannerCLICompatibleFormatConfig().Clone()
+fc.FormatStruct.FormatStructParen = spanvalue.FormatTupleStruct
+```
+
+See [ExampleSpannerCLICompatibleFormatConfig_tupleStruct](https://pkg.go.dev/github.com/apstndb/spanvalue#example-SpannerCLICompatibleFormatConfig-TupleStruct).
+Keep product-specific combinations in your application (not as new spanvalue presets).
+
 ## Adoption snippets
 
 Use the small helper APIs directly when replacing ad hoc downstream formatting
