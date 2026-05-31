@@ -187,6 +187,49 @@ DML or other statements with no result columns: call `PrepareRowType` on
 `iter.Metadata.GetRowType()` (possibly nil or zero fields), then `Flush`—do not rely on
 `PrepareColumnNames` with an empty name list.
 
+### go-sql-spanner and GenericColumnValue export
+
+[go-sql-spanner](https://github.com/googleapis/go-sql-spanner) apps often decode query
+rows into `[]spanner.GenericColumnValue` (for example via proto decode options) and
+export with spanvalue writers. spanvalue does **not** wrap `database/sql` or
+`*sql.Rows`; keep a thin application loop (scan → GCV slice →
+[`writer.WriteGCVs`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#DelimitedWriter.WriteGCVs)).
+
+**Column names:** derive display or file headers with
+[`spanvalue.ColumnNames`](https://pkg.go.dev/github.com/apstndb/spanvalue#ColumnNames)
+on `metadata.GetRowType().GetFields()`, using the **same**
+[`UnnamedFieldNamer`](https://pkg.go.dev/github.com/apstndb/spanvalue#UnnamedFieldNamer)
+as [`writer.WithUnnamedFieldNamer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithUnnamedFieldNamer)
+(default: [`IndexedUnnamedFieldNamer`](https://pkg.go.dev/github.com/apstndb/spanvalue#IndexedUnnamedFieldNamer)).
+Do not use raw `StructType.Field` names alone when the writer applies a namer.
+
+**CSV / JSONL:** register schema and formatting at construction, stream rows, then
+`Flush` (CSV may emit a header on zero-row `SELECT`; JSONL `Flush` is a no-op):
+
+```go
+namer := spanvalue.IndexedUnnamedFieldNamer
+w := writer.NewCSVWriter(
+	out,
+	writer.WithMetadata(md),
+	writer.WithFormatter(spanvalue.SimpleFormatConfig()),
+	writer.WithUnnamedFieldNamer(namer),
+)
+for /* each scanned row */ {
+	if err := w.WriteGCVs(gcvs); err != nil {
+		return err
+	}
+}
+return w.Flush()
+```
+
+**Native Spanner client:** for `*spanner.RowIterator`, use
+[`writer.WriteRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WriteRowIterator)
+or [`writer.RunRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RunRowIterator)
+instead of building GCV slices per row.
+
+Metadata pseudo-rows, `NextResultSet` progression, and stats-only result sets stay
+in the application (for example [spannersh](https://github.com/apstndb/spannersh)).
+
 ### ENUM and PROTO in CSV
 
 Delimited output uses [`SimpleFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#SimpleFormatConfig)
