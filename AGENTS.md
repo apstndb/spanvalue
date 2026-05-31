@@ -39,7 +39,7 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 
 - **Native client:** `WriteRow` / `WriteRowIterator` / `RunRowIterator` for `*spanner.RowIterator`. First `Next` supplies metadata; zero-row CSV needs `PrepareRowType` + **`Flush`** (not `defer Flush`—return `Flush()` error). Do not pass `iter.Metadata` at construction when still nil.
 - **GCV slice path:** `WriteGCVs` + `WithMetadata` / `WithFormatter` / `WithUnnamedFieldNamer`. Same namer for **out-of-band headers** via root `ColumnNames(fields, namer)`.
-- **Delimited:** `NewCSVWriter`, `NewDelimitedWriter('\t')` = **quoted TSV** (`encoding/csv`), not legacy raw TAB; raw TAB = custom `Writer` (README).
+- **Delimited:** `NewCSVWriter(out)`, `NewDelimitedWriter(out, '\t')` = **quoted TSV** (`encoding/csv`), not legacy raw TAB; raw TAB = custom `Writer` (README).
 - **SQL INSERT:** `WithSQLInsertKind`, `WithSQLDialect` (identifier quoting), `WithSQLBatchSize` (>1 multi-row `VALUES`; **`Flush`** ends partial batch). `ErrInvalidSQLInsertKindForDialect`: PostgreSQL + `INSERT OR IGNORE`/`UPDATE`. After any write error, discard writer (documented). **`Table` / `Formatter` fields deprecated**—set via constructor/`WithFormatter` only; unexport planned ([#107](https://github.com/apstndb/spanvalue/issues/107), `breaking-change` label).
 
 ## Adoption boundaries (do not expand spanvalue into)
