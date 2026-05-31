@@ -31,8 +31,14 @@
 // accept [WithFormatter] and schema options below. [WithSQLInsertKind] selects the
 // INSERT prefix (see Spanner INSERT DML syntax). [WithSQLDialect] selects identifier
 // quoting for table and column names in SQL INSERT output (GoogleSQL by default).
-// [WithSQLBatchSize] groups rows into multi-row INSERT statements; call
-// [SQLInsertWriter.Flush] after the last row when batching.
+// [WithSQLBatchSize] groups rows into multi-row INSERT statements. When batching,
+// call [SQLInsertWriter.Flush] after the final row to close a partial batch; Flush
+// is safe to call unconditionally (including when the last batch closed on a size
+// boundary).
+//
+// After any write error from [SQLInsertWriter.WriteRow], [SQLInsertWriter.WriteGCVs],
+// [SQLInsertWriter.WriteValues], or [SQLInsertWriter.WriteStructValues], discard the
+// writer and do not retry writes (same convention as [encoding/csv.Writer] after Error).
 // [RowData], [FormatDelimitedRow], and [FormatJSONLRow] format a single row without a writer.
 //
 // # Column names and field types
@@ -144,6 +150,10 @@ var (
 	ErrMissingFieldTypes = errors.New("missing field types schema")
 	// ErrMismatchedStructValueCount reports that WriteStructValues value count does not match the schema.
 	ErrMismatchedStructValueCount = errors.New("mismatched struct value count")
+	// ErrInvalidSQLInsertKindForDialect reports that [WithSQLInsertKind] selected INSERT OR IGNORE
+	// or INSERT OR UPDATE with a PostgreSQL dialect. Those prefixes are GoogleSQL-only; use plain
+	// [SQLInsert] with [WithSQLDialect](databasepb.DatabaseDialect_POSTGRESQL) instead.
+	ErrInvalidSQLInsertKindForDialect = errors.New("INSERT OR IGNORE/UPDATE not supported for PostgreSQL dialect")
 )
 
 // Writer writes Spanner rows to an output stream.
@@ -201,6 +211,10 @@ type JSONLOption interface {
 // key already exists; INSERT OR UPDATE inserts or updates by primary key. They
 // cannot be combined with ON CONFLICT in the same statement, and INSERT is not
 // supported in Partitioned DML. See https://cloud.google.com/spanner/docs/reference/standard-sql/dml-syntax .
+//
+// [SQLInsertOrIgnore] and [SQLInsertOrUpdate] are invalid with
+// [WithSQLDialect](databasepb.DatabaseDialect_POSTGRESQL); [NewSQLInsertWriter] rejects
+// that combination via [ErrInvalidSQLInsertKindForDialect] on the first write.
 type SQLInsertKind int
 
 const (
@@ -246,6 +260,9 @@ type sqlDialectOption struct {
 // output. It does not change INSERT statement prefixes ([WithSQLInsertKind]) or
 // value literal formatting ([WithFormatter]). The default is GoogleSQL
 // ([databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL]).
+//
+// PostgreSQL dialect does not support [SQLInsertOrIgnore] or [SQLInsertOrUpdate]
+// prefixes; combining them returns [ErrInvalidSQLInsertKindForDialect] on write.
 func WithSQLDialect(dialect databasepb.DatabaseDialect) SQLInsertOption {
 	return sqlDialectOption{dialect: dialect}
 }
@@ -257,11 +274,13 @@ func (o sqlDialectOption) applySQLInsertOption(w *SQLInsertWriter) {
 // WithSQLBatchSize sets how many rows [SQLInsertWriter] combines into one INSERT
 // statement. Values 0 or 1 keep the default of one row per statement. Values greater
 // than 1 emit multi-row INSERT ... VALUES (...), (...); up to n rows per statement.
-// Call [SQLInsertWriter.Flush] after the final row to close a partial batch.
+// Call [SQLInsertWriter.Flush] after the final row to close a partial batch (Flush is
+// also safe when the last batch closed exactly on a size boundary).
 //
 // Batching applies the same [SQLInsertKind] prefix once per batched statement. Multi-row
-// INSERT OR IGNORE and INSERT OR UPDATE follow Spanner GoogleSQL DML rules. Identifier
-// quoting follows [WithSQLDialect]; value literals still use [WithFormatter].
+// INSERT OR IGNORE and INSERT OR UPDATE follow Spanner GoogleSQL DML rules and require
+// GoogleSQL dialect; PostgreSQL rejects those prefixes ([ErrInvalidSQLInsertKindForDialect]).
+// Identifier quoting follows [WithSQLDialect]; value literals still use [WithFormatter].
 func WithSQLBatchSize(n int) SQLInsertOption {
 	return sqlBatchSizeOption{batchSize: n}
 }
@@ -927,15 +946,24 @@ func (w *JSONLWriter) marshalResolvedNames(resolvedNames []string) ([][]byte, er
 }
 
 // SQLInsertWriter writes rows as SQL INSERT statements with dialect-aware identifier quoting.
+//
+// After any error from [SQLInsertWriter.WriteRow], [SQLInsertWriter.WriteGCVs],
+// [SQLInsertWriter.WriteValues], or [SQLInsertWriter.WriteStructValues], discard the
+// writer; partial batched INSERT output may be unrecoverable on retry.
 type SQLInsertWriter struct {
 	// Table is the qualified table name used in INSERT statements.
 	//
 	// Deprecated: Set only via [NewSQLInsertWriter]. Do not mutate Table after the
 	// first write; the field will be unexported in v0.6.
-	Table     string
+	Table string
+	// Formatter formats value literals in INSERT statements.
+	//
+	// Deprecated: Set only via [NewSQLInsertWriter] or [WithFormatter]. Do not mutate
+	// Formatter after the first write; the field will be unexported in v0.6.
 	Formatter *spanvalue.FormatConfig
 
 	insertKind        SQLInsertKind
+	configErr         error
 	sqlDialect        databasepb.DatabaseDialect
 	batchSize         int
 	batchPending      int
@@ -954,6 +982,7 @@ func NewSQLInsertWriter(out io.Writer, table string, options ...SQLInsertOption)
 			opt.applySQLInsertOption(w)
 		}
 	}
+	w.configErr = w.validateSQLInsertConfig()
 	return w
 }
 
@@ -1068,7 +1097,8 @@ func (w *SQLInsertWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 }
 
 // Flush finalizes a partial multi-row INSERT batch started by [WithSQLBatchSize].
-// When batch size is 0 or 1, Flush is a no-op.
+// When batch size is 0 or 1, or when the last batch closed on a size boundary,
+// Flush is a no-op. Flush is safe to call unconditionally after the final row.
 func (w *SQLInsertWriter) Flush() error {
 	if w.sqlBatchSize() <= 1 || w.batchPending == 0 {
 		return nil
@@ -1094,7 +1124,22 @@ func (w *SQLInsertWriter) sqlBatchSize() int {
 	return w.batchSize
 }
 
+func (w *SQLInsertWriter) validateSQLInsertConfig() error {
+	if w.sqlDialect != databasepb.DatabaseDialect_POSTGRESQL {
+		return nil
+	}
+	switch w.insertKind {
+	case SQLInsertOrIgnore, SQLInsertOrUpdate:
+		return ErrInvalidSQLInsertKindForDialect
+	default:
+		return nil
+	}
+}
+
 func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedColumns string) error {
+	if w.configErr != nil {
+		return w.configErr
+	}
 	if w.out == nil {
 		return ErrNilOutputWriter
 	}
