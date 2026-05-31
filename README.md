@@ -91,7 +91,7 @@ may be empty but metadata still lists columns, use the `iter.Next` loop below an
 `PrepareRowType(iter.Metadata.GetRowType())` on the first loop iteration (even when `Next` returns
 `iterator.Done`), then `WriteRow` in the loop and `return w.Flush()` after the loop (do not
 `defer w.Flush()`—that discards Flush errors). You do not need to build `[]GenericColumnValue` per row or call
-`WriteStructValues` on that path. If you already hold `*sppb.ResultSetMetadata` outside a
+`WriteStructValues` on that path. If you already hold `*spannerpb.ResultSetMetadata` outside a
 `RowIterator` (for example an in-memory `spannerpb.ResultSet`), `WithMetadata(md)` at
 construction is fine.
 
@@ -186,7 +186,7 @@ Minimal adapter shape:
 
 ```go
 result, err := writer.RunRowIterator(iter, writer.RowIteratorHooks{
-	PrepareMetadata: func(md *sppb.ResultSetMetadata) error {
+	PrepareMetadata: func(md *spannerpb.ResultSetMetadata) error {
 		return sink.Init(md)
 	},
 	WriteRow: func(row *spanner.Row) error {
@@ -270,10 +270,10 @@ export with spanvalue writers. spanvalue does **not** wrap `database/sql` or
 [`writer.WriteGCVs`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#DelimitedWriter.WriteGCVs)).
 
 **Column names:** `database/sql` does not surface Spanner
-`*spanpb.ResultSetMetadata`; register columns with
+`*spannerpb.ResultSetMetadata`; register columns with
 [`writer.WithColumnNames`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithColumnNames)
 from your scan metadata (or `rows.Columns()` plus any unnamed-field policy).
-When the app already holds `*sppb.ResultSetMetadata` (for example proto decode),
+When the app already holds `*spannerpb.ResultSetMetadata` (for example proto decode),
 [`writer.WithMetadata`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithMetadata)
 is appropriate. For display headers outside the writer, use
 [`spanvalue.ColumnNames`](https://pkg.go.dev/github.com/apstndb/spanvalue#ColumnNames)
@@ -293,6 +293,7 @@ w := writer.NewCSVWriter(
 	writer.WithFormatter(spanvalue.SimpleFormatConfig()),
 	writer.WithUnnamedFieldNamer(namer),
 )
+var gcvs []spanner.GenericColumnValue
 for rows.Next() {
 	// decode the scanned row into gcvs
 	if err := w.WriteGCVs(gcvs); err != nil {
