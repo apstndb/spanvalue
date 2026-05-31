@@ -10,9 +10,11 @@
 // a preset. Scalar plugins ([FormatSimpleValue], [FormatLiteralValue],
 // [FormatSpannerCLIValue], [FormatJSONSimpleValue]) format GenericColumnValue directly
 // without Decode; remove them with [FormatConfigWithoutScalarPlugins] or from
-// [FormatConfig.FormatComplexPlugins] on a clone to use Decode + [FormatNullable].
+// [FormatConfig.FormatComplexPlugins] to use Decode + [FormatNullable].
 // Scalar plugins fall through to that path when [FormatConfig.FormatNullable] is replaced.
-// Customize a preset with [FormatConfig.Clone].
+// Constructors return a new [FormatConfig]; use [FormatConfig.Clone] when sharing a config.
+// For tuple STRUCT with Spanner CLI scalars, set [FormatTupleStruct] on
+// [SpannerCLICompatibleFormatConfig] (see README).
 // [FormatConfig.FormatColumn] runs [FormatComplexFunc] plugins first, then built-in
 // ARRAY, STRUCT, and scalar formatting.
 // Convenience entry points include [FormatRowLiteral], [FormatColumnLiteral],
@@ -24,11 +26,10 @@
 // Lower-level callbacks and plugin types are intended for custom output formats:
 // [FormatArrayFunc], [FormatStructFieldFunc], [FormatStructParenFunc], [FormatComplexFunc],
 // [ErrFallthrough], [FormatStruct], [FormatTupleStruct], [TypedStructFormat], and
-// [JSONObjectStructFormat]. Copy a preset with [FormatConfig.Clone] before changing
-// callbacks. Convenience formatters such as [FormatRowSpannerCLICompatible] use
-// internal singleton configs; call [FormatConfig.Clone] on a preset from
-// [LiteralFormatConfig], [SimpleFormatConfig], or the other constructors before
-// changing callbacks.
+// [JSONObjectStructFormat]. Customize a [FormatConfig] from a constructor, or
+// [FormatConfig.Clone] when reusing one. Convenience formatters such as
+// [FormatRowSpannerCLICompatible] use internal singleton configs; call
+// [FormatConfig.FormatRow] on your own config instead of those helpers.
 //
 // # Related packages
 //

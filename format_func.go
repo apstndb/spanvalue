@@ -14,6 +14,9 @@ func formatTypedStructParen(typ *sppb.Type, toplevel bool, fieldStrings []string
 	return fmt.Sprintf("%v(%v)", lo.Ternary(toplevel, spantype.FormatTypeVerbose(typ), ""), strings.Join(fieldStrings, ", ")), nil
 }
 
+// FormatTupleStruct renders STRUCT values with parentheses, for example (1, east).
+// [SimpleFormatConfig] uses it by default. To combine tuple STRUCT with Spanner CLI
+// scalars, see [SpannerCLICompatibleFormatConfig] and the README tuple STRUCT example.
 func FormatTupleStruct(typ *sppb.Type, toplevel bool, fieldStrings []string) (string, error) {
 	return fmt.Sprintf("(%v)", strings.Join(fieldStrings, ", ")), nil
 }

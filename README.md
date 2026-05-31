@@ -36,6 +36,23 @@ quotedColumn := spanvalue.QuoteIdentifier(
 // quotedColumn == "`select`"
 ```
 
+## Tuple-style STRUCT with Spanner CLI scalars
+
+[SpannerCLICompatibleFormatConfig](https://pkg.go.dev/github.com/apstndb/spanvalue#SpannerCLICompatibleFormatConfig)
+matches official [spanner-cli](https://github.com/cloudspannerecosystem/spanner-cli)
+output, including bracket-style STRUCT in arrays (`[[1, east]]`). For tuple
+parentheses (`[(1, east)]`) while keeping CLI scalar rules, customize the config
+returned by the constructor and set
+[FormatTupleStruct](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatTupleStruct):
+
+```go
+fc := spanvalue.SpannerCLICompatibleFormatConfig()
+fc.FormatStruct.FormatStructParen = spanvalue.FormatTupleStruct
+```
+
+See [ExampleSpannerCLICompatibleFormatConfig_tupleStruct](https://pkg.go.dev/github.com/apstndb/spanvalue#example-SpannerCLICompatibleFormatConfig-TupleStruct).
+Keep product-specific combinations in your application (not as new spanvalue presets).
+
 ## Adoption snippets
 
 Use the small helper APIs directly when replacing ad hoc downstream formatting
@@ -205,9 +222,8 @@ func writeCSV(out io.Writer, rows []*spanner.Row) error {
 }
 ```
 
-Quoted TSV uses the same CSV-style writer with a tab delimiter (`encoding/csv`
-quoting: embedded tabs, quotes, and newlines in a field are escaped). For CSV output,
-`NewCSVWriter` is a thin helper for `NewDelimitedWriter(out, writer.Comma)`. Pass
+TSV output uses the same CSV-style writer with a tab delimiter. `NewCSVWriter`
+is a thin helper for `NewDelimitedWriter(out, writer.Comma)`. Pass
 `writer.Comma` when using the generic delimited constructor for CSV output.
 Delimiters must be non-zero valid runes other than `"`, `\r`, `\n`, or
 `utf8.RuneError`.
@@ -223,14 +239,6 @@ func writeTSV(out io.Writer, rows []*spanner.Row) error {
 	return w.Flush()
 }
 ```
-
-Some CLIs expose a legacy **TAB** format that joins pre-formatted column strings
-with `\t` and does not apply CSV-style quoting. That is not what
-`NewDelimitedWriter(out, '\t')` emits. To keep raw tab-separated output while
-still using spanvalue formatters, implement [`writer.Writer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#Writer)
-(or [`writer.RowIteratorWriter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorWriter)
-when streaming via [`writer.WriteRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WriteRowIterator)): format each column, `strings.Join(fields, "\t")`,
-then write the line.
 
 JSONL output:
 

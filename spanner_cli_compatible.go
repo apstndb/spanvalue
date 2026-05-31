@@ -16,7 +16,21 @@ import (
 var spannerCLICompatibleFormatConfig = SpannerCLICompatibleFormatConfig()
 
 // SpannerCLICompatibleFormatConfig returns a new FormatConfig that matches
-// the output format of spanner-cli.
+// the output format of the official [spanner-cli] tool (bracket-style STRUCT
+// fields in arrays, for example [[1, east]] for `ARRAY<STRUCT<...>>`).
+//
+// Tuple-style STRUCT parentheses such as [(1, east)] are not spanner-cli output.
+// To keep Spanner CLI scalar formatting but render STRUCT with [FormatTupleStruct],
+// customize the returned config:
+//
+//	fc := SpannerCLICompatibleFormatConfig()
+//	fc.FormatStruct.FormatStructParen = FormatTupleStruct
+//
+// See the repository README for a tuple STRUCT example. Application-specific presets
+// (for example spanner-mycli table modes) should compose [FormatConfig] in the caller
+// rather than adding new constructors here.
+//
+// [spanner-cli]: https://github.com/cloudspannerecosystem/spanner-cli
 func SpannerCLICompatibleFormatConfig() *FormatConfig {
 	return &FormatConfig{
 		NullString:  nullStringUpperCase,
