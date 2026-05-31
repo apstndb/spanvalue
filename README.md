@@ -167,6 +167,8 @@ writers emit a header-only CSV when columns were present but no data rows were
 written:
 
 ```go
+defer iter.Stop()
+
 w := writer.NewDelimitedWriter(out, writer.Comma, writer.WithFormatter(cfg))
 for {
 	_, err := iter.Next()
