@@ -4,8 +4,11 @@
 // For [database/sql] clients that decode rows into
 // [][cloud.google.com/go/spanner.GenericColumnValue] (for example
 // [github.com/googleapis/go-sql-spanner]), use [DelimitedWriter.WriteGCVs] with
-// [WithMetadata], [WithFormatter], and [WithUnnamedFieldNamer]; match out-of-band
-// headers with [github.com/apstndb/spanvalue.ColumnNames].
+// [WithColumnNames] (typical—[database/sql] does not expose Spanner
+// [cloud.google.com/go/spanner/apiv1/spannerpb.ResultSetMetadata]), or
+// [WithMetadata] when the app already holds metadata (for example proto decode).
+// Also set [WithFormatter] and [WithUnnamedFieldNamer]; match out-of-band headers
+// with [github.com/apstndb/spanvalue.ColumnNames] on the same field list.
 // See the README section "go-sql-spanner and GenericColumnValue export".
 //
 // DelimitedWriter is the primary writer for CSV-style delimited text.

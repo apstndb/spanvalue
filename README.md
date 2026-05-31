@@ -195,22 +195,27 @@ export with spanvalue writers. spanvalue does **not** wrap `database/sql` or
 `*sql.Rows`; keep a thin application loop (scan → GCV slice →
 [`writer.WriteGCVs`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#DelimitedWriter.WriteGCVs)).
 
-**Column names:** derive display or file headers with
+**Column names:** `database/sql` does not surface Spanner
+`*spanpb.ResultSetMetadata`; register columns with
+[`writer.WithColumnNames`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithColumnNames)
+from your scan metadata (or `rows.Columns()` plus any unnamed-field policy).
+When the app already holds `*sppb.ResultSetMetadata` (for example proto decode),
+[`writer.WithMetadata`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithMetadata)
+is appropriate. For display headers outside the writer, use
 [`spanvalue.ColumnNames`](https://pkg.go.dev/github.com/apstndb/spanvalue#ColumnNames)
-on `metadata.GetRowType().GetFields()`, using the **same**
+on the **same** field list with the **same**
 [`UnnamedFieldNamer`](https://pkg.go.dev/github.com/apstndb/spanvalue#UnnamedFieldNamer)
-as [`writer.WithUnnamedFieldNamer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithUnnamedFieldNamer)
-(default: [`IndexedUnnamedFieldNamer`](https://pkg.go.dev/github.com/apstndb/spanvalue#IndexedUnnamedFieldNamer)).
-Do not use raw `StructType.Field` names alone when the writer applies a namer.
+as [`writer.WithUnnamedFieldNamer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithUnnamedFieldNamer).
 
 **CSV / JSONL:** register schema and formatting at construction, stream rows, then
 `Flush` (CSV may emit a header on zero-row `SELECT`; JSONL `Flush` is a no-op):
 
 ```go
 namer := spanvalue.IndexedUnnamedFieldNamer
+names := []string{"id", "name"} // same names passed to WithColumnNames
 w := writer.NewCSVWriter(
 	out,
-	writer.WithMetadata(md),
+	writer.WithColumnNames(names),
 	writer.WithFormatter(spanvalue.SimpleFormatConfig()),
 	writer.WithUnnamedFieldNamer(namer),
 )
