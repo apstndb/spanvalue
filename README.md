@@ -201,6 +201,37 @@ result, err := writer.RunRowIterator(iter, writer.RowIteratorHooks{
 Nil hook fields are skipped. For header-only or row-skip patterns, see
 [Metadata-only finish after skipping rows](#metadata-only-finish-after-skipping-rows).
 
+### Metadata-only finish after skipping rows
+
+When the application consumes a `RowIterator` but does not write every row body
+(for example a redacted or stats-only export path), metadata is still available
+after `iterator.Done`. Register the row type and call `Flush` so delimited
+writers emit a header-only CSV when columns were present but no data rows were
+written:
+
+```go
+defer iter.Stop()
+
+w := writer.NewDelimitedWriter(out, writer.Comma, writer.WithFormatter(cfg))
+for {
+	_, err := iter.Next()
+	if errors.Is(err, iterator.Done) {
+		break
+	}
+	if err != nil {
+		return err
+	}
+	// discard row body
+}
+if err := w.PrepareRowType(iter.Metadata.GetRowType()); err != nil {
+	return err
+}
+return w.Flush()
+```
+
+When every row is written normally, prefer [`WriteRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WriteRowIterator)
+instead of reimplementing the loop.
+
 ### Schema registration
 
 | Goal | API |
