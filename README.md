@@ -265,7 +265,7 @@ DML or other statements with no result columns: call `PrepareRowType` on
 
 [go-sql-spanner](https://github.com/googleapis/go-sql-spanner) apps often decode query
 rows into `[]spanner.GenericColumnValue` (for example via proto decode options) and
-export with spanvalue writers. spanvalue does **not** wrap `database/sql` or
+export with `spanvalue` writers. `spanvalue` does **not** wrap `database/sql` or
 `*sql.Rows`; keep a thin application loop (scan → GCV slice →
 [`writer.WriteGCVs`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#DelimitedWriter.WriteGCVs)).
 
