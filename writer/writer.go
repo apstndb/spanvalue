@@ -166,6 +166,9 @@ var (
 	// or INSERT OR UPDATE with a PostgreSQL dialect. Those prefixes are GoogleSQL-only; use plain
 	// [SQLInsert] with [WithSQLDialect](databasepb.DatabaseDialect_POSTGRESQL) instead.
 	ErrInvalidSQLInsertKindForDialect = errors.New("INSERT OR IGNORE/UPDATE not supported for PostgreSQL dialect")
+	// ErrTableNameChangedMidBatch reports that SQLInsertWriter.Table was mutated while
+	// a multi-row INSERT batch was open.
+	ErrTableNameChangedMidBatch = errors.New("table name changed mid-batch")
 )
 
 // Writer writes Spanner rows to an output stream.
@@ -1190,7 +1193,17 @@ func (w *SQLInsertWriter) writeSingleInsert(quotedColumns string, formattedValue
 	return err
 }
 
+func (w *SQLInsertWriter) rejectTableChangeMidBatch() error {
+	if w.batchPending == 0 || w.quotedTableInput == "" || w.Table == w.quotedTableInput {
+		return nil
+	}
+	return fmt.Errorf("%w: %q to %q", ErrTableNameChangedMidBatch, w.quotedTableInput, w.Table)
+}
+
 func (w *SQLInsertWriter) appendBatchedInsert(quotedColumns string, formattedValues []string) error {
+	if err := w.rejectTableChangeMidBatch(); err != nil {
+		return err
+	}
 	if w.batchPending == 0 {
 		quotedTable, err := w.quotedQualifiedTable()
 		if err != nil {

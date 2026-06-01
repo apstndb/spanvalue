@@ -981,6 +981,29 @@ func TestSQLInsertWriterBatchSize(t *testing.T) {
 		}
 	})
 
+	t.Run("table change mid-batch rejects", func(t *testing.T) {
+		t.Parallel()
+
+		var out bytes.Buffer
+		w := NewSQLInsertWriter(&out, "db.users", WithSQLBatchSize(2))
+		if err := w.WriteValues(columnNames, row(1, "a")); err != nil {
+			t.Fatalf("WriteValues() error = %v", err)
+		}
+		// Legacy mutation remains syntactically possible until Table is unexported,
+		// but a mid-batch change must not silently append rows to the previous table.
+		w.Table = "archive.users"
+		err := w.WriteValues(columnNames, row(2, "b"))
+		if !errors.Is(err, ErrTableNameChangedMidBatch) {
+			t.Fatalf("WriteValues() after table change error = %v, want ErrTableNameChangedMidBatch", err)
+		}
+		want := "" +
+			"INSERT INTO `db`.`users` (`id`, `name`) VALUES\n" +
+			"  (1, \"a\")"
+		if diff := cmp.Diff(want, out.String()); diff != "" {
+			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("PostgreSQL dialect batched", func(t *testing.T) {
 		t.Parallel()
 
