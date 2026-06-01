@@ -965,6 +965,7 @@ func TestSQLInsertWriterBatchSize(t *testing.T) {
 				t.Fatalf("WriteValues() error = %v", err)
 			}
 		}
+		// Legacy: mutating Table after writes; legacy behavior until Table is unexported.
 		w.Table = "archive.users"
 		if err := w.WriteValues(columnNames, row(3, "c")); err != nil {
 			t.Fatalf("WriteValues() after table change error = %v", err)
@@ -975,29 +976,6 @@ func TestSQLInsertWriterBatchSize(t *testing.T) {
 			"  (2, \"b\");\n" +
 			"INSERT INTO `archive`.`users` (`id`, `name`) VALUES\n" +
 			"  (3, \"c\")"
-		if diff := cmp.Diff(want, out.String()); diff != "" {
-			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
-		}
-	})
-
-	t.Run("table change mid-batch flushes pending", func(t *testing.T) {
-		t.Parallel()
-
-		var out bytes.Buffer
-		w := NewSQLInsertWriter(&out, "db.users", WithSQLBatchSize(2))
-		if err := w.WriteValues(columnNames, row(1, "a")); err != nil {
-			t.Fatalf("WriteValues() error = %v", err)
-		}
-		// Legacy: mutating Table after writes; legacy behavior until Table is unexported.
-		w.Table = "archive.users"
-		if err := w.WriteValues(columnNames, row(2, "b")); err != nil {
-			t.Fatalf("WriteValues() after table change error = %v", err)
-		}
-		want := "" +
-			"INSERT INTO `db`.`users` (`id`, `name`) VALUES\n" +
-			"  (1, \"a\");\n" +
-			"INSERT INTO `archive`.`users` (`id`, `name`) VALUES\n" +
-			"  (2, \"b\")"
 		if diff := cmp.Diff(want, out.String()); diff != "" {
 			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
 		}

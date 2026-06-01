@@ -302,3 +302,27 @@ func TestDecoratorResetOnQueryErrorBeforeMetadata(t *testing.T) {
 		t.Fatalf("after query error Current = %d, want 0", ord.Current)
 	}
 }
+
+func TestResetEachRunRunsOncePerRun(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithColumnNames("id")
+	row, err := spanner.NewRow([]string{"id"}, []interface{}{int64(1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var resets int
+	hooks := resetEachRun(RowIteratorHooks{
+		WriteRow: func(*spanner.Row) error { return nil },
+	}, func() {
+		resets++
+	})
+	_, err = runRowIterator(&stubRowIterator{md: md, rows: []*spanner.Row{row}}, hooks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resets != 1 {
+		t.Fatalf("resets = %d, want 1", resets)
+	}
+}
