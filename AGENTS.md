@@ -57,8 +57,9 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 ## Releases & issues
 
 - **Per-version truth:** [GitHub Releases](https://github.com/apstndb/spanvalue/releases) only—no in-repo `CHANGELOG.md`. Retroactive release edits OK with date footnote.
-- **v0.4.2:** scalar plugins (#97), `WriteRowIterator` (#98). **v0.4.3+:** SQL dialect/batch, TAB/tuple docs, SQL field deprecations—not Simple NUMERIC behavior.
-- Open follow-ups: [#79](https://github.com/apstndb/spanvalue/issues/79) (INSERT fragments; batching done). **v0.5.0 track (shipped in alpha / pending stable tag):** constructor errors ([#95](https://github.com/apstndb/spanvalue/issues/95)), writer field unexport ([#107](https://github.com/apstndb/spanvalue/issues/107), [#140](https://github.com/apstndb/spanvalue/issues/140)). Stable release checklist: [#136](https://github.com/apstndb/spanvalue/issues/136).
+- **v0.4.2:** scalar plugins (#97), `WriteRowIterator` (#98). **v0.4.3-alpha.1** (never stable-tagged): SQL dialect/batch, TAB/tuple docs—not Simple NUMERIC behavior ([v0.4.2](https://github.com/apstndb/spanvalue/releases/tag/v0.4.2)).
+- **v0.5.0** ([release](https://github.com/apstndb/spanvalue/releases/tag/v0.5.0)): writer constructor `error`, `RowIteratorHooks` extensibility, field unexport (SQL INSERT [#107](https://github.com/apstndb/spanvalue/issues/107), delimited/JSONL [#140](https://github.com/apstndb/spanvalue/issues/140)), docs/lint. Upgrading: release **Upgrading to v0.5.0** section.
+- Open follow-ups: [#79](https://github.com/apstndb/spanvalue/issues/79) (INSERT fragment helpers only), [#126](https://github.com/apstndb/spanvalue/issues/126) (PostgreSQL value literals for SQL INSERT), [#43](https://github.com/apstndb/spanvalue/issues/43) (gcvctor naming memo), [#24](https://github.com/apstndb/spanvalue/issues/24) (umbrella).
 
 ## Git & review
 
