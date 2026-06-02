@@ -58,7 +58,7 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 
 - **Per-version truth:** [GitHub Releases](https://github.com/apstndb/spanvalue/releases) only—no in-repo `CHANGELOG.md`. Retroactive release edits OK with date footnote.
 - **v0.4.2:** scalar plugins (#97), `WriteRowIterator` (#98). **v0.4.3+:** SQL dialect/batch, TAB/tuple docs, SQL field deprecations—not Simple NUMERIC behavior.
-- Open follow-ups: [#79](https://github.com/apstndb/spanvalue/issues/79) (INSERT fragments; batching done), [#95](https://github.com/apstndb/spanvalue/issues/95) (options return errors), [#107](https://github.com/apstndb/spanvalue/issues/107) (breaking unexport).
+- Open follow-ups: [#79](https://github.com/apstndb/spanvalue/issues/79) (INSERT fragments; batching done). **v0.5.0 track (shipped in alpha):** constructor errors ([#95](https://github.com/apstndb/spanvalue/issues/95)), SQL INSERT field unexport ([#107](https://github.com/apstndb/spanvalue/issues/107) / [v0.5.0-alpha.2](https://github.com/apstndb/spanvalue/releases/tag/v0.5.0-alpha.2)). Stable release checklist: [#136](https://github.com/apstndb/spanvalue/issues/136).
 
 ## Git & review
 

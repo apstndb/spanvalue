@@ -341,6 +341,7 @@ type formatterOption struct {
 }
 
 // WithFormatter sets the FormatConfig used by a writer.
+// For [SQLInsertWriter], a nil formatter selects [spanvalue.LiteralFormatConfig].
 func WithFormatter(formatter *spanvalue.FormatConfig) Option {
 	return formatterOption{formatter: formatter}
 }
