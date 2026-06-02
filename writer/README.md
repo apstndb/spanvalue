@@ -10,6 +10,8 @@ Stream Cloud Spanner query results to **CSV**, **quoted TSV**, **JSONL**, or **S
 
 **Write paths:** `WriteRow` (`*spanner.Row`), `WriteStructValues` (`[]*structpb.Value` with registered field types), `WriteGCVs` (pre-built `GenericColumnValue` slices), or per-call `WriteValues`. Use [`Writer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#Writer) for row-only adapters; use [`FlushWriter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#FlushWriter) when the adapter owns finalization.
 
+**Formatter:** set [`WithFormatter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithFormatter) at construction; inspect the effective preset with [`FormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#DelimitedWriter.FormatConfig) on delimited, JSONL, or SQL INSERT writers (fields are not exported in v0.5.0+).
+
 ## RowIterator
 
 Production code with `*spanner.RowIterator` should treat metadata as **lazy**: `iter.Metadata` is populated after the first `Next()`. Do not pass `iter.Metadata` to `WithMetadata` at construction—it is still `nil`.
