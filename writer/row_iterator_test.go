@@ -66,7 +66,7 @@ func TestRunRowIterator_nilIterator(t *testing.T) {
 func TestWriteRowIterator_nilIterator(t *testing.T) {
 	t.Parallel()
 
-	_, err := WriteRowIterator(nil, NewDelimitedWriter(&bytes.Buffer{}, ','))
+	_, err := WriteRowIterator(nil, mustNewDelimitedWriter(t, &bytes.Buffer{}, ','))
 	if !errors.Is(err, ErrNilRowIterator) {
 		t.Fatalf("error = %v, want ErrNilRowIterator", err)
 	}
@@ -80,7 +80,7 @@ func TestWriteRowIterator_emptyWithMetadata(t *testing.T) {
 	stub := &stubRowIterator{md: md, wantStat: wantStats}
 
 	var out bytes.Buffer
-	w := NewDelimitedWriter(&out, ',', WithHeader(true))
+	w := mustNewDelimitedWriter(t, &out, ',', WithHeader(true))
 	got, err := runRowIterator(stub, RowIteratorHooksFromWriter(w))
 	if err != nil {
 		t.Fatal(err)
@@ -104,7 +104,7 @@ func TestWriteRowIterator_emptyZeroColumnMetadata(t *testing.T) {
 	stub := &stubRowIterator{md: md}
 
 	var out bytes.Buffer
-	w := NewDelimitedWriter(&out, ',', WithHeader(true))
+	w := mustNewDelimitedWriter(t, &out, ',', WithHeader(true))
 	got, err := runRowIterator(stub, RowIteratorHooksFromWriter(w))
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +132,7 @@ func TestWriteRowIterator_withRows(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	w := NewDelimitedWriter(&out, ',', WithHeader(true))
+	w := mustNewDelimitedWriter(t, &out, ',', WithHeader(true))
 	got, err := runRowIterator(stub, RowIteratorHooksFromWriter(w))
 	if err != nil {
 		t.Fatal(err)
@@ -214,7 +214,7 @@ func TestWriteRowIterator_writeErrorStillReturnsOutcome(t *testing.T) {
 	}
 	stub := &stubRowIterator{md: md, rows: []*spanner.Row{row}}
 
-	hooks := RowIteratorHooksFromWriter(NewDelimitedWriter(&bytes.Buffer{}, ','))
+	hooks := RowIteratorHooksFromWriter(mustNewDelimitedWriter(t, &bytes.Buffer{}, ','))
 	hooks.WriteRow = func(*spanner.Row) error {
 		return errors.New("write failed")
 	}
