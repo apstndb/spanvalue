@@ -2,7 +2,6 @@ package writer
 
 import (
 	"cloud.google.com/go/spanner"
-	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 )
 
 // RowOrdinal holds a 1-based row index for diagnostics while streaming rows.
@@ -90,14 +89,6 @@ func resetEachRun(base RowIteratorHooks, reset func()) RowIteratorHooks {
 			prev()
 		}
 		reset()
-	}
-	prep := base.PrepareMetadata
-	base.PrepareMetadata = func(md *sppb.ResultSetMetadata) error {
-		reset()
-		if prep != nil {
-			return prep(md)
-		}
-		return nil
 	}
 	return base
 }

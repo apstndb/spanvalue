@@ -965,6 +965,7 @@ func TestSQLInsertWriterBatchSize(t *testing.T) {
 				t.Fatalf("WriteValues() error = %v", err)
 			}
 		}
+		// Legacy: mutating Table after writes; legacy behavior until Table is unexported.
 		w.Table = "archive.users"
 		if err := w.WriteValues(columnNames, row(3, "c")); err != nil {
 			t.Fatalf("WriteValues() after table change error = %v", err)
@@ -980,7 +981,7 @@ func TestSQLInsertWriterBatchSize(t *testing.T) {
 		}
 	})
 
-	t.Run("table change mid-batch flushes pending", func(t *testing.T) {
+	t.Run("table change mid-batch rejects", func(t *testing.T) {
 		t.Parallel()
 
 		var out bytes.Buffer
@@ -988,16 +989,16 @@ func TestSQLInsertWriterBatchSize(t *testing.T) {
 		if err := w.WriteValues(columnNames, row(1, "a")); err != nil {
 			t.Fatalf("WriteValues() error = %v", err)
 		}
-		// Legacy: mutating Table after writes; legacy behavior until Table is unexported.
+		// Legacy mutation remains syntactically possible until Table is unexported,
+		// but a mid-batch change must not silently append rows to the previous table.
 		w.Table = "archive.users"
-		if err := w.WriteValues(columnNames, row(2, "b")); err != nil {
-			t.Fatalf("WriteValues() after table change error = %v", err)
+		err := w.WriteValues(columnNames, row(2, "b"))
+		if !errors.Is(err, ErrTableNameChangedMidBatch) {
+			t.Fatalf("WriteValues() after table change error = %v, want ErrTableNameChangedMidBatch", err)
 		}
 		want := "" +
 			"INSERT INTO `db`.`users` (`id`, `name`) VALUES\n" +
-			"  (1, \"a\");\n" +
-			"INSERT INTO `archive`.`users` (`id`, `name`) VALUES\n" +
-			"  (2, \"b\")"
+			"  (1, \"a\")"
 		if diff := cmp.Diff(want, out.String()); diff != "" {
 			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
 		}
