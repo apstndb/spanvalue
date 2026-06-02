@@ -467,7 +467,11 @@ func (o formatterOption) applyJSONLOption(w *JSONLWriter) error {
 }
 
 func (o formatterOption) applySQLInsertOption(w *SQLInsertWriter) error {
-	w.formatter = o.formatter
+	if o.formatter != nil {
+		w.formatter = o.formatter
+	} else {
+		w.formatter = spanvalue.LiteralFormatConfig()
+	}
 	return nil
 }
 
@@ -1335,7 +1339,8 @@ func (w *SQLInsertWriter) setColumnNames(names []string) {
 
 func (w *SQLInsertWriter) insertFormatter() *spanvalue.FormatConfig {
 	if w.formatter == nil {
-		w.formatter = spanvalue.LiteralFormatConfig()
+		// Zero-initialized writers are unsupported; avoid mutating w in this getter.
+		return spanvalue.LiteralFormatConfig()
 	}
 	return w.formatter
 }
