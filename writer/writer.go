@@ -341,17 +341,29 @@ type formatterOption struct {
 }
 
 // WithFormatter sets the FormatConfig used by a writer.
+// A nil formatter selects the writer-type default:
+// [DelimitedWriter] uses [spanvalue.SimpleFormatConfig],
+// [JSONLWriter] uses [spanvalue.JSONFormatConfig],
+// and [SQLInsertWriter] uses [spanvalue.LiteralFormatConfig].
 func WithFormatter(formatter *spanvalue.FormatConfig) Option {
 	return formatterOption{formatter: formatter}
 }
 
 func (o formatterOption) applyDelimitedOption(w *DelimitedWriter) error {
-	w.Formatter = o.formatter
+	if o.formatter != nil {
+		w.formatter = o.formatter
+	} else {
+		w.formatter = spanvalue.SimpleFormatConfig()
+	}
 	return nil
 }
 
 func (o formatterOption) applyJSONLOption(w *JSONLWriter) error {
-	w.Formatter = o.formatter
+	if o.formatter != nil {
+		w.formatter = o.formatter
+	} else {
+		w.formatter = spanvalue.JSONFormatConfig()
+	}
 	return nil
 }
 
@@ -421,7 +433,7 @@ func (s *columnSchema) applyNamesOnly(names []string) {
 // DelimitedWriter writes rows as CSV-style delimited text. Call Flush after the final write.
 // Header controls automatic header output; see [WithHeader] and [DelimitedWriter.WriteHeader].
 type DelimitedWriter struct {
-	Formatter *spanvalue.FormatConfig
+	formatter *spanvalue.FormatConfig
 	// Header enables a header line before the first data row when true (default).
 	// See [WithHeader].
 	Header bool
@@ -446,7 +458,7 @@ func NewCSVWriter(out io.Writer, opts ...DelimitedOption) (*DelimitedWriter, err
 
 func newDelimitedWriter(out io.Writer) *DelimitedWriter {
 	return &DelimitedWriter{
-		Formatter:         spanvalue.SimpleFormatConfig(),
+		formatter:         spanvalue.SimpleFormatConfig(),
 		Header:            true,
 		UnnamedFieldNamer: spanvalue.IndexedUnnamedFieldNamer,
 		out:               out,
@@ -591,7 +603,7 @@ func (w *DelimitedWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 		return ErrMissingColumnNames
 	}
 
-	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.schema.names, values)
+	formattedValues, err := spanvalue.FormatRowColumns(w.delimitedFormatter(), w.schema.names, values)
 	if err != nil {
 		return err
 	}
@@ -646,11 +658,18 @@ func (w *DelimitedWriter) initOrValidateColumnNames(columnNames []string) error 
 	return nil
 }
 
-func (w *DelimitedWriter) formatter() *spanvalue.FormatConfig {
-	if w.Formatter != nil {
-		return w.Formatter
+// FormatConfig returns the effective formatter used for delimited value cells.
+// When no formatter is configured, this returns [spanvalue.SimpleFormatConfig].
+// Configure it only via [NewDelimitedWriter], [NewCSVWriter], or [WithFormatter].
+func (w *DelimitedWriter) FormatConfig() *spanvalue.FormatConfig {
+	return w.delimitedFormatter()
+}
+
+func (w *DelimitedWriter) delimitedFormatter() *spanvalue.FormatConfig {
+	if w.formatter == nil {
+		return spanvalue.SimpleFormatConfig()
 	}
-	return spanvalue.SimpleFormatConfig()
+	return w.formatter
 }
 
 func (w *DelimitedWriter) csvWriter() (*csv.Writer, error) {
@@ -719,7 +738,7 @@ func (w *DelimitedWriter) resolvedNames() ([]string, error) {
 // JSONLWriter writes one JSON object per line.
 // JSONLWriter streams one JSON object per line using [github.com/apstndb/spanvalue] JSON formatting.
 type JSONLWriter struct {
-	Formatter *spanvalue.FormatConfig
+	formatter *spanvalue.FormatConfig
 	// Set before the first write. Once names have been resolved for the current
 	// schema, later changes do not retroactively rewrite cached object keys.
 	UnnamedFieldNamer spanvalue.UnnamedFieldNamer
@@ -751,7 +770,7 @@ func NewJSONLWriterWithOptions(out io.Writer, options ...JSONLOption) (*JSONLWri
 
 func newJSONLWriter(out io.Writer) *JSONLWriter {
 	return &JSONLWriter{
-		Formatter:         spanvalue.JSONFormatConfig(),
+		formatter:         spanvalue.JSONFormatConfig(),
 		UnnamedFieldNamer: spanvalue.IndexedUnnamedFieldNamer,
 		out:               out,
 	}
@@ -839,7 +858,7 @@ func (w *JSONLWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 		}
 		return ErrMissingColumnNames
 	}
-	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.schema.names, values)
+	formattedValues, err := spanvalue.FormatRowColumns(w.jsonlFormatter(), w.schema.names, values)
 	if err != nil {
 		return err
 	}
@@ -894,11 +913,18 @@ func (w *JSONLWriter) initOrValidateColumnNames(columnNames []string) error {
 	return nil
 }
 
-func (w *JSONLWriter) formatter() *spanvalue.FormatConfig {
-	if w.Formatter != nil {
-		return w.Formatter
+// FormatConfig returns the effective formatter used for JSONL value encoding.
+// When no formatter is configured, this returns [spanvalue.JSONFormatConfig].
+// Configure it only via [NewJSONLWriter] or [WithFormatter].
+func (w *JSONLWriter) FormatConfig() *spanvalue.FormatConfig {
+	return w.jsonlFormatter()
+}
+
+func (w *JSONLWriter) jsonlFormatter() *spanvalue.FormatConfig {
+	if w.formatter == nil {
+		return spanvalue.JSONFormatConfig()
 	}
-	return spanvalue.JSONFormatConfig()
+	return w.formatter
 }
 
 func (w *JSONLWriter) resolvedNames() ([]string, error) {
