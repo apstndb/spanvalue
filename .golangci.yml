@@ -5,14 +5,12 @@ linters:
   enable:
     - godoclint
   exclusions:
-    # godoc-lint README: exclude test files from godoclint by default practice.
     rules:
       - path: _test\.go$
         linters:
           - godoclint
-
-linters-settings:
-  godoclint:
-    default: basic
-    enable:
-      - no-unused-link
+  settings:
+    godoclint:
+      default: basic
+      enable:
+        - no-unused-link
