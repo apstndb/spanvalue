@@ -166,6 +166,44 @@ func TestDelimitedWriterWithOptions(t *testing.T) {
 	}
 }
 
+func TestDelimitedWriterFormatConfig(t *testing.T) {
+	t.Parallel()
+
+	cfg := spanvalue.LiteralFormatConfig()
+	w := mustNewDelimitedWriter(t, &bytes.Buffer{}, ',', WithFormatter(cfg))
+	if w.FormatConfig() != cfg {
+		t.Fatalf("FormatConfig() = %p, want %p", w.FormatConfig(), cfg)
+	}
+
+	nilFormatterW := mustNewDelimitedWriter(t, &bytes.Buffer{}, ',', WithFormatter(nil))
+	gotFormatter := nilFormatterW.FormatConfig()
+	if gotFormatter == nil {
+		t.Fatal("FormatConfig() with nil formatter = nil, want effective simple formatter")
+	}
+	if nilFormatterW.FormatConfig() != gotFormatter {
+		t.Fatal("FormatConfig() should return the same cached formatter on repeat calls")
+	}
+}
+
+func TestJSONLWriterFormatConfig(t *testing.T) {
+	t.Parallel()
+
+	cfg := spanvalue.LiteralFormatConfig()
+	w := mustNewJSONLWriter(t, &bytes.Buffer{}, WithFormatter(cfg))
+	if w.FormatConfig() != cfg {
+		t.Fatalf("FormatConfig() = %p, want %p", w.FormatConfig(), cfg)
+	}
+
+	nilFormatterW := mustNewJSONLWriter(t, &bytes.Buffer{}, WithFormatter(nil))
+	gotFormatter := nilFormatterW.FormatConfig()
+	if gotFormatter == nil {
+		t.Fatal("FormatConfig() with nil formatter = nil, want effective JSON formatter")
+	}
+	if nilFormatterW.FormatConfig() != gotFormatter {
+		t.Fatal("FormatConfig() should return the same cached formatter on repeat calls")
+	}
+}
+
 func TestDelimitedWriterWriteValuesZeroDelimiterInvalid(t *testing.T) {
 	t.Parallel()
 
