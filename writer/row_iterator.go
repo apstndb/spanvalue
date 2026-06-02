@@ -26,6 +26,11 @@ type RowIteratorStats struct {
 
 // RowIteratorResult is the metadata and stats available from a
 // [cloud.google.com/go/spanner.RowIterator] after [RunRowIterator] returns.
+//
+// Application code should use the value returned by [RunRowIterator] or
+// [WriteRowIterator] rather than constructing RowIteratorResult manually. When a
+// value must be built outside this package (for example in tests), use keyed
+// composite literals so added exported fields do not break positional literals.
 // On the error path, stats fields reflect whatever the iterator had populated at
 // the abort point and may be zero until [iterator.Done] (QueryStats and RowCount
 // are only fully populated after a successful run).
@@ -44,6 +49,15 @@ type RowIteratorResult struct {
 }
 
 // RowIteratorHooks drives [RunRowIterator]. Nil function fields are skipped.
+//
+// RowIteratorHooks contains unexported fields, so other packages cannot use
+// unkeyed composite literals. Construct hooks with [NewRowIteratorHooks],
+// [RowIteratorHooksFromWriter], or package decorators ([WithRowOrdinal],
+// [ObserveWriteRow], [AfterEachSuccessfulWriteRow]); set exported callbacks with
+// [RowIteratorHooks.WithPrepareMetadata], [RowIteratorHooks.WithWriteRow], and
+// [RowIteratorHooks.WithFinish], keyed composite literals, or by assigning
+// exported fields on a value from [NewRowIteratorHooks]. Customize run behavior with [RowIteratorHooks.MarkOmitRowsRead] and
+// [RowIteratorHooks.OnRunStart].
 //
 // PrepareMetadata runs once after the first [spanner.RowIterator.Next], with
 // whatever [cloud.google.com/go/spanner.RowIterator.Metadata] holds at that point
@@ -67,6 +81,30 @@ type RowIteratorHooks struct {
 	omitRowsRead bool
 	// onRunStart runs once at the beginning of each RunRowIterator call.
 	onRunStart func()
+}
+
+// NewRowIteratorHooks returns an empty hooks value for [RowIteratorHooksFromWriter],
+// package decorators, or custom decoration.
+func NewRowIteratorHooks() RowIteratorHooks {
+	return RowIteratorHooks{}
+}
+
+// WithPrepareMetadata sets PrepareMetadata and returns h.
+func (h RowIteratorHooks) WithPrepareMetadata(fn func(*sppb.ResultSetMetadata) error) RowIteratorHooks {
+	h.PrepareMetadata = fn
+	return h
+}
+
+// WithWriteRow sets WriteRow and returns h.
+func (h RowIteratorHooks) WithWriteRow(fn func(*spanner.Row) error) RowIteratorHooks {
+	h.WriteRow = fn
+	return h
+}
+
+// WithFinish sets Finish and returns h.
+func (h RowIteratorHooks) WithFinish(fn func(*RowIteratorResult) error) RowIteratorHooks {
+	h.Finish = fn
+	return h
 }
 
 // MarkOmitRowsRead configures the hooks so successful WriteRow calls do not
@@ -107,17 +145,16 @@ type RowIteratorWriter interface {
 // A nil writer returns empty hooks.
 func RowIteratorHooksFromWriter(w RowIteratorWriter) RowIteratorHooks {
 	if w == nil {
-		return RowIteratorHooks{}
+		return NewRowIteratorHooks()
 	}
-	return RowIteratorHooks{
-		PrepareMetadata: func(md *sppb.ResultSetMetadata) error {
+	return NewRowIteratorHooks().
+		WithPrepareMetadata(func(md *sppb.ResultSetMetadata) error {
 			return w.PrepareRowType(rowTypeFromMetadata(md))
-		},
-		WriteRow: w.WriteRow,
-		Finish: func(*RowIteratorResult) error {
+		}).
+		WithWriteRow(w.WriteRow).
+		WithFinish(func(*RowIteratorResult) error {
 			return w.Flush()
-		},
-	}
+		})
 }
 
 // RunRowIterator streams all rows from iter using hooks. It always calls
