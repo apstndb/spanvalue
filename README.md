@@ -294,7 +294,39 @@ on the **same** field list with the **same**
 as [`writer.WithUnnamedFieldNamer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithUnnamedFieldNamer).
 
 **CSV / JSONL:** register schema and formatting at construction, stream rows, then
-`Flush` (CSV may emit a header on zero-row `SELECT`; JSONL `Flush` is a no-op):
+`Flush` (CSV may emit a header on zero-row `SELECT`; JSONL `Flush` is a no-op).
+
+When the app already holds `*spannerpb.ResultSetMetadata` (for example from proto
+decode), pass metadata, formatter, and namer together with
+[`writer.DelimitedGCVExportOptions`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#DelimitedGCVExportOptions)
+or [`writer.JSONLGCVExportOptions`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#JSONLGCVExportOptions)
+(nil arguments are skipped):
+
+```go
+w, err := writer.NewCSVWriter(out, writer.DelimitedGCVExportOptions(
+	metadata,
+	spanvalue.SimpleFormatConfig(),
+	spanvalue.IndexedUnnamedFieldNamer,
+)...)
+if err != nil {
+	return err
+}
+defer rows.Close()
+for rows.Next() {
+	var gcvs []spanner.GenericColumnValue
+	// decode the scanned row into gcvs
+	if err := w.WriteGCVs(gcvs); err != nil {
+		return err
+	}
+}
+if err := rows.Err(); err != nil {
+	return err
+}
+return w.Flush()
+```
+
+If you only have column names from `database/sql` (no `ResultSetMetadata`), use
+separate `With*` options instead:
 
 ```go
 namer := spanvalue.IndexedUnnamedFieldNamer
