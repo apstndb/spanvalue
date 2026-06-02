@@ -180,7 +180,7 @@ func RunRowIterator(iter *spanner.RowIterator, hooks RowIteratorHooks) (*RowIter
 //
 // When an application skips row bodies but still needs a header-only delimited finish,
 // call [RowIteratorWriter.PrepareRowType] with iter.Metadata.GetRowType() after the Next
-// loop, then [Flusher.Flush]; see README "Metadata-only finish after skipping rows".
+// loop, then [Flusher.Flush]; see package README on GitHub (writer/README.md).
 func WriteRowIterator(iter *spanner.RowIterator, w RowIteratorWriter) (*RowIteratorResult, error) {
 	if iter == nil {
 		return nil, ErrNilRowIterator

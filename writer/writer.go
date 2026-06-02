@@ -1,114 +1,3 @@
-// Package writer provides small streaming helpers for exporting Spanner rows
-// using spanvalue formatters.
-//
-// For [database/sql] clients that decode rows into
-// [][cloud.google.com/go/spanner.GenericColumnValue] (for example
-// [github.com/googleapis/go-sql-spanner]), use [DelimitedWriter.WriteGCVs].
-// Register columns with [WithColumnNames] when scan metadata supplies names.
-// [database/sql] does not expose Spanner
-// [cloud.google.com/go/spanner/apiv1/spannerpb.ResultSetMetadata].
-// Use [WithMetadata] when the app already holds metadata (for example proto decode).
-// Also set [WithFormatter] and [WithUnnamedFieldNamer].
-// Match out-of-band headers with [github.com/apstndb/spanvalue.ColumnNames] on the
-// same field list and [github.com/apstndb/spanvalue.UnnamedFieldNamer] policy.
-// See the README section "go-sql-spanner and GenericColumnValue export".
-//
-// DelimitedWriter is the primary writer for CSV-style delimited text.
-// NewCSVWriter is a thin helper for the common comma-delimited CSV case, while
-// NewDelimitedWriter accepts an explicit delimiter for TSV and other delimited
-// output. DelimitedWriter and JSONLWriter preserve explicit duplicate column
-// names. Their UnnamedFieldNamer only fills empty column names, and generated
-// names avoid collisions with existing names. DelimitedWriter buffers through
-// encoding/csv, so callers must call Flush after the final write.
-//
-// # Quoted delimited text vs raw tab-separated
-//
-// [DelimitedWriter] uses encoding/csv rules: fields that contain the delimiter,
-// double quotes, or newlines are quoted and inner quotes are doubled (RFC 4180-style).
-// [NewDelimitedWriter] with delimiter '\t' produces quoted TSV, not a raw join of
-// formatted column strings with tab characters only.
-//
-// Downstream tools that must preserve legacy TAB output (for example tab-separated
-// CLI export without CSV escaping) can implement [Writer] and format each column with
-// spanvalue, then join with '\t'. For [WriteRowIterator], implement [RowIteratorWriter]
-// ([FlushWriter] plus [RowIteratorWriter.PrepareRowType]); [Flusher.Flush] may be a no-op when no header is needed.
-//
-// [Writer] streams *spanner.Row values; concrete writers also offer WriteValues,
-// WriteGCVs, and WriteStructValues. [FlushWriter] adds Flush (required for buffered
-// DelimitedWriter). Flush does not close the underlying io.Writer.
-//
-// # Constructors
-//
-// [NewDelimitedWriter], [NewCSVWriter], [NewJSONLWriter], and [NewSQLInsertWriter]
-// return an error when an option fails (for example [WithColumnNames] with an empty
-// name list). They accept [WithFormatter] and schema options below. [WithSQLInsertKind] selects the
-// INSERT prefix (see Spanner INSERT DML syntax). [WithSQLDialect] selects identifier
-// quoting for table and column names in SQL INSERT output (GoogleSQL by default).
-// [WithSQLBatchSize] groups rows into multi-row INSERT statements. When batching,
-// call [SQLInsertWriter.Flush] after the final row to close a partial batch; Flush
-// is safe to call unconditionally (including when the last batch closed on a size
-// boundary).
-//
-// After any write error from [SQLInsertWriter.WriteRow], [SQLInsertWriter.WriteGCVs],
-// [SQLInsertWriter.WriteValues], or [SQLInsertWriter.WriteStructValues], discard the
-// writer and do not retry writes (same convention as [encoding/csv.Writer] after Error).
-// [RowData], [FormatDelimitedRow], and [FormatJSONLRow] format a single row without a writer.
-//
-// # Column names and field types
-//
-// Each write API either supplies schema on every call or expects it in the writer:
-//
-//   - WriteRow, WriteValues: column names and GCV types per call; no registration.
-//   - WriteGCVs: register column names before the first row; types from each GCV.
-//   - WriteStructValues: register column names and field types before the first row.
-//
-// Pre-register at construction with With* or later with Prepare* on the concrete writer.
-// Names only: [WithColumnNames], PrepareColumnNames. Names and types: [WithRowType],
-// [WithMetadata], PrepareRowType. [WithMetadata] uses metadata.GetRowType(); from a
-// [cloud.google.com/go/spanner.RowIterator], Metadata is set after the first Next.
-// The first [WriteRow] or [WriteValues] call can also register column names from a row.
-// [DelimitedWriter.Prepare], [JSONLWriter.Prepare], and [SQLInsertWriter.Prepare] are deprecated.
-//
-// # Registered schema vs missing schema
-//
-// Writers distinguish schema that was never registered from a registered schema with
-// zero column names (len(names) == 0):
-//
-//   - Not registered: no Prepare*, With*, or row has supplied names yet.
-//     [DelimitedWriter.WriteHeader], [DelimitedWriter.Flush] (with [WithHeader](true)),
-//     and [DelimitedWriter.WriteGCVs] without prior registration return [ErrMissingColumnNames].
-//   - Registered empty: [PrepareRowType] or [WithRowType] with a nil row type or a row type
-//     whose fields slice is empty (for example DML without THEN RETURN: zero rows and zero
-//     columns). [DelimitedWriter.Flush] succeeds and writes no output; [DelimitedWriter.WriteHeader]
-//     is a no-op because there are no column names. A later [WriteRow] still initializes
-//     names from the row if one arrives.
-//   - [PrepareColumnNames] requires at least one column name and returns [ErrMissingColumnNames]
-//     for an empty list. Do not use it when metadata has zero columns; use [PrepareRowType] or
-//     [WithRowType] with nil or an empty fields slice instead (for example DML without THEN RETURN).
-//   - [WithColumnNames] with an empty name list returns [ErrMissingColumnNames] at
-//     construction. Prefer [PrepareRowType] or [WithRowType] for zero-column metadata.
-//
-// [WithMetadata] registers the same names and types as [WithRowType]; call one or the other, not both.
-// Use it when metadata is already available (not iter.Metadata from a
-// [cloud.google.com/go/spanner.RowIterator] before the first Next). For streaming, call
-// [PrepareRowType] with iter.Metadata.GetRowType() after the first Next when the result may be empty
-// but still has columns (including when Next returns iterator.Done); call [DelimitedWriter.Flush]
-// after the loop and propagate its error (do not defer Flush—it returns an error).
-// [RunRowIterator] and [WriteRowIterator] run that loop, call Finish (Flush for writers),
-// and return metadata and stats (including for zero-row results).
-// When every query returns at least one row, [WriteRow] registers names from the first row.
-//
-// [DelimitedWriter] defaults to a CSV/TSV header once column names are known ([WithHeader]):
-// before the first data row, or on [DelimitedWriter.Flush] when no data row was written
-// (including zero-row SELECT when names were registered). [WithHeader](false) omits the header.
-// [DelimitedWriter.WriteHeader] forces the header earlier.
-//
-// Delimited, JSONL, and SQL encodings differ after spanvalue formats each column.
-//
-// # Compatibility constructors
-//
-// [NewDelimitedWriterWithOptions], [NewJSONLWriterWithOptions], and
-// [NewSQLInsertWriterWithOptions] forward to the primary constructors above.
 package writer
 
 import (
@@ -824,6 +713,7 @@ func (w *DelimitedWriter) resolvedNames() ([]string, error) {
 }
 
 // JSONLWriter writes one JSON object per line.
+// JSONLWriter streams one JSON object per line using [github.com/apstndb/spanvalue] JSON formatting.
 type JSONLWriter struct {
 	Formatter *spanvalue.FormatConfig
 	// Set before the first write. Once names have been resolved for the current
@@ -1039,6 +929,7 @@ func (w *JSONLWriter) marshalResolvedNames(resolvedNames []string) ([][]byte, er
 // After any error from [SQLInsertWriter.WriteRow], [SQLInsertWriter.WriteGCVs],
 // [SQLInsertWriter.WriteValues], or [SQLInsertWriter.WriteStructValues], discard the
 // writer; partial batched INSERT output may be unrecoverable on retry.
+// SQLInsertWriter streams INSERT (or INSERT OR …) statements for a fixed table.
 type SQLInsertWriter struct {
 	// Table is the qualified table name used in INSERT statements.
 	//
