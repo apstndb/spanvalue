@@ -1,0 +1,16 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - godoclint
+  exclusions:
+    rules:
+      - path: _test\.go$
+        linters:
+          - godoclint
+  settings:
+    godoclint:
+      default: basic
+      enable:
+        - no-unused-link

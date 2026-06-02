@@ -1,6 +1,3 @@
-// Throughput benchmarks: build many GenericColumnValues up front, then repeatedly
-// format and discard every cell. Use to compare scalar FormatComplexFunc plugins vs the
-// legacy Decode + FormatNullable path on a realistic mixed-type row shape.
 package spanvalue
 
 import (
@@ -76,6 +73,9 @@ func benchmarkFormatThroughput(b *testing.B, fc *FormatConfig, values []spanner.
 	benchmarkFormatCells(b, fc, values)
 }
 
+// BenchmarkFormatThroughput builds GenericColumnValues up front, then repeatedly
+// formats and discards every cell, comparing scalar FormatComplexFunc plugins vs the
+// legacy Decode + FormatNullable path on a realistic mixed-type row shape.
 func BenchmarkFormatThroughput(b *testing.B) {
 	sizes := []int{1_000, 10_000}
 	for _, rows := range sizes {
