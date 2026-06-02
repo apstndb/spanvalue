@@ -3,8 +3,9 @@
 //
 // Main types: [DelimitedWriter], [JSONLWriter], [SQLInsertWriter], and the [Writer] /
 // [FlushWriter] interfaces. Register column schema with [WithColumnNames], [WithRowType],
-// or [WithMetadata] (or [PrepareRowType] / [PrepareColumnNames] after construction).
-// [DelimitedWriter] buffers through encoding/csv—call [Flusher.Flush] after the final row.
+// or [WithMetadata] (or [DelimitedWriter.PrepareRowType] / [DelimitedWriter.PrepareColumnNames]
+// after construction). [DelimitedWriter] buffers through encoding/csv—call [Flusher.Flush]
+// after the final row.
 //
 // Extended documentation, RowIterator recipes, and module-split notes:
 // https://github.com/apstndb/spanvalue/blob/main/writer/README.md
@@ -15,19 +16,20 @@
 // ([DelimitedWriter], [JSONLWriter], [SQLInsertWriter]) via [RowIteratorHooksFromWriter].
 // [RunRowIterator] is the extension point for other sinks: supply [RowIteratorHooks] built with
 // [NewRowIteratorHooks] and the With* setters, or decorate with [WithRowOrdinal],
-// [ObserveWriteRow], and [AfterEachSuccessfulWriteRow]. Both helpers call [cloud.google.com/go/spanner.RowIterator.Stop]
-// and return [RowIteratorResult] (metadata, stats, [RowIteratorResult.RowsRead]).
+// [ObserveWriteRow], and [AfterEachSuccessfulWriteRow]. Both helpers call
+// [*cloud.google.com/go/spanner.RowIterator.Stop] and return [RowIteratorResult] (metadata, stats,
+// [RowIteratorResult.RowsRead]).
 //
-// For manual [cloud.google.com/go/spanner.RowIterator.Next] loops, register
+// For manual [*cloud.google.com/go/spanner.RowIterator.Next] loops, register
 // [RowIteratorWriter.PrepareRowType] after the first Next when results may be empty;
 // propagate [Flusher.Flush] errors (do not defer Flush).
 //
 // # Direct writers vs hooks
 //
 // Prefer [WriteRowIterator] when the destination is a package writer. Prefer [RunRowIterator]
-// when formatting or export logic should stay outside spanvalue. Prefer [WriteRow] or
-// [WriteGCVs] without RowIterator when the app already owns iteration (for example
-// [database/sql] scans—see the root README go-sql-spanner section).
+// when formatting or export logic should stay outside spanvalue. Prefer [Writer.WriteRow] or
+// [*DelimitedWriter.WriteGCVs] without RowIterator when the app already owns iteration (for
+// example [database/sql] scans—see the root README go-sql-spanner section).
 //
 // [DelimitedGCVExportOptions] and [JSONLGCVExportOptions] group metadata, formatter,
 // and unnamed-field namer options for GCV slice export.
@@ -40,15 +42,16 @@
 //
 // # Column names and registered schema
 //
-// [WriteGCVs] and [WriteStructValues] require prior name/type registration.
-// [WriteRow] and [WriteValues] supply names per call. Writers distinguish missing schema
-// from registered zero-column schema; see [ErrMissingColumnNames]. [WithMetadata] from a
-// [cloud.google.com/go/spanner.RowIterator] before the first Next registers an empty schema—
-// use [PrepareRowType] after the first Next or [WriteRowIterator] instead.
+// [*DelimitedWriter.WriteGCVs] and [*DelimitedWriter.WriteStructValues] require prior
+// name/type registration. [Writer.WriteRow] and [*DelimitedWriter.WriteValues] supply names
+// per call. Writers distinguish missing schema from registered zero-column schema; see
+// [ErrMissingColumnNames]. [WithMetadata] from a [cloud.google.com/go/spanner.RowIterator]
+// before the first Next registers an empty schema—use [RowIteratorWriter.PrepareRowType] after
+// the first Next or [WriteRowIterator] instead.
 //
 // # SQL INSERT
 //
 // [NewSQLInsertWriter] accepts [WithSQLInsertKind], [WithSQLDialect], and [WithSQLBatchSize].
-// After any write error from [SQLInsertWriter], discard the writer. [SQLInsertWriter.Flush]
+// After any write error from [SQLInsertWriter], discard the writer. [*SQLInsertWriter.Flush]
 // closes a partial batch when batching.
 package writer

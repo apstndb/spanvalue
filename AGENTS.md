@@ -66,7 +66,7 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 - **English only** on github.com (issues, PRs, review threads).
 - **Merge:** `squash and merge`; branch updates via **merge**, not rebase+force-push to `main`.
 - **During review response:** avoid **rebase** on the PR branch; squash merge cleans history.
-- After pushing fixes: `gh copilot-review request <pr> --wait` ([gh-copilot-review](https://github.com/apstndb/gh-copilot-review)); `/gemini review` on PR when needed. Local diff reviews: **review-router** (include Codex 5.5 + Antigravity when asked).
+- **Gemini on PRs:** automatic review on open; do **not** post `/gemini review` right after `gh pr create` (only after review-response pushes when needed). **Go doc comment syntax** is enforced by **`godoclint`** in `make lint`—see `.gemini/styleguide.md`; do not duplicate those findings in bot review. **Temporarily** skip GitHub Copilot PR reviews. Local diff reviews: **review-router** when asked.
 - **Do not merge** unless the user asks. **Do not commit** unless asked.
 
 ## Shell
