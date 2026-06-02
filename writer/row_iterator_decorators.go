@@ -26,7 +26,7 @@ func WithRowOrdinal(base RowIteratorHooks, ord *RowOrdinal) RowIteratorHooks {
 	writeRow := base.WriteRow
 	base = resetEachRun(base, func() { ord.Current = 0 })
 	if writeRow == nil {
-		base.MarkOmitRowsRead()
+		base = base.MarkOmitRowsRead()
 	}
 	base.WriteRow = func(row *spanner.Row) error {
 		ord.Current++
@@ -49,7 +49,7 @@ func ObserveWriteRow(base RowIteratorHooks, observe func(rowNum int) error) RowI
 	var rowNum int
 	base = resetEachRun(base, func() { rowNum = 0 })
 	if writeRow == nil {
-		base.MarkOmitRowsRead()
+		base = base.MarkOmitRowsRead()
 	}
 	base.WriteRow = func(row *spanner.Row) error {
 		rowNum++
@@ -75,7 +75,7 @@ func AfterEachSuccessfulWriteRow(base RowIteratorHooks, after func() error) RowI
 	}
 	writeRow := base.WriteRow
 	if writeRow == nil {
-		base.MarkOmitRowsRead()
+		base = base.MarkOmitRowsRead()
 	}
 	base.WriteRow = func(row *spanner.Row) error {
 		if writeRow != nil {
@@ -89,6 +89,5 @@ func AfterEachSuccessfulWriteRow(base RowIteratorHooks, after func() error) RowI
 }
 
 func resetEachRun(base RowIteratorHooks, reset func()) RowIteratorHooks {
-	base.OnRunStart(reset)
-	return base
+	return base.OnRunStart(reset)
 }

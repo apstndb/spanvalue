@@ -337,19 +337,19 @@ func TestRowIteratorHooksExtensibility(t *testing.T) {
 	}
 	stub := &stubRowIterator{md: md, rows: []*spanner.Row{row, row}}
 
-	var runStarts int
+	var runStarts []string
 	hooks := RowIteratorHooks{
 		WriteRow: func(*spanner.Row) error { return nil },
-	}
-	hooks.MarkOmitRowsRead()
-	hooks.OnRunStart(func() { runStarts++ })
+	}.MarkOmitRowsRead().
+		OnRunStart(func() { runStarts = append(runStarts, "first") }).
+		OnRunStart(func() { runStarts = append(runStarts, "second") })
 
 	got, err := runRowIterator(stub, hooks)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if runStarts != 1 {
-		t.Fatalf("runStarts = %d, want 1", runStarts)
+	if len(runStarts) != 2 || runStarts[0] != "first" || runStarts[1] != "second" {
+		t.Fatalf("runStarts = %v, want [first, second]", runStarts)
 	}
 	if got.RowsRead != 0 {
 		t.Fatalf("RowsRead = %d, want 0 with MarkOmitRowsRead", got.RowsRead)
