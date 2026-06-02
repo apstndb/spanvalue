@@ -338,9 +338,9 @@ func TestRowIteratorHooksExtensibility(t *testing.T) {
 	stub := &stubRowIterator{md: md, rows: []*spanner.Row{row, row}}
 
 	var runStarts []string
-	hooks := RowIteratorHooks{
-		WriteRow: func(*spanner.Row) error { return nil },
-	}.MarkOmitRowsRead().
+	hooks := NewRowIteratorHooks().
+		WithWriteRow(func(*spanner.Row) error { return nil }).
+		MarkOmitRowsRead().
 		OnRunStart(func() { runStarts = append(runStarts, "first") }).
 		OnRunStart(func() { runStarts = append(runStarts, "second") })
 
