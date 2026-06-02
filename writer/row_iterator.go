@@ -69,6 +69,30 @@ type RowIteratorHooks struct {
 	onRunStart func()
 }
 
+// MarkOmitRowsRead configures the hooks so successful WriteRow calls do not
+// increment [RowIteratorResult.RowsRead]. Use when WriteRow exists only for
+// side effects (for example a custom decorator) and should not count as exported rows.
+func (h RowIteratorHooks) MarkOmitRowsRead() RowIteratorHooks {
+	h.omitRowsRead = true
+	return h
+}
+
+// OnRunStart registers fn to run once at the beginning of each [RunRowIterator]
+// call. Multiple calls chain in registration order. A nil fn is ignored.
+func (h RowIteratorHooks) OnRunStart(fn func()) RowIteratorHooks {
+	if fn == nil {
+		return h
+	}
+	prev := h.onRunStart
+	h.onRunStart = func() {
+		if prev != nil {
+			prev()
+		}
+		fn()
+	}
+	return h
+}
+
 // RowIteratorWriter streams rows from a [cloud.google.com/go/spanner.RowIterator]
 // through [WriteRowIterator]. [DelimitedWriter], [JSONLWriter], and
 // [SQLInsertWriter] implement it.
