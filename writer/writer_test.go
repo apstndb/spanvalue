@@ -169,33 +169,18 @@ func TestDelimitedWriterWithOptions(t *testing.T) {
 func TestDelimitedWriterWriteValuesZeroDelimiterInvalid(t *testing.T) {
 	t.Parallel()
 
-	var out bytes.Buffer
-	w := mustNewDelimitedWriter(t, &out, 0)
-
-	err := w.WriteValues(
-		[]string{"name", "note"},
-		[]spanner.GenericColumnValue{
-			gcvctor.StringValue("Alice"),
-			gcvctor.StringValue("comma, ok"),
-		},
-	)
+	_, err := NewDelimitedWriter(&bytes.Buffer{}, 0)
 	if !errors.Is(err, ErrInvalidDelimiter) {
-		t.Fatalf("WriteValues() error = %v, want ErrInvalidDelimiter", err)
+		t.Fatalf("NewDelimitedWriter() error = %v, want ErrInvalidDelimiter", err)
 	}
 }
 
 func TestDelimitedWriterWriteValuesInvalidDelimiter(t *testing.T) {
 	t.Parallel()
 
-	var out bytes.Buffer
-	w := mustNewDelimitedWriter(t, &out, '\n')
-
-	err := w.WriteValues(
-		[]string{"name"},
-		[]spanner.GenericColumnValue{gcvctor.StringValue("Alice")},
-	)
+	_, err := NewDelimitedWriter(&bytes.Buffer{}, '\n')
 	if !errors.Is(err, ErrInvalidDelimiter) {
-		t.Fatalf("WriteValues() error = %v, want ErrInvalidDelimiter", err)
+		t.Fatalf("NewDelimitedWriter() error = %v, want ErrInvalidDelimiter", err)
 	}
 }
 
@@ -508,18 +493,18 @@ func TestDelimitedWriterWriteGCVsWithoutMetadata(t *testing.T) {
 func TestDelimitedWriterWriteGCVsNilOutputWithoutMetadata(t *testing.T) {
 	t.Parallel()
 
-	err := mustNewDelimitedWriter(t, nil, Comma).WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")})
+	_, err := NewDelimitedWriter(nil, Comma)
 	if !errors.Is(err, ErrNilOutputWriter) {
-		t.Fatalf("WriteGCVs() error = %v, want ErrNilOutputWriter", err)
+		t.Fatalf("NewDelimitedWriter() error = %v, want ErrNilOutputWriter", err)
 	}
 }
 
 func TestDelimitedWriterWriteHeaderNilOutputWithoutMetadata(t *testing.T) {
 	t.Parallel()
 
-	err := mustNewDelimitedWriter(t, nil, Comma).WriteHeader()
+	_, err := NewDelimitedWriter(nil, Comma)
 	if !errors.Is(err, ErrNilOutputWriter) {
-		t.Fatalf("WriteHeader() error = %v, want ErrNilOutputWriter", err)
+		t.Fatalf("NewDelimitedWriter() error = %v, want ErrNilOutputWriter", err)
 	}
 }
 
@@ -533,22 +518,22 @@ func TestWritersReturnErrNilOutputWriter(t *testing.T) {
 		{
 			name: "csv",
 			run: func() error {
-				w := mustNewDelimitedWriter(t, nil, Comma, WithMetadata(metadataWithColumnNames("name")))
-				return w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")})
+				_, err := NewDelimitedWriter(nil, Comma, WithMetadata(metadataWithColumnNames("name")))
+				return err
 			},
 		},
 		{
 			name: "jsonl",
 			run: func() error {
-				w := mustNewJSONLWriter(t, nil, WithMetadata(metadataWithColumnNames("name")))
-				return w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")})
+				_, err := NewJSONLWriter(nil, WithMetadata(metadataWithColumnNames("name")))
+				return err
 			},
 		},
 		{
 			name: "sql",
 			run: func() error {
-				w := mustNewSQLInsertWriter(t, nil, "users", WithMetadata(metadataWithColumnNames("name")))
-				return w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")})
+				_, err := NewSQLInsertWriter(nil, "users", WithMetadata(metadataWithColumnNames("name")))
+				return err
 			},
 		},
 	}
@@ -1063,16 +1048,15 @@ func TestSQLInsertWriterPostgreSQLInsertOrKindsRejected(t *testing.T) {
 			t.Parallel()
 
 			var out bytes.Buffer
-			w := mustNewSQLInsertWriter(t, &out, "users",
+			_, err := NewSQLInsertWriter(&out, "users",
 				WithSQLDialect(databasepb.DatabaseDialect_POSTGRESQL),
 				WithSQLInsertKind(kind),
 			)
-			err := w.WriteValues([]string{"id"}, []spanner.GenericColumnValue{gcvctor.Int64Value(1)})
 			if !errors.Is(err, ErrInvalidSQLInsertKindForDialect) {
-				t.Fatalf("WriteValues() error = %v, want ErrInvalidSQLInsertKindForDialect", err)
+				t.Fatalf("NewSQLInsertWriter() error = %v, want ErrInvalidSQLInsertKindForDialect", err)
 			}
 			if out.Len() != 0 {
-				t.Fatalf("WriteValues() wrote %q, want no output", out.String())
+				t.Fatalf("NewSQLInsertWriter() wrote %q, want no output", out.String())
 			}
 		})
 	}

@@ -149,8 +149,8 @@ var (
 	// when none was registered yet, or column names/types are insufficient for the write
 	// (for example values without names). It is not returned for a registered zero-column
 	// schema (see package doc "Registered schema vs missing schema"). [PrepareColumnNames]
-	// with an empty name list returns this error; [WithColumnNames] with an empty list is
-	// ignored (writer stays unregistered). Use [PrepareRowType] for zero-column result sets.
+	// and [WithColumnNames] with an empty name list return this error; use [PrepareRowType]
+	// or [WithRowType] for zero-column result sets.
 	ErrMissingColumnNames = errors.New("missing column names")
 	// ErrColumnNamesMismatch reports that provided column names differ from initialized schema.
 	ErrColumnNamesMismatch = errors.New("column names mismatch")
@@ -568,6 +568,12 @@ func newDelimitedWriter(out io.Writer) *DelimitedWriter {
 // field joins. Delimiter must be non-zero and a valid encoding/csv delimiter.
 // See the package-level section "Quoted delimited text vs raw tab-separated".
 func NewDelimitedWriter(out io.Writer, delimiter rune, options ...DelimitedOption) (*DelimitedWriter, error) {
+	if out == nil {
+		return nil, ErrNilOutputWriter
+	}
+	if !validDelimiter(delimiter) {
+		return nil, fmt.Errorf("%w: %q", ErrInvalidDelimiter, delimiter)
+	}
 	w := newDelimitedWriter(out)
 	w.delimiter = delimiter
 	if err := applyDelimitedOptions(w, options...); err != nil {
@@ -832,6 +838,9 @@ type JSONLWriter struct {
 
 // NewJSONLWriter returns a JSONL writer configured by options.
 func NewJSONLWriter(out io.Writer, options ...JSONLOption) (*JSONLWriter, error) {
+	if out == nil {
+		return nil, ErrNilOutputWriter
+	}
 	w := newJSONLWriter(out)
 	if err := applyJSONLOptions(w, options...); err != nil {
 		return nil, err
@@ -1043,7 +1052,6 @@ type SQLInsertWriter struct {
 	Formatter *spanvalue.FormatConfig
 
 	insertKind        SQLInsertKind
-	configErr         error
 	sqlDialect        databasepb.DatabaseDialect
 	batchSize         int
 	batchPending      int
@@ -1056,11 +1064,16 @@ type SQLInsertWriter struct {
 
 // NewSQLInsertWriter returns a SQL INSERT writer configured by options.
 func NewSQLInsertWriter(out io.Writer, table string, options ...SQLInsertOption) (*SQLInsertWriter, error) {
+	if out == nil {
+		return nil, ErrNilOutputWriter
+	}
 	w := newSQLInsertWriter(out, table)
 	if err := applySQLInsertOptions(w, options...); err != nil {
 		return nil, err
 	}
-	w.configErr = w.validateSQLInsertConfig()
+	if err := w.validateSQLInsertConfig(); err != nil {
+		return nil, err
+	}
 	return w, nil
 }
 
@@ -1215,9 +1228,6 @@ func (w *SQLInsertWriter) validateSQLInsertConfig() error {
 }
 
 func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedColumns string) error {
-	if w.configErr != nil {
-		return w.configErr
-	}
 	if w.out == nil {
 		return ErrNilOutputWriter
 	}
