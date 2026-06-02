@@ -40,7 +40,8 @@
 // # Constructors
 //
 // [NewDelimitedWriter], [NewCSVWriter], [NewJSONLWriter], and [NewSQLInsertWriter]
-// accept [WithFormatter] and schema options below. [WithSQLInsertKind] selects the
+// return an error when an option fails (for example [WithColumnNames] with an empty
+// name list). They accept [WithFormatter] and schema options below. [WithSQLInsertKind] selects the
 // INSERT prefix (see Spanner INSERT DML syntax). [WithSQLDialect] selects identifier
 // quoting for table and column names in SQL INSERT output (GoogleSQL by default).
 // [WithSQLBatchSize] groups rows into multi-row INSERT statements. When batching,
@@ -84,9 +85,8 @@
 //   - [PrepareColumnNames] requires at least one column name and returns [ErrMissingColumnNames]
 //     for an empty list. Do not use it when metadata has zero columns; use [PrepareRowType] or
 //     [WithRowType] with nil or an empty fields slice instead (for example DML without THEN RETURN).
-//   - [WithColumnNames] with an empty name list is ignored at construction (the writer stays
-//     unregistered); it does not return an error because options cannot report one (#95 tracks
-//     error-returning options). Prefer [PrepareRowType] for zero-column metadata.
+//   - [WithColumnNames] with an empty name list returns [ErrMissingColumnNames] at
+//     construction. Prefer [PrepareRowType] or [WithRowType] for zero-column metadata.
 //
 // [WithMetadata] registers the same names and types as [WithRowType]; call one or the other, not both.
 // Use it when metadata is already available (not iter.Metadata from a
@@ -212,12 +212,12 @@ type NameOption interface {
 
 // DelimitedOption configures a DelimitedWriter created by [NewDelimitedWriter] or [NewCSVWriter].
 type DelimitedOption interface {
-	applyDelimitedOption(*DelimitedWriter)
+	applyDelimitedOption(*DelimitedWriter) error
 }
 
 // JSONLOption configures a JSONLWriter created by [NewJSONLWriter].
 type JSONLOption interface {
-	applyJSONLOption(*JSONLWriter)
+	applyJSONLOption(*JSONLWriter) error
 }
 
 // SQLInsertKind selects the INSERT statement prefix written by [SQLInsertWriter].
@@ -263,8 +263,9 @@ type sqlInsertKindOption struct {
 	kind SQLInsertKind
 }
 
-func (o sqlInsertKindOption) applySQLInsertOption(w *SQLInsertWriter) {
+func (o sqlInsertKindOption) applySQLInsertOption(w *SQLInsertWriter) error {
 	w.insertKind = o.kind
+	return nil
 }
 
 type sqlDialectOption struct {
@@ -282,8 +283,9 @@ func WithSQLDialect(dialect databasepb.DatabaseDialect) SQLInsertOption {
 	return sqlDialectOption{dialect: dialect}
 }
 
-func (o sqlDialectOption) applySQLInsertOption(w *SQLInsertWriter) {
+func (o sqlDialectOption) applySQLInsertOption(w *SQLInsertWriter) error {
 	w.sqlDialect = o.dialect
+	return nil
 }
 
 // WithSQLBatchSize sets how many rows [SQLInsertWriter] combines into one INSERT
@@ -304,19 +306,56 @@ type sqlBatchSizeOption struct {
 	batchSize int
 }
 
-func (o sqlBatchSizeOption) applySQLInsertOption(w *SQLInsertWriter) {
+func (o sqlBatchSizeOption) applySQLInsertOption(w *SQLInsertWriter) error {
 	w.batchSize = o.batchSize
+	return nil
 }
 
 // SQLInsertOption configures a SQLInsertWriter created by [NewSQLInsertWriter].
 type SQLInsertOption interface {
-	applySQLInsertOption(*SQLInsertWriter)
+	applySQLInsertOption(*SQLInsertWriter) error
 }
 
-type delimitedOptionFunc func(*DelimitedWriter)
+type delimitedOptionFunc func(*DelimitedWriter) error
 
-func (f delimitedOptionFunc) applyDelimitedOption(w *DelimitedWriter) {
-	f(w)
+func (f delimitedOptionFunc) applyDelimitedOption(w *DelimitedWriter) error {
+	return f(w)
+}
+
+func applyDelimitedOptions(w *DelimitedWriter, options ...DelimitedOption) error {
+	for _, opt := range options {
+		if opt == nil {
+			continue
+		}
+		if err := opt.applyDelimitedOption(w); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func applyJSONLOptions(w *JSONLWriter, options ...JSONLOption) error {
+	for _, opt := range options {
+		if opt == nil {
+			continue
+		}
+		if err := opt.applyJSONLOption(w); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func applySQLInsertOptions(w *SQLInsertWriter, options ...SQLInsertOption) error {
+	for _, opt := range options {
+		if opt == nil {
+			continue
+		}
+		if err := opt.applySQLInsertOption(w); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type metadataOption struct {
@@ -333,16 +372,19 @@ func WithMetadata(metadata *sppb.ResultSetMetadata) Option {
 	return metadataOption{metadata: metadata}
 }
 
-func (o metadataOption) applyDelimitedOption(w *DelimitedWriter) {
+func (o metadataOption) applyDelimitedOption(w *DelimitedWriter) error {
 	w.setRowType(rowTypeFromMetadata(o.metadata))
+	return nil
 }
 
-func (o metadataOption) applyJSONLOption(w *JSONLWriter) {
+func (o metadataOption) applyJSONLOption(w *JSONLWriter) error {
 	w.setRowType(rowTypeFromMetadata(o.metadata))
+	return nil
 }
 
-func (o metadataOption) applySQLInsertOption(w *SQLInsertWriter) {
+func (o metadataOption) applySQLInsertOption(w *SQLInsertWriter) error {
 	w.setRowType(rowTypeFromMetadata(o.metadata))
+	return nil
 }
 
 type rowTypeOption struct {
@@ -355,16 +397,19 @@ func WithRowType(rowType *sppb.StructType) Option {
 	return rowTypeOption{rowType: rowType}
 }
 
-func (o rowTypeOption) applyDelimitedOption(w *DelimitedWriter) {
+func (o rowTypeOption) applyDelimitedOption(w *DelimitedWriter) error {
 	w.setRowType(o.rowType)
+	return nil
 }
 
-func (o rowTypeOption) applyJSONLOption(w *JSONLWriter) {
+func (o rowTypeOption) applyJSONLOption(w *JSONLWriter) error {
 	w.setRowType(o.rowType)
+	return nil
 }
 
-func (o rowTypeOption) applySQLInsertOption(w *SQLInsertWriter) {
+func (o rowTypeOption) applySQLInsertOption(w *SQLInsertWriter) error {
 	w.setRowType(o.rowType)
+	return nil
 }
 
 type columnNamesOption struct {
@@ -372,22 +417,34 @@ type columnNamesOption struct {
 }
 
 // WithColumnNames registers column names only and clears any registered field types.
-// An empty names slice is ignored (the writer stays unregistered); use [WithRowType]
-// for a zero-column result set.
+// An empty names slice returns [ErrMissingColumnNames]; use [WithRowType] for a
+// zero-column result set.
 func WithColumnNames(names []string) Option {
 	return columnNamesOption{names: slices.Clone(names)}
 }
 
-func (o columnNamesOption) applyDelimitedOption(w *DelimitedWriter) {
+func (o columnNamesOption) applyDelimitedOption(w *DelimitedWriter) error {
+	if len(o.names) == 0 {
+		return ErrMissingColumnNames
+	}
 	w.setColumnNames(o.names)
+	return nil
 }
 
-func (o columnNamesOption) applyJSONLOption(w *JSONLWriter) {
+func (o columnNamesOption) applyJSONLOption(w *JSONLWriter) error {
+	if len(o.names) == 0 {
+		return ErrMissingColumnNames
+	}
 	w.setColumnNames(o.names)
+	return nil
 }
 
-func (o columnNamesOption) applySQLInsertOption(w *SQLInsertWriter) {
+func (o columnNamesOption) applySQLInsertOption(w *SQLInsertWriter) error {
+	if len(o.names) == 0 {
+		return ErrMissingColumnNames
+	}
 	w.setColumnNames(o.names)
+	return nil
 }
 
 type formatterOption struct {
@@ -399,16 +456,19 @@ func WithFormatter(formatter *spanvalue.FormatConfig) Option {
 	return formatterOption{formatter: formatter}
 }
 
-func (o formatterOption) applyDelimitedOption(w *DelimitedWriter) {
+func (o formatterOption) applyDelimitedOption(w *DelimitedWriter) error {
 	w.Formatter = o.formatter
+	return nil
 }
 
-func (o formatterOption) applyJSONLOption(w *JSONLWriter) {
+func (o formatterOption) applyJSONLOption(w *JSONLWriter) error {
 	w.Formatter = o.formatter
+	return nil
 }
 
-func (o formatterOption) applySQLInsertOption(w *SQLInsertWriter) {
+func (o formatterOption) applySQLInsertOption(w *SQLInsertWriter) error {
 	w.Formatter = o.formatter
+	return nil
 }
 
 type unnamedFieldNamerOption struct {
@@ -422,20 +482,23 @@ func WithUnnamedFieldNamer(namer spanvalue.UnnamedFieldNamer) NameOption {
 	return unnamedFieldNamerOption{namer: namer}
 }
 
-func (o unnamedFieldNamerOption) applyDelimitedOption(w *DelimitedWriter) {
+func (o unnamedFieldNamerOption) applyDelimitedOption(w *DelimitedWriter) error {
 	w.UnnamedFieldNamer = o.namer
+	return nil
 }
 
-func (o unnamedFieldNamerOption) applyJSONLOption(w *JSONLWriter) {
+func (o unnamedFieldNamerOption) applyJSONLOption(w *JSONLWriter) error {
 	w.UnnamedFieldNamer = o.namer
+	return nil
 }
 
 // WithHeader sets whether [DelimitedWriter] emits a CSV/TSV header (default true).
 // The header is written before the first data row, or on [DelimitedWriter.Flush] if only
 // names were registered. See [DelimitedWriter.WriteHeader] to emit it earlier.
 func WithHeader(header bool) DelimitedOption {
-	return delimitedOptionFunc(func(w *DelimitedWriter) {
+	return delimitedOptionFunc(func(w *DelimitedWriter) error {
 		w.Header = header
+		return nil
 	})
 }
 
@@ -484,7 +547,7 @@ type DelimitedWriter struct {
 
 // NewCSVWriter returns a comma-delimited CSV writer configured by options.
 // It is a thin helper for NewDelimitedWriter(out, Comma, opts...).
-func NewCSVWriter(out io.Writer, opts ...DelimitedOption) *DelimitedWriter {
+func NewCSVWriter(out io.Writer, opts ...DelimitedOption) (*DelimitedWriter, error) {
 	return NewDelimitedWriter(out, Comma, opts...)
 }
 
@@ -504,21 +567,19 @@ func newDelimitedWriter(out io.Writer) *DelimitedWriter {
 // single-rune delimiters. Output follows encoding/csv quoting rules, not raw
 // field joins. Delimiter must be non-zero and a valid encoding/csv delimiter.
 // See the package-level section "Quoted delimited text vs raw tab-separated".
-func NewDelimitedWriter(out io.Writer, delimiter rune, options ...DelimitedOption) *DelimitedWriter {
+func NewDelimitedWriter(out io.Writer, delimiter rune, options ...DelimitedOption) (*DelimitedWriter, error) {
 	w := newDelimitedWriter(out)
 	w.delimiter = delimiter
-	for _, opt := range options {
-		if opt != nil {
-			opt.applyDelimitedOption(w)
-		}
+	if err := applyDelimitedOptions(w, options...); err != nil {
+		return nil, err
 	}
-	return w
+	return w, nil
 }
 
 // NewDelimitedWriterWithOptions forwards to [NewDelimitedWriter].
 //
 // Deprecated: Use [NewDelimitedWriter] instead.
-func NewDelimitedWriterWithOptions(out io.Writer, delimiter rune, options ...DelimitedOption) *DelimitedWriter {
+func NewDelimitedWriterWithOptions(out io.Writer, delimiter rune, options ...DelimitedOption) (*DelimitedWriter, error) {
 	return NewDelimitedWriter(out, delimiter, options...)
 }
 
@@ -770,20 +831,18 @@ type JSONLWriter struct {
 }
 
 // NewJSONLWriter returns a JSONL writer configured by options.
-func NewJSONLWriter(out io.Writer, options ...JSONLOption) *JSONLWriter {
+func NewJSONLWriter(out io.Writer, options ...JSONLOption) (*JSONLWriter, error) {
 	w := newJSONLWriter(out)
-	for _, opt := range options {
-		if opt != nil {
-			opt.applyJSONLOption(w)
-		}
+	if err := applyJSONLOptions(w, options...); err != nil {
+		return nil, err
 	}
-	return w
+	return w, nil
 }
 
 // NewJSONLWriterWithOptions forwards to [NewJSONLWriter].
 //
 // Deprecated: Use [NewJSONLWriter] instead.
-func NewJSONLWriterWithOptions(out io.Writer, options ...JSONLOption) *JSONLWriter {
+func NewJSONLWriterWithOptions(out io.Writer, options ...JSONLOption) (*JSONLWriter, error) {
 	return NewJSONLWriter(out, options...)
 }
 
@@ -996,21 +1055,19 @@ type SQLInsertWriter struct {
 }
 
 // NewSQLInsertWriter returns a SQL INSERT writer configured by options.
-func NewSQLInsertWriter(out io.Writer, table string, options ...SQLInsertOption) *SQLInsertWriter {
+func NewSQLInsertWriter(out io.Writer, table string, options ...SQLInsertOption) (*SQLInsertWriter, error) {
 	w := newSQLInsertWriter(out, table)
-	for _, opt := range options {
-		if opt != nil {
-			opt.applySQLInsertOption(w)
-		}
+	if err := applySQLInsertOptions(w, options...); err != nil {
+		return nil, err
 	}
 	w.configErr = w.validateSQLInsertConfig()
-	return w
+	return w, nil
 }
 
 // NewSQLInsertWriterWithOptions forwards to [NewSQLInsertWriter].
 //
 // Deprecated: Use [NewSQLInsertWriter] instead.
-func NewSQLInsertWriterWithOptions(out io.Writer, table string, options ...SQLInsertOption) *SQLInsertWriter {
+func NewSQLInsertWriterWithOptions(out io.Writer, table string, options ...SQLInsertOption) (*SQLInsertWriter, error) {
 	return NewSQLInsertWriter(out, table, options...)
 }
 

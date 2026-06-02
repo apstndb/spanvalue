@@ -67,7 +67,10 @@ jsonLine, err := spanvalue.FormatRowJSONObjectFromColumns(
 ```
 
 ```go
-w := writer.NewSQLInsertWriter(out, "analytics.daily_metrics")
+w, err := writer.NewSQLInsertWriter(out, "analytics.daily_metrics")
+if err != nil {
+	return err
+}
 if err := w.WriteValues(columnNames, gcvs); err != nil {
     return err
 }
@@ -116,12 +119,15 @@ column names from the first row and writes the header before the first data row:
 ```go
 iter := txn.Query(ctx, stmt)
 
-w := writer.NewDelimitedWriter(
+w, err := writer.NewDelimitedWriter(
 	out,
 	'\t',
 	writer.WithFormatter(cfg),
 	writer.WithHeader(true), // false for headerless CSV/TSV
 )
+if err != nil {
+	return err
+}
 if err := iter.Do(func(row *spanner.Row) error {
 	return w.WriteRow(row)
 }); err != nil {
@@ -139,12 +145,15 @@ and query stats even when the iterator is empty:
 ```go
 iter := txn.QueryWithStats(ctx, stmt) // WriteRowIterator stops iter for us
 
-w := writer.NewDelimitedWriter(
+w, err := writer.NewDelimitedWriter(
 	out,
 	'\t',
 	writer.WithFormatter(cfg),
 	writer.WithHeader(true),
 )
+if err != nil {
+	return err
+}
 result, err := writer.WriteRowIterator(iter, w)
 if err != nil {
 	return err
@@ -245,7 +254,7 @@ instead of reimplementing the loop.
 Registration is not the same as having zero columns: without `Prepare*` / `With*` and
 with no row written, `Flush` or `WriteHeader` returns `writer.ErrMissingColumnNames`.
 `PrepareColumnNames` with an empty slice returns `writer.ErrMissingColumnNames`;
-`WithColumnNames([])` at construction is ignored (writer stays unregistered). See
+`WithColumnNames([])` at construction returns `writer.ErrMissingColumnNames`. See
 `go doc writer`, sections "Column names and field types" and
 "Registered schema vs missing schema".
 
@@ -287,12 +296,15 @@ as [`writer.WithUnnamedFieldNamer`](https://pkg.go.dev/github.com/apstndb/spanva
 ```go
 namer := spanvalue.IndexedUnnamedFieldNamer
 names := []string{"id", "name"} // same names passed to WithColumnNames
-w := writer.NewCSVWriter(
+w, err := writer.NewCSVWriter(
 	out,
 	writer.WithColumnNames(names),
 	writer.WithFormatter(spanvalue.SimpleFormatConfig()),
 	writer.WithUnnamedFieldNamer(namer),
 )
+if err != nil {
+	return err
+}
 defer rows.Close()
 for rows.Next() {
 	var gcvs []spanner.GenericColumnValue
@@ -339,7 +351,10 @@ CSV output:
 
 ```go
 func writeCSV(out io.Writer, rows []*spanner.Row) error {
-	w := writer.NewCSVWriter(out)
+	w, err := writer.NewCSVWriter(out)
+	if err != nil {
+		return err
+	}
 	for _, row := range rows {
 		if err := w.WriteRow(row); err != nil {
 			return err
@@ -358,7 +373,10 @@ Delimiters must be non-zero valid runes other than `"`, `\r`, `\n`, or
 
 ```go
 func writeTSV(out io.Writer, rows []*spanner.Row) error {
-	w := writer.NewDelimitedWriter(out, '\t')
+	w, err := writer.NewDelimitedWriter(out, '\t')
+	if err != nil {
+		return err
+	}
 	for _, row := range rows {
 		if err := w.WriteRow(row); err != nil {
 			return err
@@ -380,7 +398,10 @@ JSONL output:
 
 ```go
 func writeJSONL(out io.Writer, rows []*spanner.Row) error {
-	w := writer.NewJSONLWriter(out)
+	w, err := writer.NewJSONLWriter(out)
+	if err != nil {
+		return err
+	}
 	for _, row := range rows {
 		if err := w.WriteRow(row); err != nil {
 			return err
@@ -396,7 +417,10 @@ SQL INSERT output uses Spanner GoogleSQL quoting. Use
 
 ```go
 func writeInserts(out io.Writer, table string, rows []*spanner.Row) error {
-	w := writer.NewSQLInsertWriter(out, table)
+	w, err := writer.NewSQLInsertWriter(out, table)
+	if err != nil {
+		return err
+	}
 	for _, row := range rows {
 		if err := w.WriteRow(row); err != nil {
 			return err
