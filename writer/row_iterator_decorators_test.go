@@ -326,3 +326,32 @@ func TestResetEachRunRunsOncePerRun(t *testing.T) {
 		t.Fatalf("resets = %d, want 1", resets)
 	}
 }
+
+func TestRowIteratorHooksExtensibility(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithColumnNames("id")
+	row, err := spanner.NewRow([]string{"id"}, []interface{}{int64(1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stub := &stubRowIterator{md: md, rows: []*spanner.Row{row, row}}
+
+	var runStarts []string
+	hooks := RowIteratorHooks{
+		WriteRow: func(*spanner.Row) error { return nil },
+	}.MarkOmitRowsRead().
+		OnRunStart(func() { runStarts = append(runStarts, "first") }).
+		OnRunStart(func() { runStarts = append(runStarts, "second") })
+
+	got, err := runRowIterator(stub, hooks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runStarts) != 2 || runStarts[0] != "first" || runStarts[1] != "second" {
+		t.Fatalf("runStarts = %v, want [first, second]", runStarts)
+	}
+	if got.RowsRead != 0 {
+		t.Fatalf("RowsRead = %d, want 0 with MarkOmitRowsRead", got.RowsRead)
+	}
+}
