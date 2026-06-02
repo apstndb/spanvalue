@@ -361,7 +361,7 @@ func TestDelimitedWriterWriteRow(t *testing.T) {
 	var out bytes.Buffer
 	w := mustNewDelimitedWriter(t, &out, Comma)
 
-	row, err := spanner.NewRow([]string{"id", ""}, []interface{}{int64(42), "hello"})
+	row, err := spanner.NewRow([]string{"id", ""}, []any{int64(42), "hello"})
 	if err != nil {
 		t.Fatalf("spanner.NewRow() error = %v", err)
 	}
@@ -601,7 +601,7 @@ func TestJSONLWriterWriteRow(t *testing.T) {
 
 	var out bytes.Buffer
 	w := mustNewJSONLWriter(t, &out)
-	row, err := spanner.NewRow([]string{"id", ""}, []interface{}{int64(42), "hello"})
+	row, err := spanner.NewRow([]string{"id", ""}, []any{int64(42), "hello"})
 	if err != nil {
 		t.Fatalf("spanner.NewRow() error = %v", err)
 	}
@@ -645,7 +645,7 @@ func TestJSONLWriterWriteGCVsAfterWriteRow(t *testing.T) {
 	var out bytes.Buffer
 	w := mustNewJSONLWriter(t, &out)
 
-	row, err := spanner.NewRow([]string{"id", "name"}, []interface{}{int64(42), "hello"})
+	row, err := spanner.NewRow([]string{"id", "name"}, []any{int64(42), "hello"})
 	if err != nil {
 		t.Fatalf("spanner.NewRow() error = %v", err)
 	}
@@ -673,7 +673,7 @@ func TestJSONLWriterWriteGCVsKeepsResolvedNamesAfterNamerChange(t *testing.T) {
 	var out bytes.Buffer
 	w := mustNewJSONLWriter(t, &out)
 
-	row, err := spanner.NewRow([]string{"", ""}, []interface{}{int64(42), "hello"})
+	row, err := spanner.NewRow([]string{"", ""}, []any{int64(42), "hello"})
 	if err != nil {
 		t.Fatalf("spanner.NewRow() error = %v", err)
 	}
@@ -1133,7 +1133,7 @@ func TestSQLInsertWriterWriteRow(t *testing.T) {
 	var out bytes.Buffer
 	w := mustNewSQLInsertWriter(t, &out, "db.user`table")
 
-	row, err := spanner.NewRow([]string{"na`me", "payload"}, []interface{}{"Alice", "semi;\nline"})
+	row, err := spanner.NewRow([]string{"na`me", "payload"}, []any{"Alice", "semi;\nline"})
 	if err != nil {
 		t.Fatalf("spanner.NewRow() error = %v", err)
 	}
@@ -1285,7 +1285,7 @@ func TestSQLInsertWriterWriteGCVsEmptyTableName(t *testing.T) {
 func TestRowDataAndOneRowFormatHelpers(t *testing.T) {
 	t.Parallel()
 
-	row, err := spanner.NewRow([]string{"id", "note"}, []interface{}{int64(42), "comma, ok"})
+	row, err := spanner.NewRow([]string{"id", "note"}, []any{int64(42), "comma, ok"})
 	if err != nil {
 		t.Fatalf("spanner.NewRow() error = %v", err)
 	}
@@ -1354,7 +1354,7 @@ func TestFormatDelimitedValuesInvalidDelimiter(t *testing.T) {
 			name:      "zero in FormatDelimitedRow",
 			delimiter: 0,
 			format: func(delim rune) error {
-				row, err := spanner.NewRow(columnNames, []interface{}{"Alice"})
+				row, err := spanner.NewRow(columnNames, []any{"Alice"})
 				if err != nil {
 					return err
 				}

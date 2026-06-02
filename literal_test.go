@@ -48,7 +48,7 @@ func mustParseTimeString(t *testing.T, timeStr string) time.Time {
 func TestDecodeColumnLiteral(t *testing.T) {
 	for _, tt := range []struct {
 		desc  string
-		value interface{}
+		value any
 		want  string
 	}{
 		// non-nullable
@@ -500,17 +500,17 @@ func TestDecodeColumn_roundtripFloat64(t *testing.T) {
 func TestDecodeRowLiteral(t *testing.T) {
 	for _, tt := range []struct {
 		desc   string
-		values []interface{}
+		values []any
 		want   []string
 	}{
 		{
 			desc:   "non-null columns",
-			values: []interface{}{"foo", 123},
+			values: []any{"foo", 123},
 			want:   []string{`"foo"`, "123"},
 		},
 		{
 			desc:   "non-null column and null column",
-			values: []interface{}{"foo", spanner.NullString{StringVal: "", Valid: false}},
+			values: []any{"foo", spanner.NullString{StringVal: "", Valid: false}},
 			want:   []string{`"foo"`, "NULL"},
 		},
 	} {

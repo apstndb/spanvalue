@@ -133,7 +133,6 @@ func BenchmarkFormatPerType(b *testing.B) {
 		values := benchCellsForCase(tc, benchCellsPerType)
 		b.Run(tc.name, func(b *testing.B) {
 			for _, preset := range benchPerTypePresets {
-				preset := preset
 				b.Run(preset.name, func(b *testing.B) {
 					benchmarkFormatCells(b, preset.fc(), values)
 				})

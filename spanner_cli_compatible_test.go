@@ -37,12 +37,12 @@ import (
 	"github.com/apstndb/spanvalue/gcvctor"
 )
 
-func createRow(t *testing.T, values []interface{}) *spanner.Row {
+func createRow(t *testing.T, values []any) *spanner.Row {
 	t.Helper()
 
 	// column names are not important in this test, so use dummy name
 	names := make([]string, len(values))
-	for i := 0; i < len(names); i++ {
+	for i := range names {
 		names[i] = "dummy"
 	}
 
@@ -53,10 +53,10 @@ func createRow(t *testing.T, values []interface{}) *spanner.Row {
 	return row
 }
 
-func createColumnValue(t *testing.T, value interface{}) spanner.GenericColumnValue {
+func createColumnValue(t *testing.T, value any) spanner.GenericColumnValue {
 	t.Helper()
 
-	row := createRow(t, []interface{}{value})
+	row := createRow(t, []any{value})
 	var cv spanner.GenericColumnValue
 	if err := row.Column(0, &cv); err != nil {
 		t.Fatalf("Creating spanner column value failed unexpectedly: %v", err)
@@ -72,7 +72,7 @@ func equalStringSlice(a []string, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		if a[i] != b[i] {
 			return false
 		}
@@ -87,7 +87,7 @@ type jsonMessage struct {
 func TestDecodeColumn(t *testing.T) {
 	tests := []struct {
 		desc  string
-		value interface{}
+		value any
 		want  string
 	}{
 		// non-nullable
@@ -499,17 +499,17 @@ func TestDecodeColumn(t *testing.T) {
 func TestDecodeRow(t *testing.T) {
 	tests := []struct {
 		desc   string
-		values []interface{}
+		values []any
 		want   []string
 	}{
 		{
 			desc:   "non-null columns",
-			values: []interface{}{"foo", 123},
+			values: []any{"foo", 123},
 			want:   []string{"foo", "123"},
 		},
 		{
 			desc:   "non-null column and null column",
-			values: []interface{}{"foo", spanner.NullString{StringVal: "", Valid: false}},
+			values: []any{"foo", spanner.NullString{StringVal: "", Valid: false}},
 			want:   []string{"foo", "NULL"},
 		},
 	}
