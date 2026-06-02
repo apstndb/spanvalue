@@ -1096,10 +1096,12 @@ func (w *SQLInsertWriter) TableName() string {
 	return w.table
 }
 
-// FormatConfig returns the formatter used for INSERT value literals.
+// FormatConfig returns the effective formatter used for INSERT value literals.
+// When no formatter is configured, this returns [spanvalue.LiteralFormatConfig]
+// (the same default as [SQLInsertWriter.insertFormatter]).
 // Configure it only via [NewSQLInsertWriter] or [WithFormatter].
 func (w *SQLInsertWriter) FormatConfig() *spanvalue.FormatConfig {
-	return w.formatter
+	return w.insertFormatter()
 }
 
 func (w *SQLInsertWriter) WriteRow(row *spanner.Row) error {

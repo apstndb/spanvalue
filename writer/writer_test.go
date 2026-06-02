@@ -1099,6 +1099,17 @@ func TestSQLInsertWriterWithOptions(t *testing.T) {
 		t.Fatalf("FormatConfig() = %p, want %p", w.FormatConfig(), cfg)
 	}
 
+	var nilFormatterOut bytes.Buffer
+	nilFormatterW := mustNewSQLInsertWriter(t,
+		&nilFormatterOut,
+		"users",
+		WithMetadata(metadataWithColumnNames("id")),
+		WithFormatter(nil),
+	)
+	if nilFormatterW.FormatConfig() == nil {
+		t.Fatal("FormatConfig() with nil formatter = nil, want effective literal formatter")
+	}
+
 	if err := w.WriteGCVs([]spanner.GenericColumnValue{
 		gcvctor.Int64Value(42),
 		gcvctor.StringValue("Alice"),
