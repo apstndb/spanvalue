@@ -1074,6 +1074,11 @@ func NewSQLInsertWriter(out io.Writer, table string, options ...SQLInsertOption)
 	if err := w.validateSQLInsertConfig(); err != nil {
 		return nil, err
 	}
+	if len(w.schema.names) > 0 {
+		if _, err := w.initOrValidateQuotedColumns(nil); err != nil {
+			return nil, err
+		}
+	}
 	return w, nil
 }
 

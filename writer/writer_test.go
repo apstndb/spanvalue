@@ -1128,6 +1128,15 @@ func TestSQLInsertWriterWriteRow(t *testing.T) {
 	}
 }
 
+func TestNewSQLInsertWriterEmptyColumnNameAtConstruction(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewSQLInsertWriter(&bytes.Buffer{}, "users", WithColumnNames([]string{""}))
+	if !errors.Is(err, ErrEmptyColumnName) {
+		t.Fatalf("NewSQLInsertWriter() error = %v, want ErrEmptyColumnName", err)
+	}
+}
+
 func TestSQLInsertWriterWriteValuesEmptyColumnName(t *testing.T) {
 	t.Parallel()
 
