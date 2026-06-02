@@ -26,6 +26,10 @@ type RowIteratorStats struct {
 
 // RowIteratorResult is the metadata and stats available from a
 // [cloud.google.com/go/spanner.RowIterator] after [RunRowIterator] returns.
+//
+// Since v0.5.0 this struct includes RowsRead; use keyed composite literals
+// (RowIteratorResult{Metadata: md, Stats: stats, RowsRead: n}) rather than
+// unkeyed literals when constructing values outside this package.
 // On the error path, stats fields reflect whatever the iterator had populated at
 // the abort point and may be zero until [iterator.Done] (QueryStats and RowCount
 // are only fully populated after a successful run).
@@ -44,6 +48,12 @@ type RowIteratorResult struct {
 }
 
 // RowIteratorHooks drives [RunRowIterator]. Nil function fields are skipped.
+//
+// Since v0.5.0 the struct may carry decorator state; use keyed composite literals
+// (RowIteratorHooks{PrepareMetadata: prep, WriteRow: write, Finish: finish})
+// rather than unkeyed literals when constructing values outside this package.
+// Custom decorators should use [RowIteratorHooks.MarkOmitRowsRead] and
+// [RowIteratorHooks.OnRunStart] instead of relying on struct field layout.
 //
 // PrepareMetadata runs once after the first [spanner.RowIterator.Next], with
 // whatever [cloud.google.com/go/spanner.RowIterator.Metadata] holds at that point
