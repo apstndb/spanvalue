@@ -55,8 +55,8 @@ type RowIteratorResult struct {
 // [RowIteratorHooksFromWriter], or package decorators ([WithRowOrdinal],
 // [ObserveWriteRow], [AfterEachSuccessfulWriteRow]); set exported callbacks with
 // [RowIteratorHooks.WithPrepareMetadata], [RowIteratorHooks.WithWriteRow], and
-// [RowIteratorHooks.WithFinish], or keyed literals on a [NewRowIteratorHooks]
-// base. Customize run behavior with [RowIteratorHooks.MarkOmitRowsRead] and
+// [RowIteratorHooks.WithFinish], keyed composite literals, or by assigning
+// exported fields on a value from [NewRowIteratorHooks]. Customize run behavior with [RowIteratorHooks.MarkOmitRowsRead] and
 // [RowIteratorHooks.OnRunStart].
 //
 // PrepareMetadata runs once after the first [spanner.RowIterator.Next], with
