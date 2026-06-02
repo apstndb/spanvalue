@@ -221,7 +221,10 @@ written:
 ```go
 defer iter.Stop()
 
-w := writer.NewDelimitedWriter(out, writer.Comma, writer.WithFormatter(cfg))
+w, err := writer.NewDelimitedWriter(out, writer.Comma, writer.WithFormatter(cfg))
+if err != nil {
+	return err
+}
 for {
 	_, err := iter.Next()
 	if errors.Is(err, iterator.Done) {
