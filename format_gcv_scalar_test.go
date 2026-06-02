@@ -72,7 +72,6 @@ func TestFormatGCVScalarPluginsMatchNullablePath(t *testing.T) {
 	}
 
 	for _, preset := range presets {
-		preset := preset
 		t.Run(preset.name, func(t *testing.T) {
 			t.Parallel()
 			legacy := formatConfigNullableOnly(preset.fc)

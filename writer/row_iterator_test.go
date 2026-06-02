@@ -121,7 +121,7 @@ func TestWriteRowIterator_withRows(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithColumnNames("id", "name")
-	row, err := spanner.NewRow([]string{"id", "name"}, []interface{}{int64(1), "a"})
+	row, err := spanner.NewRow([]string{"id", "name"}, []any{int64(1), "a"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestWriteRowIterator_writeErrorStillReturnsOutcome(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithColumnNames("id")
-	row, err := spanner.NewRow([]string{"id"}, []interface{}{int64(1)})
+	row, err := spanner.NewRow([]string{"id"}, []any{int64(1)})
 	if err != nil {
 		t.Fatal(err)
 	}

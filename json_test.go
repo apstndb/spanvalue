@@ -141,7 +141,6 @@ func TestJSONFormatConfig_InvalidRawPayload(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -159,7 +158,7 @@ func TestJSONFormatConfig_InvalidRawPayload(t *testing.T) {
 func TestFormatRowJSONObject(t *testing.T) {
 	t.Parallel()
 
-	row := lo.Must(spanner.NewRow([]string{"id", "name", "active"}, []interface{}{int64(42), "Alice", true}))
+	row := lo.Must(spanner.NewRow([]string{"id", "name", "active"}, []any{int64(42), "Alice", true}))
 	got := lo.Must(FormatRowJSONObject(JSONFormatConfig(), row, IndexedUnnamedFieldNamer))
 
 	want := `{"id":42,"name":"Alice","active":true}`
@@ -171,7 +170,7 @@ func TestFormatRowJSONObject(t *testing.T) {
 func TestFormatRowJSONObject_UnnamedColumns(t *testing.T) {
 	t.Parallel()
 
-	row := lo.Must(spanner.NewRow([]string{"", ""}, []interface{}{int64(2), "hello"}))
+	row := lo.Must(spanner.NewRow([]string{"", ""}, []any{int64(2), "hello"}))
 	got := lo.Must(FormatRowJSONObject(JSONFormatConfig(), row, IndexedUnnamedFieldNamer))
 
 	want := `{"_0":2,"_1":"hello"}`
@@ -335,7 +334,7 @@ func TestFormatRowJSONObject_Error(t *testing.T) {
 
 	t.Run("empty name", func(t *testing.T) {
 		t.Parallel()
-		row := lo.Must(spanner.NewRow([]string{""}, []interface{}{1}))
+		row := lo.Must(spanner.NewRow([]string{""}, []any{1}))
 		_, err := FormatRowJSONObject(JSONFormatConfig(), row, func(i int) string {
 			return ""
 		})
@@ -353,7 +352,7 @@ func TestFormatRowJSONObject_Error(t *testing.T) {
 		// First column is named "dup", second is unnamed.
 		// Namer returns "dup" for index 0, but it's taken by first column.
 		// Namer returns "dup" again for index 1, which should trigger an error.
-		row := lo.Must(spanner.NewRow([]string{"dup", ""}, []interface{}{1, 2}))
+		row := lo.Must(spanner.NewRow([]string{"dup", ""}, []any{1, 2}))
 		_, err := FormatRowJSONObject(JSONFormatConfig(), row, func(i int) string {
 			return "dup"
 		})

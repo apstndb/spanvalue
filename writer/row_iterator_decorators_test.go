@@ -11,11 +11,11 @@ func TestRunRowIterator_rowsRead(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithColumnNames("id")
-	row, err := spanner.NewRow([]string{"id"}, []interface{}{int64(1)})
+	row, err := spanner.NewRow([]string{"id"}, []any{int64(1)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	row2, err := spanner.NewRow([]string{"id"}, []interface{}{int64(2)})
+	row2, err := spanner.NewRow([]string{"id"}, []any{int64(2)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestWithRowOrdinal(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithColumnNames("id")
-	row, err := spanner.NewRow([]string{"id"}, []interface{}{int64(1)})
+	row, err := spanner.NewRow([]string{"id"}, []any{int64(1)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestObserveWriteRow(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithColumnNames("id")
-	row, err := spanner.NewRow([]string{"id"}, []interface{}{int64(1)})
+	row, err := spanner.NewRow([]string{"id"}, []any{int64(1)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,11 +194,11 @@ func TestAfterEachSuccessfulWriteRow(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithColumnNames("id")
-	row, err := spanner.NewRow([]string{"id"}, []interface{}{int64(1)})
+	row, err := spanner.NewRow([]string{"id"}, []any{int64(1)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	row2, err := spanner.NewRow([]string{"id"}, []interface{}{int64(2)})
+	row2, err := spanner.NewRow([]string{"id"}, []any{int64(2)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +275,7 @@ func TestDecoratorResetOnQueryErrorBeforeMetadata(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithColumnNames("id")
-	row, err := spanner.NewRow([]string{"id"}, []interface{}{int64(1)})
+	row, err := spanner.NewRow([]string{"id"}, []any{int64(1)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestResetEachRunRunsOncePerRun(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithColumnNames("id")
-	row, err := spanner.NewRow([]string{"id"}, []interface{}{int64(1)})
+	row, err := spanner.NewRow([]string{"id"}, []any{int64(1)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +331,7 @@ func TestRowIteratorHooksExtensibility(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithColumnNames("id")
-	row, err := spanner.NewRow([]string{"id"}, []interface{}{int64(1)})
+	row, err := spanner.NewRow([]string{"id"}, []any{int64(1)})
 	if err != nil {
 		t.Fatal(err)
 	}

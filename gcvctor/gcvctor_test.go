@@ -57,7 +57,6 @@ func TestNumericValueCheckedNil(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -93,7 +92,6 @@ func TestNumericValueAndPGNumericValueNilReturnTypedNull(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			if diff := cmp.Diff(tt.want, tt.got, protocmp.Transform()); diff != "" {
@@ -472,7 +470,6 @@ func TestValidatedStringValueHelpers(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -728,7 +725,6 @@ func TestNormalizeArrayElements(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.desc, func(t *testing.T) {
 			t.Parallel()
 
@@ -944,7 +940,6 @@ func TestStructValueOf(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.desc, func(t *testing.T) {
 			t.Parallel()
 
@@ -987,7 +982,6 @@ func TestStructValueOfNilFieldTypeReturnsStructFieldError(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

@@ -1,9 +1,14 @@
 version: "2"
 
 linters:
+  # Matches golangci-lint v2 implicit default before this file existed.
   default: standard
   enable:
     - godoclint
+    - errorlint
+    - misspell
+    # Includes forvar (loop-variable copy) and rangeint; subsumes copyloopvar for our tree.
+    - modernize
   exclusions:
     rules:
       - path: _test\.go$

@@ -23,7 +23,6 @@ func TestQuoteIdentifier(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			if got := QuoteIdentifier(tt.dialect, tt.input); got != tt.want {
@@ -48,7 +47,6 @@ func TestQuoteQualifiedIdentifier(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			if got := QuoteQualifiedIdentifier(tt.dialect, tt.input); got != tt.want {
