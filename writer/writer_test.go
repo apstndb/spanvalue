@@ -490,24 +490,6 @@ func TestDelimitedWriterWriteGCVsWithoutMetadata(t *testing.T) {
 	}
 }
 
-func TestDelimitedWriterWriteGCVsNilOutputWithoutMetadata(t *testing.T) {
-	t.Parallel()
-
-	_, err := NewDelimitedWriter(nil, Comma)
-	if !errors.Is(err, ErrNilOutputWriter) {
-		t.Fatalf("NewDelimitedWriter() error = %v, want ErrNilOutputWriter", err)
-	}
-}
-
-func TestDelimitedWriterWriteHeaderNilOutputWithoutMetadata(t *testing.T) {
-	t.Parallel()
-
-	_, err := NewDelimitedWriter(nil, Comma)
-	if !errors.Is(err, ErrNilOutputWriter) {
-		t.Fatalf("NewDelimitedWriter() error = %v, want ErrNilOutputWriter", err)
-	}
-}
-
 func TestWritersReturnErrNilOutputWriter(t *testing.T) {
 	t.Parallel()
 
