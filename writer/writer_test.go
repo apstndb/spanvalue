@@ -1106,8 +1106,12 @@ func TestSQLInsertWriterWithOptions(t *testing.T) {
 		WithMetadata(metadataWithColumnNames("id")),
 		WithFormatter(nil),
 	)
-	if nilFormatterW.FormatConfig() == nil {
+	gotFormatter := nilFormatterW.FormatConfig()
+	if gotFormatter == nil {
 		t.Fatal("FormatConfig() with nil formatter = nil, want effective literal formatter")
+	}
+	if nilFormatterW.FormatConfig() != gotFormatter {
+		t.Fatal("FormatConfig() should return the same cached formatter on repeat calls")
 	}
 
 	if err := w.WriteGCVs([]spanner.GenericColumnValue{

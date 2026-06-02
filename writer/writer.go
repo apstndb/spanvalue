@@ -1334,10 +1334,10 @@ func (w *SQLInsertWriter) setColumnNames(names []string) {
 }
 
 func (w *SQLInsertWriter) insertFormatter() *spanvalue.FormatConfig {
-	if w.formatter != nil {
-		return w.formatter
+	if w.formatter == nil {
+		w.formatter = spanvalue.LiteralFormatConfig()
 	}
-	return spanvalue.LiteralFormatConfig()
+	return w.formatter
 }
 
 func (w *SQLInsertWriter) initOrValidateQuotedColumns(columnNames []string) (string, error) {
