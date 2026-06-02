@@ -40,7 +40,7 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 - **Native client:** `WriteRow` / `WriteRowIterator` / `RunRowIterator` for `*spanner.RowIterator`. `WriteRowIterator`/`RunRowIterator` with `RowIteratorHooksFromWriter` register metadata and call **`Flush`** in hooks. Manual `RowIterator.Next` loops need first-`Next` metadata and zero-row **`PrepareRowType` + `Flush`** (not `defer Flush`—return `Flush()` error). Do not pass `iter.Metadata` at construction when still nil.
 - **GCV slice path:** `WriteGCVs` + `WithMetadata` / `WithFormatter` / `WithUnnamedFieldNamer`. Same namer for **out-of-band headers** via root `ColumnNames(fields, namer)`.
 - **Delimited:** `NewCSVWriter(out)`, `NewDelimitedWriter(out, '\t')` = **quoted TSV** (`encoding/csv`), not legacy raw TAB; raw TAB = custom `Writer` (README).
-- **SQL INSERT:** `WithSQLInsertKind`, `WithSQLDialect` (identifier quoting), `WithSQLBatchSize` (>1 multi-row `VALUES`; **`Flush`** ends partial batch). `ErrInvalidSQLInsertKindForDialect`: PostgreSQL + `INSERT OR IGNORE`/`UPDATE`. After any write error, discard writer (documented). **`Table` / `Formatter` fields deprecated**—set via constructor/`WithFormatter` only; unexport planned ([#107](https://github.com/apstndb/spanvalue/issues/107), `breaking-change` label).
+- **SQL INSERT:** `WithSQLInsertKind`, `WithSQLDialect` (identifier quoting), `WithSQLBatchSize` (>1 multi-row `VALUES`; **`Flush`** ends partial batch). `ErrInvalidSQLInsertKindForDialect`: PostgreSQL + `INSERT OR IGNORE`/`UPDATE`. After any write error, discard writer (documented). Table and formatter are constructor-only (`TableName` / `FormatConfig` accessors on `SQLInsertWriter`).
 
 ## Adoption boundaries (do not expand spanvalue into)
 

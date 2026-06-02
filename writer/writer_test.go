@@ -932,8 +932,7 @@ func TestSQLInsertWriterBatchSize(t *testing.T) {
 				t.Fatalf("WriteValues() error = %v", err)
 			}
 		}
-		// Legacy: mutating Table after writes; legacy behavior until Table is unexported.
-		w.Table = "archive.users"
+		w.table = "archive.users"
 		if err := w.WriteValues(columnNames, row(3, "c")); err != nil {
 			t.Fatalf("WriteValues() after table change error = %v", err)
 		}
@@ -956,9 +955,8 @@ func TestSQLInsertWriterBatchSize(t *testing.T) {
 		if err := w.WriteValues(columnNames, row(1, "a")); err != nil {
 			t.Fatalf("WriteValues() error = %v", err)
 		}
-		// Legacy mutation remains syntactically possible until Table is unexported,
-		// but a mid-batch change must not silently append rows to the previous table.
-		w.Table = "archive.users"
+		// Mid-batch table mutation must not silently append rows to the previous table.
+		w.table = "archive.users"
 		err := w.WriteValues(columnNames, row(2, "b"))
 		if !errors.Is(err, ErrTableNameChangedMidBatch) {
 			t.Fatalf("WriteValues() after table change error = %v, want ErrTableNameChangedMidBatch", err)
@@ -1087,12 +1085,34 @@ func TestSQLInsertWriterWithOptions(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
+	cfg := spanvalue.LiteralFormatConfig()
 	w := mustNewSQLInsertWriter(t,
 		&out,
 		"users",
 		WithMetadata(metadataWithColumnNames("id", "name")),
-		WithFormatter(spanvalue.LiteralFormatConfig()),
+		WithFormatter(cfg),
 	)
+	if w.TableName() != "users" {
+		t.Fatalf("TableName() = %q, want users", w.TableName())
+	}
+	if w.FormatConfig() != cfg {
+		t.Fatalf("FormatConfig() = %p, want %p", w.FormatConfig(), cfg)
+	}
+
+	var nilFormatterOut bytes.Buffer
+	nilFormatterW := mustNewSQLInsertWriter(t,
+		&nilFormatterOut,
+		"users",
+		WithMetadata(metadataWithColumnNames("id")),
+		WithFormatter(nil),
+	)
+	gotFormatter := nilFormatterW.FormatConfig()
+	if gotFormatter == nil {
+		t.Fatal("FormatConfig() with nil formatter = nil, want effective literal formatter")
+	}
+	if nilFormatterW.FormatConfig() != gotFormatter {
+		t.Fatal("FormatConfig() should return the same cached formatter on repeat calls")
+	}
 
 	if err := w.WriteGCVs([]spanner.GenericColumnValue{
 		gcvctor.Int64Value(42),
@@ -1194,8 +1214,7 @@ func TestSQLInsertWriterWriteValuesTableChangeAfterCache(t *testing.T) {
 		t.Fatalf("first WriteValues() error = %v", err)
 	}
 
-	// Legacy: mutating Table after writes; legacy behavior until Table is unexported.
-	w.Table = "archive.users"
+	w.table = "archive.users"
 	err = w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(2)})
 	if err != nil {
 		t.Fatalf("WriteGCVs() after table change error = %v", err)

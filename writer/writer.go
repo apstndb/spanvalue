@@ -137,7 +137,7 @@ const (
 )
 
 var (
-	// ErrEmptyTableName reports that SQLInsertWriter.Table is empty.
+	// ErrEmptyTableName reports that the SQL INSERT writer table name is empty.
 	ErrEmptyTableName = errors.New("empty table name")
 	// ErrEmptyColumnName reports that a SQL writer received an empty column name.
 	ErrEmptyColumnName = errors.New("empty column name")
@@ -166,7 +166,7 @@ var (
 	// or INSERT OR UPDATE with a PostgreSQL dialect. Those prefixes are GoogleSQL-only; use plain
 	// [SQLInsert] with [WithSQLDialect](databasepb.DatabaseDialect_POSTGRESQL) instead.
 	ErrInvalidSQLInsertKindForDialect = errors.New("INSERT OR IGNORE/UPDATE not supported for PostgreSQL dialect")
-	// ErrTableNameChangedMidBatch reports that SQLInsertWriter.Table was mutated while
+	// ErrTableNameChangedMidBatch reports that the SQL INSERT table name was mutated while
 	// a multi-row INSERT batch was open.
 	ErrTableNameChangedMidBatch = errors.New("table name changed mid-batch")
 )
@@ -467,7 +467,11 @@ func (o formatterOption) applyJSONLOption(w *JSONLWriter) error {
 }
 
 func (o formatterOption) applySQLInsertOption(w *SQLInsertWriter) error {
-	w.Formatter = o.formatter
+	if o.formatter != nil {
+		w.formatter = o.formatter
+	} else {
+		w.formatter = spanvalue.LiteralFormatConfig()
+	}
 	return nil
 }
 
@@ -1040,16 +1044,8 @@ func (w *JSONLWriter) marshalResolvedNames(resolvedNames []string) ([][]byte, er
 // [SQLInsertWriter.WriteValues], or [SQLInsertWriter.WriteStructValues], discard the
 // writer; partial batched INSERT output may be unrecoverable on retry.
 type SQLInsertWriter struct {
-	// Table is the qualified table name used in INSERT statements.
-	//
-	// Deprecated: Set only via [NewSQLInsertWriter]. Do not mutate Table after the
-	// first write; the field will be unexported in a future minor release.
-	Table string
-	// Formatter formats value literals in INSERT statements.
-	//
-	// Deprecated: Set only via [NewSQLInsertWriter] or [WithFormatter]. Do not mutate
-	// Formatter after the first write; the field will be unexported in a future minor release.
-	Formatter *spanvalue.FormatConfig
+	table     string
+	formatter *spanvalue.FormatConfig
 
 	insertKind        SQLInsertKind
 	sqlDialect        databasepb.DatabaseDialect
@@ -1091,11 +1087,24 @@ func NewSQLInsertWriterWithOptions(out io.Writer, table string, options ...SQLIn
 
 func newSQLInsertWriter(out io.Writer, table string) *SQLInsertWriter {
 	return &SQLInsertWriter{
-		Table:      table,
-		Formatter:  spanvalue.LiteralFormatConfig(),
+		table:      table,
+		formatter:  spanvalue.LiteralFormatConfig(),
 		sqlDialect: databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL,
 		out:        out,
 	}
+}
+
+// TableName returns the qualified table name used in INSERT statements.
+// Configure it only via [NewSQLInsertWriter]; create a new writer to use a different table.
+func (w *SQLInsertWriter) TableName() string {
+	return w.table
+}
+
+// FormatConfig returns the effective formatter used for INSERT value literals.
+// When no formatter is configured, this returns [spanvalue.LiteralFormatConfig].
+// Configure it only via [NewSQLInsertWriter] or [WithFormatter].
+func (w *SQLInsertWriter) FormatConfig() *spanvalue.FormatConfig {
+	return w.insertFormatter()
 }
 
 func (w *SQLInsertWriter) WriteRow(row *spanner.Row) error {
@@ -1236,10 +1245,10 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 	if w.out == nil {
 		return ErrNilOutputWriter
 	}
-	if w.Table == "" {
+	if w.table == "" {
 		return ErrEmptyTableName
 	}
-	formattedValues, err := spanvalue.FormatRowColumns(w.formatter(), w.schema.names, values)
+	formattedValues, err := spanvalue.FormatRowColumns(w.insertFormatter(), w.schema.names, values)
 	if err != nil {
 		return err
 	}
@@ -1266,10 +1275,10 @@ func (w *SQLInsertWriter) writeSingleInsert(quotedColumns string, formattedValue
 }
 
 func (w *SQLInsertWriter) rejectTableChangeMidBatch() error {
-	if w.batchPending == 0 || w.quotedTableInput == "" || w.Table == w.quotedTableInput {
+	if w.batchPending == 0 || w.quotedTableInput == "" || w.table == w.quotedTableInput {
 		return nil
 	}
-	return fmt.Errorf("%w: %q to %q", ErrTableNameChangedMidBatch, w.quotedTableInput, w.Table)
+	return fmt.Errorf("%w: %q to %q", ErrTableNameChangedMidBatch, w.quotedTableInput, w.table)
 }
 
 func (w *SQLInsertWriter) appendBatchedInsert(quotedColumns string, formattedValues []string) error {
@@ -1328,11 +1337,12 @@ func (w *SQLInsertWriter) setColumnNames(names []string) {
 	w.quotedColumnNames = ""
 }
 
-func (w *SQLInsertWriter) formatter() *spanvalue.FormatConfig {
-	if w.Formatter != nil {
-		return w.Formatter
+func (w *SQLInsertWriter) insertFormatter() *spanvalue.FormatConfig {
+	if w.formatter == nil {
+		// Zero-initialized writers are unsupported; avoid mutating w in this getter.
+		return spanvalue.LiteralFormatConfig()
 	}
-	return spanvalue.LiteralFormatConfig()
+	return w.formatter
 }
 
 func (w *SQLInsertWriter) initOrValidateQuotedColumns(columnNames []string) (string, error) {
@@ -1356,15 +1366,15 @@ func (w *SQLInsertWriter) initOrValidateQuotedColumns(columnNames []string) (str
 }
 
 func (w *SQLInsertWriter) quotedQualifiedTable() (string, error) {
-	if w.quotedTable != "" && w.quotedTableInput == w.Table {
+	if w.quotedTable != "" && w.quotedTableInput == w.table {
 		return w.quotedTable, nil
 	}
-	quotedTable, err := quoteQualifiedIdentifier(w.Table, w.sqlDialect)
+	quotedTable, err := quoteQualifiedIdentifier(w.table, w.sqlDialect)
 	if err != nil {
 		return "", err
 	}
 	w.quotedTable = quotedTable
-	w.quotedTableInput = w.Table
+	w.quotedTableInput = w.table
 	return quotedTable, nil
 }
 
