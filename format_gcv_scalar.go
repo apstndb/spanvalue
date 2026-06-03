@@ -175,6 +175,7 @@ func formatGCVScalarLiteral(q LiteralQuoteConfig, gcv spanner.GenericColumnValue
 	if err := validateScalarWire(gcv); err != nil {
 		return "", err
 	}
+	policy := toInternalQuotePolicy(q)
 	switch gcv.Type.GetCode() {
 	case sppb.TypeCode_BOOL:
 		return strconv.FormatBool(gcv.Value.GetBoolValue()), nil
@@ -189,34 +190,34 @@ func formatGCVScalarLiteral(q LiteralQuoteConfig, gcv spanner.GenericColumnValue
 		if err != nil {
 			return "", err
 		}
-		return internal.Float32ToLiteralPolicy(f, toInternalQuotePolicy(q)), nil
+		return internal.Float32ToLiteralPolicy(f, policy), nil
 	case sppb.TypeCode_FLOAT64:
 		f, err := gcvFloat64(gcv.Value)
 		if err != nil {
 			return "", err
 		}
-		return internal.Float64ToLiteralPolicy(f, toInternalQuotePolicy(q)), nil
+		return internal.Float64ToLiteralPolicy(f, policy), nil
 	case sppb.TypeCode_STRING:
-		return internal.ToStringLiteralPolicy(gcv.Value.GetStringValue(), toInternalQuotePolicy(q)), nil
+		return internal.ToStringLiteralPolicy(gcv.Value.GetStringValue(), policy), nil
 	case sppb.TypeCode_BYTES, sppb.TypeCode_PROTO:
 		b, err := internal.DecodeBase64Wire(gcv.Value.GetStringValue())
 		if err != nil {
 			return "", err
 		}
-		return internal.ToReadableBytesLiteralPolicy(b, toInternalQuotePolicy(q)), nil
+		return internal.ToReadableBytesLiteralPolicy(b, policy), nil
 	case sppb.TypeCode_TIMESTAMP:
-		return stringBasedLiteral("TIMESTAMP", gcv.Value.GetStringValue(), toInternalQuotePolicy(q)), nil
+		return stringBasedLiteral("TIMESTAMP", gcv.Value.GetStringValue(), policy), nil
 	case sppb.TypeCode_DATE:
-		return stringBasedLiteral("DATE", gcv.Value.GetStringValue(), toInternalQuotePolicy(q)), nil
+		return stringBasedLiteral("DATE", gcv.Value.GetStringValue(), policy), nil
 	case sppb.TypeCode_NUMERIC:
-		return stringBasedLiteral("NUMERIC", numericWireString(gcv), toInternalQuotePolicy(q)), nil
+		return stringBasedLiteral("NUMERIC", numericWireString(gcv), policy), nil
 	case sppb.TypeCode_JSON:
 		s := gcv.Value.GetStringValue()
-		return stringBasedLiteral("JSON", s, toInternalQuotePolicy(q)), nil
+		return stringBasedLiteral("JSON", s, policy), nil
 	case sppb.TypeCode_INTERVAL:
-		return stringLiteralCast("INTERVAL", gcv.Value.GetStringValue(), toInternalQuotePolicy(q)), nil
+		return stringLiteralCast("INTERVAL", gcv.Value.GetStringValue(), policy), nil
 	case sppb.TypeCode_UUID:
-		return stringLiteralCast("UUID", gcv.Value.GetStringValue(), toInternalQuotePolicy(q)), nil
+		return stringLiteralCast("UUID", gcv.Value.GetStringValue(), policy), nil
 	case sppb.TypeCode_TYPE_CODE_UNSPECIFIED:
 		fallthrough
 	default:

@@ -169,11 +169,11 @@ func Float64ToLiteral(v float64) string {
 func Float64ToLiteralPolicy(v float64, policy QuotePolicy) string {
 	switch {
 	case math.IsNaN(v):
-		return castQuotedLiteral("nan", "FLOAT64", nanInfCastQuote(policy))
+		return sqlCastQuotedString("nan", "FLOAT64", nonFiniteCastDelimiter(policy))
 	case math.IsInf(v, 1):
-		return castQuotedLiteral("inf", "FLOAT64", nanInfCastQuote(policy))
+		return sqlCastQuotedString("inf", "FLOAT64", nonFiniteCastDelimiter(policy))
 	case math.IsInf(v, -1):
-		return castQuotedLiteral("-inf", "FLOAT64", nanInfCastQuote(policy))
+		return sqlCastQuotedString("-inf", "FLOAT64", nonFiniteCastDelimiter(policy))
 	default:
 		return strconv.FormatFloat(v, 'g', -1, 64)
 	}
@@ -186,19 +186,20 @@ func Float32ToLiteral(v float32) string {
 func Float32ToLiteralPolicy(v float32, policy QuotePolicy) string {
 	switch {
 	case math.IsNaN(float64(v)):
-		return castQuotedLiteral("nan", "FLOAT32", nanInfCastQuote(policy))
+		return sqlCastQuotedString("nan", "FLOAT32", nonFiniteCastDelimiter(policy))
 	case math.IsInf(float64(v), 1):
-		return castQuotedLiteral("inf", "FLOAT32", nanInfCastQuote(policy))
+		return sqlCastQuotedString("inf", "FLOAT32", nonFiniteCastDelimiter(policy))
 	case math.IsInf(float64(v), -1):
-		return castQuotedLiteral("-inf", "FLOAT32", nanInfCastQuote(policy))
+		return sqlCastQuotedString("-inf", "FLOAT32", nonFiniteCastDelimiter(policy))
 	default:
 		return fmt.Sprintf("CAST(%v AS FLOAT32)", strconv.FormatFloat(float64(v), 'g', -1, 32))
 	}
 }
 
-// nanInfCastQuote selects the outer delimiter for NaN/±Inf CAST payloads.
-// Legacy keeps historical single quotes; Always and MinEscape use PreferredQuote.
-func nanInfCastQuote(policy QuotePolicy) rune {
+// nonFiniteCastDelimiter selects the outer delimiter for NaN/±Inf CAST payloads.
+// v0.5 compat: QuoteStrategyLegacy keeps historical single quotes; Always and
+// MinEscape use PreferredQuote. Planned v0.6: align with quoteForPayload.
+func nonFiniteCastDelimiter(policy QuotePolicy) rune {
 	switch policy.Strategy {
 	case QuoteStrategyAlways, QuoteStrategyMinEscape:
 		if policy.Preferred == PreferredQuoteDouble {
@@ -210,15 +211,15 @@ func nanInfCastQuote(policy QuotePolicy) rune {
 	}
 }
 
-func castQuotedLiteral(payload, typ string, quote rune) string {
+func sqlCastQuotedString(payload, castType string, quote rune) string {
 	var b strings.Builder
-	b.Grow(len(payload) + len(typ) + 12)
+	b.Grow(len(payload) + len(castType) + 12)
 	b.WriteString("CAST(")
 	b.WriteRune(quote)
 	b.WriteString(payload)
 	b.WriteRune(quote)
 	b.WriteString(" AS ")
-	b.WriteString(typ)
+	b.WriteString(castType)
 	b.WriteByte(')')
 	return b.String()
 }
