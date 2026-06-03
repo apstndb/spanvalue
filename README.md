@@ -208,7 +208,10 @@ For display paths where protobuf descriptors are available, prepend opt-in
 [`protofmt`](https://pkg.go.dev/github.com/apstndb/spanvalue/protofmt) plugins to a cloned
 formatter. These plugins render PROTO values as protobuf text and ENUM values
 as names; they are display-oriented and do not replace descriptor-free SQL
-literal output such as `FormatProtoAsCast` / `FormatEnumAsCast`.
+literal output such as `FormatProtoAsCast` / `FormatEnumAsCast`. Descriptor
+loading and compilation stay in the application. If you enable multiline
+prototext, nested ARRAY/STRUCT cells and delimited-output fields can contain
+embedded newlines.
 Delimited, JSONL, and SQL encodings differ after
 spanvalue formats each column; see [writer/README.md](writer/README.md). For
 non-streaming paths, use
