@@ -157,8 +157,21 @@ func RowIteratorHooksFromWriter(w RowIteratorWriter) RowIteratorHooks {
 		})
 }
 
-// RunRowIterator streams all rows from iter using hooks. It always calls
-// [spanner.RowIterator.Stop] on return.
+// RunRowIterator streams all rows from iter using hooks. The helper owns iter:
+// it consumes the iterator, always calls [*cloud.google.com/go/spanner.RowIterator.Stop] on return,
+// and returns metadata and stats through [RowIteratorResult].
+//
+// Prefer passing a newly created iterator directly, without binding it at the
+// call site:
+//
+//	result, err := RunRowIterator(txn.Query(ctx, stmt), hooks)
+//
+// Do not call [*cloud.google.com/go/spanner.RowIterator.Stop] on iter after RunRowIterator returns;
+// the helper already stopped it. Use the returned [RowIteratorResult] for
+// metadata, query stats, and row counts—not iter.Metadata, iter.QueryStats,
+// iter.RowCount, or iter.QueryPlan after the call. Reading those fields after
+// Stop does not panic in current cloud.google.com/go/spanner releases, but the
+// iterator is transferred and the result value is the supported post-run API.
 //
 // The returned [RowIteratorResult] reflects iter.Metadata and iter stats fields
 // after Stop and the loop (including when no data rows were written). When
@@ -171,12 +184,16 @@ func RunRowIterator(iter *spanner.RowIterator, hooks RowIteratorHooks) (*RowIter
 }
 
 // WriteRowIterator streams all rows from iter into w using [RowIteratorHooksFromWriter].
-// See [RunRowIterator] for iterator metadata, stats, and zero-row behavior.
+// See [RunRowIterator] for iterator ownership, metadata, stats, and zero-row behavior.
+//
+// Prefer passing a newly created iterator directly:
+//
+//	result, err := WriteRowIterator(txn.Query(ctx, stmt), w)
 //
 // When an application drives [cloud.google.com/go/spanner.RowIterator.Next] directly
-// (instead of [WriteRowIterator] or [RunRowIterator]), call
-// [cloud.google.com/go/spanner.RowIterator.Stop] on return (typically defer iter.Stop())
-// so streams and resources are released.
+// (instead of [WriteRowIterator] or [RunRowIterator]), bind the iterator, call
+// [*cloud.google.com/go/spanner.RowIterator.Stop] on return (typically defer iter.Stop()),
+// and read metadata or stats fields only after consuming rows to [iterator.Done].
 //
 // When an application skips row bodies but still needs a header-only delimited finish,
 // call [RowIteratorWriter.PrepareRowType] with iter.Metadata.GetRowType() after the Next
