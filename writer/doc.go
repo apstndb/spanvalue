@@ -24,7 +24,7 @@
 //
 // For manual [*cloud.google.com/go/spanner.RowIterator.Next] loops, bind the iterator,
 // defer Stop, register [RowIteratorWriter.PrepareRowType] after the first Next when results
-// may be empty, and read metadata or stats only after consuming to [iterator.Done]; propagate
+// may be empty, and read metadata or stats only after consuming to [google.golang.org/api/iterator.Done]; propagate
 // [Flusher.Flush] errors (do not defer Flush).
 //
 // # Direct writers vs hooks
