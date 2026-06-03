@@ -8,6 +8,7 @@ Helpers for working with Cloud Spanner’s [`spanner.GenericColumnValue`](https:
 |--------|------|
 | [`github.com/apstndb/spanvalue`](https://pkg.go.dev/github.com/apstndb/spanvalue) | Format `spanner.GenericColumnValue` and `*spanner.Row` using [`FormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig) and presets such as [`LiteralFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#LiteralFormatConfig), [`JSONFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#JSONFormatConfig), [`SpannerCLICompatibleFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#SpannerCLICompatibleFormatConfig). |
 | [`github.com/apstndb/spanvalue/gcvctor`](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor) | Build `spanner.GenericColumnValue` (scalars, `ARRAY`, `STRUCT`, typed nulls). Types are often composed with [`github.com/apstndb/spantype/typector`](https://pkg.go.dev/github.com/apstndb/spantype/typector). |
+| [`github.com/apstndb/spanvalue/protofmt`](https://pkg.go.dev/github.com/apstndb/spanvalue/protofmt) | Opt-in descriptor-aware PROTO and ENUM display plugins for [`FormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig). |
 | [`github.com/apstndb/spanvalue/writer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer) | Stream Spanner rows to CSV, TSV, JSONL, or SQL INSERT ([writer/README.md](writer/README.md)). |
 
 ## Identifier quoting helpers
@@ -203,6 +204,14 @@ Delimited output uses [`SimpleFormatConfig`](https://pkg.go.dev/github.com/apstn
 by default. Build cells with [`gcvctor.EnumValue`](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor#EnumValue)
 and [`gcvctor.ProtoValue`](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor#ProtoValue),
 then `WriteGCVs` (see `TestDelimitedWriterWriteGCVsEnumProto` in the `writer` package).
+For display paths where protobuf descriptors are available, prepend opt-in
+[`protofmt`](https://pkg.go.dev/github.com/apstndb/spanvalue/protofmt) plugins to a cloned
+formatter. These plugins render PROTO values as protobuf text and ENUM values
+as names; they are display-oriented and do not replace descriptor-free SQL
+literal output such as `FormatProtoAsCast` / `FormatEnumAsCast`. Descriptor
+loading and compilation stay in the application. If you enable multiline
+prototext, nested ARRAY/STRUCT cells and delimited-output fields can contain
+embedded newlines.
 Delimited, JSONL, and SQL encodings differ after
 spanvalue formats each column; see [writer/README.md](writer/README.md). For
 non-streaming paths, use
