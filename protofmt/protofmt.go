@@ -113,6 +113,9 @@ func FormatProtoTextValue(opts ProtoTextValueOptions) spanvalue.FormatComplexFun
 		if err != nil {
 			return "", err
 		}
+		if messageType == nil {
+			return "", spanvalue.ErrFallthrough
+		}
 
 		wire, err := stringWire(value, sppb.TypeCode_PROTO)
 		if err != nil {
@@ -178,6 +181,9 @@ func FormatEnumNameValue(opts EnumNameValueOptions) spanvalue.FormatComplexFunc 
 		if err != nil {
 			return "", err
 		}
+		if enumType == nil {
+			return "", spanvalue.ErrFallthrough
+		}
 
 		wire, err := stringWire(value, sppb.TypeCode_ENUM)
 		if err != nil {
@@ -229,6 +235,11 @@ func ComposeProtoEnumResolvers(resolvers ...ProtoEnumResolver) ProtoEnumResolver
 		if !isNilResolver(resolver) {
 			active = append(active, resolver)
 		}
+	}
+	if len(active) == 0 {
+		// Keep ComposeProtoEnumResolvers usable as a resolver even when it is
+		// empty: direct Find* calls return exact NotFound instead of panicking.
+		return compositeResolver{resolvers: nil}
 	}
 	if len(active) == 1 {
 		return active[0]

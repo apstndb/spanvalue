@@ -177,6 +177,17 @@ func TestFormatPlugins_fallthroughCases(t *testing.T) {
 			gcv:    gcvctor.ProtoValue("example.music.Missing", nil),
 		},
 		{
+			name: "proto nil message type from resolver",
+			plugin: protofmt.FormatProtoTextValue(protofmt.ProtoTextValueOptions{
+				Resolver: fakeResolver{
+					findMessageByName: func(protoreflect.FullName) (protoreflect.MessageType, error) {
+						return nil, nil
+					},
+				},
+			}),
+			gcv: gcvctor.ProtoValue(singerInfoFQN, nil),
+		},
+		{
 			name:   "enum nil resolver",
 			plugin: protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{}),
 			gcv:    gcvctor.EnumValue(genreFQN, 1),
@@ -198,6 +209,17 @@ func TestFormatPlugins_fallthroughCases(t *testing.T) {
 			name:   "enum missing type from GlobalTypes",
 			plugin: protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{Resolver: protoregistry.GlobalTypes}),
 			gcv:    gcvctor.EnumValue("example.music.Missing", 1),
+		},
+		{
+			name: "enum nil enum type from resolver",
+			plugin: protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{
+				Resolver: fakeResolver{
+					findEnumByName: func(protoreflect.FullName) (protoreflect.EnumType, error) {
+						return nil, nil
+					},
+				},
+			}),
+			gcv: gcvctor.EnumValue(genreFQN, 1),
 		},
 	}
 
@@ -385,6 +407,16 @@ func TestComposeProtoEnumResolvers_singleActiveResolver(t *testing.T) {
 	got := protofmt.ComposeProtoEnumResolvers(nil, resolver, nil)
 	if got != resolver {
 		t.Fatalf("got %T, want original resolver %T", got, resolver)
+	}
+}
+
+func TestComposeProtoEnumResolvers_emptyResolverReturnsNotFound(t *testing.T) {
+	t.Parallel()
+
+	resolver := protofmt.ComposeProtoEnumResolvers(nil)
+	_, err := resolver.FindMessageByName("example.Missing")
+	if !isExactNotFound(err) {
+		t.Fatalf("error = %v, want exact protoregistry.NotFound", err)
 	}
 }
 
