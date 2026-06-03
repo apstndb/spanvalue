@@ -140,7 +140,7 @@ func toInternalQuotePolicy(cfg LiteralQuoteConfig) internal.QuotePolicy {
 
 func literalQuoteForFormatter(formatter any) LiteralQuoteConfig {
 	fc, ok := formatter.(*FormatConfig)
-	if !ok {
+	if !ok || fc == nil {
 		return LiteralQuoteConfig{}
 	}
 	return fc.Literal.Quote

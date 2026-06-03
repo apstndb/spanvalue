@@ -479,6 +479,11 @@ func TestLiteralQuoteForFormatterNonFormatConfig(t *testing.T) {
 	if got := literalQuoteForFormatter(struct{}{}); got != (LiteralQuoteConfig{}) {
 		t.Fatalf("non-FormatConfig formatter: got %+v, want zero", got)
 	}
+
+	var nilFC *FormatConfig
+	if got := literalQuoteForFormatter(nilFC); got != (LiteralQuoteConfig{}) {
+		t.Fatalf("typed nil *FormatConfig: got %+v, want zero", got)
+	}
 }
 
 func ExampleLiteralFormatConfigWithSingleQuotedLiterals() {

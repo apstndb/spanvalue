@@ -45,16 +45,16 @@ func legacyQuote(payload []byte, preferred PreferredQuote) rune {
 	if preferred == PreferredQuoteSingle {
 		pref, other = '\'', '"'
 	}
-	var hasPref, hasOther bool
+	var hasPref bool
 	for _, b := range payload {
 		switch b {
+		case other:
+			return rune(pref)
 		case pref:
 			hasPref = true
-		case other:
-			hasOther = true
 		}
 	}
-	if hasPref && !hasOther {
+	if hasPref {
 		return rune(other)
 	}
 	return rune(pref)
