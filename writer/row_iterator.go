@@ -158,7 +158,7 @@ func RowIteratorHooksFromWriter(w RowIteratorWriter) RowIteratorHooks {
 }
 
 // RunRowIterator streams all rows from iter using hooks. The helper owns iter:
-// it consumes the iterator, always calls [*spanner.RowIterator.Stop] on return,
+// it consumes the iterator, always calls [*cloud.google.com/go/spanner.RowIterator.Stop] on return,
 // and returns metadata and stats through [RowIteratorResult].
 //
 // Prefer passing a newly created iterator directly, without binding it at the
@@ -166,7 +166,7 @@ func RowIteratorHooksFromWriter(w RowIteratorWriter) RowIteratorHooks {
 //
 //	result, err := RunRowIterator(txn.Query(ctx, stmt), hooks)
 //
-// Do not call [*spanner.RowIterator.Stop] on iter after RunRowIterator returns;
+// Do not call [*cloud.google.com/go/spanner.RowIterator.Stop] on iter after RunRowIterator returns;
 // the helper already stopped it. Use the returned [RowIteratorResult] for
 // metadata, query stats, and row counts—not iter.Metadata, iter.QueryStats,
 // iter.RowCount, or iter.QueryPlan after the call. Reading those fields after
