@@ -36,5 +36,6 @@
 //
 // To build [cloud.google.com/go/spanner.GenericColumnValue] values from Go types, see
 // [github.com/apstndb/spanvalue/gcvctor]. For streaming row export, see
-// [github.com/apstndb/spanvalue/writer].
+// [github.com/apstndb/spanvalue/writer]. For opt-in descriptor-aware PROTO and ENUM
+// display plugins, see [github.com/apstndb/spanvalue/protofmt].
 package spanvalue
