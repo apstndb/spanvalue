@@ -198,7 +198,7 @@ func Float32ToLiteralPolicy(v float32, policy QuotePolicy) string {
 
 func floatSpecialCastLiteral(payload, typ string, quote rune) string {
 	var b strings.Builder
-	b.Grow(len(payload) + len(typ) + 8)
+	b.Grow(len(payload) + len(typ) + 12)
 	b.WriteString("CAST(")
 	b.WriteRune(quote)
 	b.WriteString(payload)

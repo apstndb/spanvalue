@@ -94,6 +94,9 @@ func TestQuoteStrategyString(t *testing.T) {
 	if got, want := QuoteMinEscape.String(), "QuoteMinEscape"; got != want {
 		t.Fatalf("QuoteMinEscape.String() = %q, want %q", got, want)
 	}
+	if got, want := QuoteStrategy(200).String(), "QuoteStrategy(200)"; got != want {
+		t.Fatalf("QuoteStrategy(200).String() = %q, want %q", got, want)
+	}
 	if got, want := PreferredSingleQuote.String(), "PreferredSingleQuote"; got != want {
 		t.Fatalf("PreferredSingleQuote.String() = %q, want %q", got, want)
 	}

@@ -1,6 +1,10 @@
 package spanvalue
 
-import "github.com/apstndb/spanvalue/internal"
+import (
+	"strconv"
+
+	"github.com/apstndb/spanvalue/internal"
+)
 
 // QuoteStrategy selects how the outer string-literal delimiter is chosen for the literal preset.
 type QuoteStrategy uint8
@@ -97,7 +101,7 @@ func (s QuoteStrategy) String() string {
 	case QuoteMinEscape:
 		return "QuoteMinEscape"
 	default:
-		return "QuoteStrategy(" + itoaUint8(uint8(s)) + ")"
+		return "QuoteStrategy(" + strconv.Itoa(int(s)) + ")"
 	}
 }
 
@@ -108,16 +112,8 @@ func (p PreferredQuote) String() string {
 	case PreferredSingleQuote:
 		return "PreferredSingleQuote"
 	default:
-		return "PreferredQuote(" + itoaUint8(uint8(p)) + ")"
+		return "PreferredQuote(" + strconv.Itoa(int(p)) + ")"
 	}
-}
-
-func itoaUint8(v uint8) string {
-	const digits = "0123456789"
-	if v < 10 {
-		return string(digits[v])
-	}
-	return string([]byte{digits[v/10], digits[v%10]})
 }
 
 func normalizeLiteralQuote(cfg LiteralQuoteConfig) LiteralQuoteConfig {
