@@ -16,13 +16,16 @@
 // ([DelimitedWriter], [JSONLWriter], [SQLInsertWriter]) via [RowIteratorHooksFromWriter].
 // [RunRowIterator] is the extension point for other sinks: supply [RowIteratorHooks] built with
 // [NewRowIteratorHooks] and the With* setters, or decorate with [WithRowOrdinal],
-// [ObserveWriteRow], and [AfterEachSuccessfulWriteRow]. Both helpers call
-// [*cloud.google.com/go/spanner.RowIterator.Stop] and return [RowIteratorResult] (metadata, stats,
-// [RowIteratorResult.RowsRead]).
+// [ObserveWriteRow], and [AfterEachSuccessfulWriteRow]. Both helpers own the iterator they
+// receive: they consume it, call [*cloud.google.com/go/spanner.RowIterator.Stop], and return
+// [RowIteratorResult] (metadata, stats, [RowIteratorResult.RowsRead]). Prefer passing a
+// newly created iterator directly (for example txn.Query(ctx, stmt)); do not defer Stop at
+// the call site. Use the returned result for post-run metadata and stats.
 //
-// For manual [*cloud.google.com/go/spanner.RowIterator.Next] loops, register
-// [RowIteratorWriter.PrepareRowType] after the first Next when results may be empty;
-// propagate [Flusher.Flush] errors (do not defer Flush).
+// For manual [*cloud.google.com/go/spanner.RowIterator.Next] loops, bind the iterator,
+// defer Stop, register [RowIteratorWriter.PrepareRowType] after the first Next when results
+// may be empty, and read metadata or stats only after consuming to [iterator.Done]; propagate
+// [Flusher.Flush] errors (do not defer Flush).
 //
 // # Direct writers vs hooks
 //

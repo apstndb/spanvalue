@@ -23,7 +23,21 @@ Production code with `*spanner.RowIterator` should treat metadata as **lazy**: `
 | Manual loop (every query has ≥1 row) | `iter.Do` + `WriteRow`, or `PrepareRowType` after first `Next` then `WriteRow` + `return w.Flush()` |
 | Zero-row `SELECT` (columns in metadata) | `WriteRowIterator` / `RunRowIterator`, or `PrepareRowType` after first `Next` then `Flush` |
 
-[`WriteRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WriteRowIterator) wires [`RowIteratorHooksFromWriter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorHooksFromWriter): `PrepareRowType` from metadata, `WriteRow` per data row, `Flush` in `Finish`. It always calls `iter.Stop()` and returns [`RowIteratorResult`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorResult) (metadata, query stats, [`RowsRead`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorResult.RowsRead)).
+### Iterator ownership
+
+[`WriteRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WriteRowIterator) and [`RunRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RunRowIterator) **own** the iterator passed in: they consume it, call `iter.Stop()`, and return [`RowIteratorResult`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorResult) for post-run metadata and stats.
+
+Prefer passing a newly created iterator directly—do not bind it and `defer iter.Stop()` at the call site:
+
+```go
+result, err := writer.WriteRowIterator(txn.Query(ctx, stmt), w)
+```
+
+After the helper returns, use `result.Metadata`, `result.Stats`, and `result.RowsRead`. Do not read `iter.Metadata`, `iter.QueryStats`, `iter.RowCount`, or `iter.QueryPlan` on the transferred iterator; reading those fields after `Stop()` does not panic in current Spanner client releases, but the helper owns lifecycle and the returned result is the supported API.
+
+**Manual loops** differ: bind `iter := txn.Query(ctx, stmt)`, `defer iter.Stop()`, consume rows yourself, and read iterator fields only after reaching `iterator.Done`.
+
+[`WriteRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WriteRowIterator) wires [`RowIteratorHooksFromWriter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorHooksFromWriter): `PrepareRowType` from metadata, `WriteRow` per data row, `Flush` in `Finish`.
 
 [`RunRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RunRowIterator) is the extension point for non-`RowIteratorWriter` sinks:
 
@@ -42,13 +56,11 @@ Construct hooks with [`NewRowIteratorHooks`](https://pkg.go.dev/github.com/apstn
 `RowsRead` counts successful `WriteRow` hook calls; it differs from [`RowIteratorStats.RowCount`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorStats.RowCount) (Spanner DML semantics). Decorators that only observe rows may call [`MarkOmitRowsRead`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorHooks.MarkOmitRowsRead) so side-effect-only `WriteRow` wrappers do not increment `RowsRead`.
 
 ```go
-iter := txn.QueryWithStats(ctx, stmt)
-
 w, err := writer.NewDelimitedWriter(out, '\t', writer.WithFormatter(cfg), writer.WithHeader(true))
 if err != nil {
 	return err
 }
-result, err := writer.WriteRowIterator(iter, w)
+result, err := writer.WriteRowIterator(txn.QueryWithStats(ctx, stmt), w)
 if err != nil {
 	return err
 }
@@ -57,7 +69,7 @@ _ = result.Stats.QueryStats
 ```
 
 ```go
-result, err := writer.RunRowIterator(iter, writer.NewRowIteratorHooks().
+result, err := writer.RunRowIterator(txn.Query(ctx, stmt), writer.NewRowIteratorHooks().
 	WithPrepareMetadata(func(md *spannerpb.ResultSetMetadata) error {
 		return sink.Init(md)
 	}).
@@ -71,7 +83,7 @@ result, err := writer.RunRowIterator(iter, writer.NewRowIteratorHooks().
 
 When the app consumes `Next` but skips row bodies, register `PrepareRowType(iter.Metadata.GetRowType())` after the loop, then `Flush` for a header-only delimited export—see package godoc.
 
-**Manual loops:** propagate `Flush()` errors (`return w.Flush()`, not `defer w.Flush()`). When driving `Next` yourself, `defer iter.Stop()`.
+**Manual loops:** bind the iterator, `defer iter.Stop()`, propagate `Flush()` errors (`return w.Flush()`, not `defer w.Flush()`), and read metadata or stats only after consuming to `iterator.Done`.
 
 ## Schema registration
 
