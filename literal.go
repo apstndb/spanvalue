@@ -53,13 +53,11 @@ var (
 	_ FormatNullableFunc = formatNullableValueLiteral
 )
 
-func stringBasedLiteral(typ, s string, q LiteralQuoteConfig) string {
-	policy := toInternalQuotePolicy(q)
+func stringBasedLiteral(typ, s string, policy internal.QuotePolicy) string {
 	return fmt.Sprintf("%s %s", typ, internal.ToStringLiteralPolicy(s, policy))
 }
 
-func stringLiteralCast(typ, s string, q LiteralQuoteConfig) string {
-	policy := toInternalQuotePolicy(q)
+func stringLiteralCast(typ, s string, policy internal.QuotePolicy) string {
 	return fmt.Sprintf("CAST(%s AS %s)", internal.ToStringLiteralPolicy(s, policy), typ)
 }
 
@@ -86,26 +84,26 @@ func formatNullableValueLiteralWithQuote(q LiteralQuoteConfig, value NullableVal
 	case spanner.NullInt64:
 		return strconv.FormatInt(v.Int64, 10), nil
 	case spanner.NullNumeric:
-		return stringBasedLiteral("NUMERIC", spanner.NumericString(&v.Numeric), q), nil
+		return stringBasedLiteral("NUMERIC", spanner.NumericString(&v.Numeric), policy), nil
 	case spanner.PGNumeric:
-		return stringBasedLiteral("NUMERIC", v.Numeric, q), nil
+		return stringBasedLiteral("NUMERIC", v.Numeric, policy), nil
 	case spanner.NullTime:
-		return stringBasedLiteral("TIMESTAMP", v.Time.Format(time.RFC3339Nano), q), nil
+		return stringBasedLiteral("TIMESTAMP", v.Time.Format(time.RFC3339Nano), policy), nil
 	case spanner.NullDate:
-		return stringBasedLiteral("DATE", v.Date.String(), q), nil
+		return stringBasedLiteral("DATE", v.Date.String(), policy), nil
 	case spanner.NullJSON:
-		return stringBasedLiteral("JSON", v.String(), q), nil
+		return stringBasedLiteral("JSON", v.String(), policy), nil
 	case spanner.PGJsonB:
 		b, err := json.Marshal(v.Value)
 		if err != nil {
 			return "", err
 		}
-		return stringBasedLiteral("JSON", string(b), q), nil
+		return stringBasedLiteral("JSON", string(b), policy), nil
 	case spanner.NullInterval:
 		// Use CAST for INTERVAL. Literal notation is unintuitive for information preservation.
-		return stringLiteralCast("INTERVAL", v.String(), q), nil
+		return stringLiteralCast("INTERVAL", v.String(), policy), nil
 	case spanner.NullUUID:
-		return stringLiteralCast("UUID", v.String(), q), nil
+		return stringLiteralCast("UUID", v.String(), policy), nil
 	default:
 		// Reject unknown type to guarantee round-trip
 		return "", fmt.Errorf("%w: %T", ErrUnknownType, v)

@@ -13,11 +13,16 @@ const (
 	// QuoteLegacy uses PreferredQuote when the payload needs no opposite-delimiter escape.
 	// When the payload contains only the preferred quote character, the opposite delimiter is used.
 	// PreferredDoubleQuote (the zero value) matches historical suitableQuote byte-for-byte.
+	// When both quote characters appear, Legacy uses presence rules (any opposite quote keeps
+	// the preferred delimiter); [QuoteMinEscape] instead compares quote-character counts.
 	QuoteLegacy QuoteStrategy = iota
 	// QuoteAlways uses PreferredQuote for every string and bytes literal.
 	QuoteAlways
 	// QuoteMinEscape picks the delimiter whose quote character occurs less often in the payload.
 	// On a tie, PreferredQuote wins. Only quote-character counts matter; other escapes are delimiter-independent.
+	// With PreferredSingleQuote it often matches [QuoteLegacy], but when both delimiters appear
+	// MinEscape compares counts (e.g. a''b"c stays single-quoted under Legacy+Single but uses
+	// double under MinEscape+Single because one double escape beats two single escapes).
 	QuoteMinEscape
 )
 
@@ -132,10 +137,22 @@ func normalizeLiteralQuote(cfg LiteralQuoteConfig) LiteralQuoteConfig {
 
 func toInternalQuotePolicy(cfg LiteralQuoteConfig) internal.QuotePolicy {
 	cfg = normalizeLiteralQuote(cfg)
-	return internal.QuotePolicy{
-		Strategy:  internal.QuoteStrategy(cfg.Strategy),
-		Preferred: internal.PreferredQuote(cfg.PreferredQuote),
+	var p internal.QuotePolicy
+	switch cfg.Strategy {
+	case QuoteAlways:
+		p.Strategy = internal.QuoteStrategyAlways
+	case QuoteMinEscape:
+		p.Strategy = internal.QuoteStrategyMinEscape
+	default:
+		p.Strategy = internal.QuoteStrategyLegacy
 	}
+	switch cfg.PreferredQuote {
+	case PreferredSingleQuote:
+		p.Preferred = internal.PreferredQuoteSingle
+	default:
+		p.Preferred = internal.PreferredQuoteDouble
+	}
+	return p
 }
 
 func literalQuoteForFormatter(formatter any) LiteralQuoteConfig {

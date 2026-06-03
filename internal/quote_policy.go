@@ -84,18 +84,3 @@ func minEscapeQuote(payload []byte, preferred PreferredQuote) rune {
 		return '"'
 	}
 }
-
-// quoteForSpecialFloatCast selects the delimiter for NaN/±Inf CAST payloads.
-// Legacy stays single-quoted. QuoteAlways and QuoteMinEscape use PreferredQuote
-// (MinEscape payloads have no quote characters, so preferred is the tie-breaker).
-func (p QuotePolicy) quoteForSpecialFloatCast() rune {
-	switch p.Strategy {
-	case QuoteStrategyAlways, QuoteStrategyMinEscape:
-		if p.Preferred == PreferredQuoteDouble {
-			return '"'
-		}
-		return '\''
-	default:
-		return '\''
-	}
-}

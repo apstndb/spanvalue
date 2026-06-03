@@ -169,11 +169,11 @@ func Float64ToLiteral(v float64) string {
 func Float64ToLiteralPolicy(v float64, policy QuotePolicy) string {
 	switch {
 	case math.IsNaN(v):
-		return floatSpecialCastLiteral("nan", "FLOAT64", policy.quoteForSpecialFloatCast())
+		return castQuotedLiteral("nan", "FLOAT64", nanInfCastQuote(policy))
 	case math.IsInf(v, 1):
-		return floatSpecialCastLiteral("inf", "FLOAT64", policy.quoteForSpecialFloatCast())
+		return castQuotedLiteral("inf", "FLOAT64", nanInfCastQuote(policy))
 	case math.IsInf(v, -1):
-		return floatSpecialCastLiteral("-inf", "FLOAT64", policy.quoteForSpecialFloatCast())
+		return castQuotedLiteral("-inf", "FLOAT64", nanInfCastQuote(policy))
 	default:
 		return strconv.FormatFloat(v, 'g', -1, 64)
 	}
@@ -186,17 +186,31 @@ func Float32ToLiteral(v float32) string {
 func Float32ToLiteralPolicy(v float32, policy QuotePolicy) string {
 	switch {
 	case math.IsNaN(float64(v)):
-		return floatSpecialCastLiteral("nan", "FLOAT32", policy.quoteForSpecialFloatCast())
+		return castQuotedLiteral("nan", "FLOAT32", nanInfCastQuote(policy))
 	case math.IsInf(float64(v), 1):
-		return floatSpecialCastLiteral("inf", "FLOAT32", policy.quoteForSpecialFloatCast())
+		return castQuotedLiteral("inf", "FLOAT32", nanInfCastQuote(policy))
 	case math.IsInf(float64(v), -1):
-		return floatSpecialCastLiteral("-inf", "FLOAT32", policy.quoteForSpecialFloatCast())
+		return castQuotedLiteral("-inf", "FLOAT32", nanInfCastQuote(policy))
 	default:
 		return fmt.Sprintf("CAST(%v AS FLOAT32)", strconv.FormatFloat(float64(v), 'g', -1, 32))
 	}
 }
 
-func floatSpecialCastLiteral(payload, typ string, quote rune) string {
+// nanInfCastQuote selects the outer delimiter for NaN/±Inf CAST payloads.
+// Legacy keeps historical single quotes; Always and MinEscape use PreferredQuote.
+func nanInfCastQuote(policy QuotePolicy) rune {
+	switch policy.Strategy {
+	case QuoteStrategyAlways, QuoteStrategyMinEscape:
+		if policy.Preferred == PreferredQuoteDouble {
+			return '"'
+		}
+		return '\''
+	default:
+		return '\''
+	}
+}
+
+func castQuotedLiteral(payload, typ string, quote rune) string {
 	var b strings.Builder
 	b.Grow(len(payload) + len(typ) + 12)
 	b.WriteString("CAST(")

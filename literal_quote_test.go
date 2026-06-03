@@ -8,7 +8,6 @@ import (
 	"cloud.google.com/go/civil"
 	"cloud.google.com/go/spanner"
 	"github.com/apstndb/spanvalue/gcvctor"
-	"github.com/apstndb/spanvalue/internal"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -186,9 +185,7 @@ func TestLiteralQuoteLegacyPreferredSingle(t *testing.T) {
 		{name: "no quotes uses preferred single", gcv: gcvctor.StringValue("plain"), want: `'plain'`},
 		{name: "only singles uses opposite double", gcv: gcvctor.StringValue("it's"), want: `"it's"`},
 		{name: "only doubles uses opposite single", gcv: gcvctor.StringValue(`say "hi"`), want: `'say "hi"'`},
-		{name: "both uses preferred single", gcv: gcvctor.StringValue(`"it's"`), want: internal.ToStringLiteralPolicy(`"it's"`, internal.QuotePolicy{
-			Strategy: internal.QuoteStrategyLegacy, Preferred: internal.PreferredQuoteSingle,
-		})},
+		{name: "both uses preferred single", gcv: gcvctor.StringValue(`"it's"`), want: `'"it\'s"'`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -407,6 +404,45 @@ func TestLiteralQuoteNormalizeAtFormatTime(t *testing.T) {
 func TestLiteralQuoteEscapeCorners(t *testing.T) {
 	t.Parallel()
 
+	escapeCornerWants := map[string]map[string]string{
+		"legacy_double": {
+			"plain":       `"plain"`,
+			"only_single": `"it's"`,
+			"only_double": `'say "hi"'`,
+			"both_quotes": `"\"it's\""`,
+		},
+		"legacy_single": {
+			"plain":       `'plain'`,
+			"only_single": `"it's"`,
+			"only_double": `'say "hi"'`,
+			"both_quotes": `'"it\'s"'`,
+		},
+		"always_single": {
+			"plain":       `'plain'`,
+			"only_single": `'it\'s'`,
+			"only_double": `'say "hi"'`,
+			"both_quotes": `'"it\'s"'`,
+		},
+		"always_double": {
+			"plain":       `"plain"`,
+			"only_single": `"it's"`,
+			"only_double": `"say \"hi\""`,
+			"both_quotes": `"\"it's\""`,
+		},
+		"minescape_single": {
+			"plain":       `'plain'`,
+			"only_single": `"it's"`,
+			"only_double": `'say "hi"'`,
+			"both_quotes": `'"it\'s"'`,
+		},
+		"minescape_double": {
+			"plain":       `"plain"`,
+			"only_single": `"it's"`,
+			"only_double": `'say "hi"'`,
+			"both_quotes": `'"it\'s"'`,
+		},
+	}
+
 	configs := []struct {
 		name string
 		cfg  LiteralQuoteConfig
@@ -421,19 +457,18 @@ func TestLiteralQuoteEscapeCorners(t *testing.T) {
 	payloads := []struct {
 		name string
 		gcv  spanner.GenericColumnValue
-		s    string
 	}{
-		{name: "plain", gcv: gcvctor.StringValue("plain"), s: "plain"},
-		{name: "only_single", gcv: gcvctor.StringValue("it's"), s: "it's"},
-		{name: "only_double", gcv: gcvctor.StringValue(`say "hi"`), s: `say "hi"`},
-		{name: "both_quotes", gcv: gcvctor.StringValue(`"it's"`), s: `"it's"`},
+		{name: "plain", gcv: gcvctor.StringValue("plain")},
+		{name: "only_single", gcv: gcvctor.StringValue("it's")},
+		{name: "only_double", gcv: gcvctor.StringValue(`say "hi"`)},
+		{name: "both_quotes", gcv: gcvctor.StringValue(`"it's"`)},
 	}
 
 	for _, config := range configs {
 		t.Run(config.name, func(t *testing.T) {
 			t.Parallel()
 			fc := LiteralFormatConfigWithQuote(config.cfg)
-			policy := toInternalQuotePolicy(config.cfg)
+			wants := escapeCornerWants[config.name]
 			for _, payload := range payloads {
 				t.Run(payload.name, func(t *testing.T) {
 					t.Parallel()
@@ -441,7 +476,7 @@ func TestLiteralQuoteEscapeCorners(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					want := internal.ToStringLiteralPolicy(payload.s, policy)
+					want := wants[payload.name]
 					if got != want {
 						t.Fatalf("got %q, want %q", got, want)
 					}
