@@ -206,11 +206,13 @@ type FormatConfig struct {
 	FormatComplexPlugins []FormatComplexFunc
 	FormatNullable       FormatNullableFunc
 	// Literal holds options for the literal preset only ([LiteralFormatOptions]).
-	// Consulted when FormatNullable is the preset formatNullableValueLiteral (including the
-	// formatSimpleColumn slow-path intercept). Custom FormatNullable callbacks ignore this field.
-	// Other presets leave Literal at the zero value. Quote zero value is legacy suitableQuote
-	// behavior (QuoteLegacy + PreferredDoubleQuote). Stored Quote values are normalized for
-	// invalid enum values only. Escaping uses GoogleSQL backslash rules; not PostgreSQL (#126).
+	// Quote is read when FormatNullable is the preset formatNullableValueLiteral (including the
+	// formatSimpleColumn slow-path intercept) and by literal preset complex plugins such as
+	// [FormatLiteralValue] and [FormatProtoAsCast]. Custom FormatNullable callbacks do not
+	// consult this field. Other presets leave Literal at the zero value. Quote zero value is
+	// legacy suitableQuote behavior (QuoteLegacy + PreferredDoubleQuote). Invalid enum values
+	// are normalized when literal options are applied and again when Quote is read at format
+	// time. Escaping uses GoogleSQL backslash rules; not PostgreSQL (#126).
 	Literal LiteralFormatOptions
 }
 
