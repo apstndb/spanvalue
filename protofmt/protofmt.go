@@ -30,6 +30,12 @@ const (
 type ProtoEnumResolver interface {
 	protoregistry.MessageTypeResolver
 	protoregistry.ExtensionTypeResolver
+	EnumResolver
+}
+
+// EnumResolver resolves protobuf enum types for descriptor-aware Spanner ENUM
+// display.
+type EnumResolver interface {
 	FindEnumByName(protoreflect.FullName) (protoreflect.EnumType, error)
 }
 
@@ -54,7 +60,7 @@ type ProtoTextValueOptions struct {
 
 // EnumNameValueOptions configures [FormatEnumNameValue].
 type EnumNameValueOptions struct {
-	Resolver ProtoEnumResolver
+	Resolver EnumResolver
 }
 
 // FormatProtoTextValue returns a spanvalue plugin that formats Spanner PROTO
@@ -63,7 +69,7 @@ type EnumNameValueOptions struct {
 //
 // The plugin returns [spanvalue.ErrFallthrough] for non-PROTO values, nil or
 // missing resolvers, empty type names, and missing message types. Typed NULL
-// PROTO values return formatter.GetNullString without consulting the resolver.
+// PROTO values return [spanvalue.Formatter.GetNullString] without consulting the resolver.
 // Malformed non-NULL wire payloads, base64 decode failures, unmarshal failures,
 // and marshal failures are returned as real errors.
 //
@@ -125,7 +131,7 @@ func FormatProtoTextValue(opts ProtoTextValueOptions) spanvalue.FormatComplexFun
 //
 // The plugin returns [spanvalue.ErrFallthrough] for non-ENUM values, nil or
 // missing resolvers, empty type names, and missing enum types. Typed NULL ENUM
-// values return formatter.GetNullString without consulting the resolver. Known
+// values return [spanvalue.Formatter.GetNullString] without consulting the resolver. Known
 // enum types with unknown or out-of-range numeric values return the original
 // numeric string.
 func FormatEnumNameValue(opts EnumNameValueOptions) spanvalue.FormatComplexFunc {
@@ -197,7 +203,13 @@ func ProtoEnumResolverFromFileDescriptorSet(fds *descriptorpb.FileDescriptorSet)
 // as ordinary errors. If no resolver finds a type, the composed resolver returns
 // exact [protoregistry.NotFound].
 func ComposeProtoEnumResolvers(resolvers ...ProtoEnumResolver) ProtoEnumResolver {
-	return compositeResolver{resolvers: append([]ProtoEnumResolver(nil), resolvers...)}
+	active := make([]ProtoEnumResolver, 0, len(resolvers))
+	for _, resolver := range resolvers {
+		if !isNilResolver(resolver) {
+			active = append(active, resolver)
+		}
+	}
+	return compositeResolver{resolvers: active}
 }
 
 type compositeResolver struct {
@@ -237,9 +249,6 @@ func (r compositeResolver) FindEnumByName(name protoreflect.FullName) (protorefl
 func find[T any](resolvers []ProtoEnumResolver, lookup func(ProtoEnumResolver) (T, error)) (T, error) {
 	var zero T
 	for _, resolver := range resolvers {
-		if isNilResolver(resolver) {
-			continue
-		}
 		v, err := lookup(resolver)
 		if err == nil {
 			return v, nil
@@ -264,7 +273,7 @@ func isExactNotFound(err error) bool {
 	return err == protoregistry.NotFound //nolint:errorlint
 }
 
-func isNilResolver(resolver ProtoEnumResolver) bool {
+func isNilResolver(resolver any) bool {
 	if resolver == nil {
 		return true
 	}

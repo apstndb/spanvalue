@@ -15,9 +15,11 @@ import (
 	"github.com/apstndb/spanvalue/protofmt"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -25,6 +27,7 @@ import (
 const (
 	testProtoPackage = "example.music"
 	singerInfoFQN    = testProtoPackage + ".SingerInfo"
+	envelopeFQN      = testProtoPackage + ".Envelope"
 	genreFQN         = testProtoPackage + ".Genre"
 )
 
@@ -71,6 +74,27 @@ func TestFormatProtoTextValue_generatedMessageFromGlobalTypes(t *testing.T) {
 	}
 	if !proto.Equal(want, &gotMessage) {
 		t.Fatalf("round-trip mismatch\nwant: %v\ngot:  %v", want, &gotMessage)
+	}
+}
+
+func TestFormatProtoTextValue_usesMarshalResolverForAnyExpansion(t *testing.T) {
+	t.Parallel()
+
+	resolver := testResolver(t)
+	singer := newSingerInfo(t, resolver, 1, "Alice", 1)
+	envelope := newEnvelopeWithAny(t, resolver, singer)
+	payload := marshalProto(t, envelope)
+
+	fc := descriptorAwareConfig(resolver)
+	got, err := fc.FormatToplevelColumn(gcvctor.ProtoValue(envelopeFQN, payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "type.googleapis.com/"+singerInfoFQN) {
+		t.Fatalf("formatted Any was not expanded with the custom resolver:\n%s", got)
+	}
+	if !strings.Contains(got, "singer_id") || !strings.Contains(got, "Alice") {
+		t.Fatalf("expanded Any did not include SingerInfo fields:\n%s", got)
 	}
 }
 
@@ -148,6 +172,11 @@ func TestFormatPlugins_fallthroughCases(t *testing.T) {
 			gcv:    gcvctor.ProtoValue("example.music.Missing", nil),
 		},
 		{
+			name:   "proto missing type from GlobalTypes",
+			plugin: protofmt.FormatProtoTextValue(protofmt.ProtoTextValueOptions{Resolver: protoregistry.GlobalTypes}),
+			gcv:    gcvctor.ProtoValue("example.music.Missing", nil),
+		},
+		{
 			name:   "enum nil resolver",
 			plugin: protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{}),
 			gcv:    gcvctor.EnumValue(genreFQN, 1),
@@ -163,6 +192,11 @@ func TestFormatPlugins_fallthroughCases(t *testing.T) {
 		{
 			name:   "enum missing type",
 			plugin: protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{Resolver: resolver}),
+			gcv:    gcvctor.EnumValue("example.music.Missing", 1),
+		},
+		{
+			name:   "enum missing type from GlobalTypes",
+			plugin: protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{Resolver: protoregistry.GlobalTypes}),
 			gcv:    gcvctor.EnumValue("example.music.Missing", 1),
 		},
 	}
@@ -459,6 +493,29 @@ func newEmptySingerInfo(t *testing.T, resolver protofmt.ProtoEnumResolver) proto
 	return messageType.New().Interface()
 }
 
+func newEnvelopeWithAny(t *testing.T, resolver protofmt.ProtoEnumResolver, message proto.Message) proto.Message {
+	t.Helper()
+
+	envelopeType, err := resolver.FindMessageByName(envelopeFQN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	anyType, err := resolver.FindMessageByName("google.protobuf.Any")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	anyMessage := anyType.New()
+	anyFields := anyMessage.Descriptor().Fields()
+	anyMessage.Set(anyFields.ByName("type_url"), protoreflect.ValueOfString("type.googleapis.com/"+string(message.ProtoReflect().Descriptor().FullName())))
+	anyMessage.Set(anyFields.ByName("value"), protoreflect.ValueOfBytes(marshalProto(t, message)))
+
+	envelope := envelopeType.New()
+	envelopeFields := envelope.Descriptor().Fields()
+	envelope.Set(envelopeFields.ByName("info"), protoreflect.ValueOfMessage(anyMessage))
+	return envelope.Interface()
+}
+
 func marshalProto(t *testing.T, m proto.Message) []byte {
 	t.Helper()
 
@@ -476,10 +533,14 @@ func isExactNotFound(err error) bool {
 func testFileDescriptorSet() *descriptorpb.FileDescriptorSet {
 	return &descriptorpb.FileDescriptorSet{
 		File: []*descriptorpb.FileDescriptorProto{
+			protodesc.ToFileDescriptorProto(anypb.File_google_protobuf_any_proto),
 			{
 				Name:    proto.String("music.proto"),
 				Package: proto.String(testProtoPackage),
 				Syntax:  proto.String("proto3"),
+				Dependency: []string{
+					"google/protobuf/any.proto",
+				},
 				EnumType: []*descriptorpb.EnumDescriptorProto{
 					{
 						Name: proto.String("Genre"),
@@ -515,6 +576,19 @@ func testFileDescriptorSet() *descriptorpb.FileDescriptorSet {
 								Label:    descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
 								Type:     descriptorpb.FieldDescriptorProto_TYPE_ENUM.Enum(),
 								TypeName: proto.String("." + genreFQN),
+							},
+						},
+					},
+					{
+						Name: proto.String("Envelope"),
+						Field: []*descriptorpb.FieldDescriptorProto{
+							{
+								Name:     proto.String("info"),
+								JsonName: proto.String("info"),
+								Number:   proto.Int32(1),
+								Label:    descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+								Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+								TypeName: proto.String(".google.protobuf.Any"),
 							},
 						},
 					},
