@@ -8,7 +8,7 @@
 // Configure output with [FormatConfig]. Use the constructors [LiteralFormatConfig],
 // [LiteralFormatConfigWithQuote], [LiteralFormatConfigWithSingleQuotedLiterals],
 // [LiteralFormatConfigWithOptions], [SimpleFormatConfig], [SpannerCLICompatibleFormatConfig],
-// and [JSONFormatConfig] to pick a preset. [WithLiteralQuote] sets [FormatConfig.Literal].Quote
+// and [JSONFormatConfig] to pick a preset. [WithLiteralQuote] sets [FormatConfig].Literal.Quote
 // on the literal preset (string/bytes delimiter policy for SQL-style literals).
 // Scalar plugins ([FormatSimpleValue], [FormatLiteralValue],
 // [FormatSpannerCLIValue], [FormatJSONSimpleValue]) format GenericColumnValue directly
