@@ -1,5 +1,9 @@
 package internal
 
+type bytesSeq interface {
+	~string | ~[]byte
+}
+
 // QuoteStrategy selects how the outer string-literal delimiter is chosen.
 type QuoteStrategy uint8
 
@@ -23,7 +27,7 @@ type QuotePolicy struct {
 	Preferred PreferredQuote
 }
 
-func (p QuotePolicy) quoteForPayload(payload []byte) rune {
+func quoteForPayload[T bytesSeq](p QuotePolicy, payload T) rune {
 	switch p.Strategy {
 	case QuoteStrategyAlways:
 		if p.Preferred == PreferredQuoteSingle {
@@ -40,13 +44,14 @@ func (p QuotePolicy) quoteForPayload(payload []byte) rune {
 // legacyQuote generalizes historical suitableQuote: when the payload contains only the
 // preferred delimiter character, use the opposite delimiter; otherwise use preferred.
 // With PreferredQuoteDouble this matches suitableQuote byte-for-byte.
-func legacyQuote(payload []byte, preferred PreferredQuote) rune {
+func legacyQuote[T bytesSeq](payload T, preferred PreferredQuote) rune {
 	pref, other := byte('"'), byte('\'')
 	if preferred == PreferredQuoteSingle {
 		pref, other = '\'', '"'
 	}
 	var hasPref bool
-	for _, b := range payload {
+	for i := 0; i < len(payload); i++ {
+		b := payload[i]
 		switch b {
 		case other:
 			return rune(pref)
@@ -62,10 +67,11 @@ func legacyQuote(payload []byte, preferred PreferredQuote) rune {
 
 // minEscapeQuote picks the delimiter that occurs less often in the payload.
 // On a tie (including payloads with neither quote character), PreferredQuote wins.
-func minEscapeQuote(payload []byte, preferred PreferredQuote) rune {
+func minEscapeQuote[T bytesSeq](payload T, preferred PreferredQuote) rune {
 	var singleCount, doubleCount int
-	for _, r := range payload {
-		switch r {
+	for i := 0; i < len(payload); i++ {
+		b := payload[i]
+		switch b {
 		case '\'':
 			singleCount++
 		case '"':
