@@ -72,8 +72,8 @@ func TestLiteralFormatConfigWithOptions(t *testing.T) {
 		}),
 	)
 	want := LiteralQuoteConfig{Strategy: QuoteMinEscape, PreferredQuote: PreferredSingleQuote}
-	if fc.LiteralQuote != want {
-		t.Fatalf("LiteralQuote = %+v, want %+v", fc.LiteralQuote, want)
+	if fc.Literal.Quote != want {
+		t.Fatalf("Literal.Quote = %+v, want %+v", fc.Literal.Quote, want)
 	}
 
 	got, err := fc.FormatToplevelColumn(gcvctor.StringValue("plain"))
@@ -146,8 +146,8 @@ func TestLiteralFormatConfigWithSingleQuotedLiterals(t *testing.T) {
 
 	fc := LiteralFormatConfigWithSingleQuotedLiterals()
 	want := LiteralQuoteConfig{Strategy: QuoteAlways, PreferredQuote: PreferredSingleQuote}
-	if fc.LiteralQuote != want {
-		t.Fatalf("LiteralQuote = %+v, want %+v", fc.LiteralQuote, want)
+	if fc.Literal.Quote != want {
+		t.Fatalf("Literal.Quote = %+v, want %+v", fc.Literal.Quote, want)
 	}
 
 	got, err := fc.FormatToplevelColumn(gcvctor.DateValue(civil.Date{Year: 2014, Month: 9, Day: 27}))
@@ -387,7 +387,7 @@ func TestLiteralQuoteNormalizeAtFormatTime(t *testing.T) {
 	t.Parallel()
 
 	fc := LiteralFormatConfig()
-	fc.LiteralQuote = LiteralQuoteConfig{
+	fc.Literal.Quote = LiteralQuoteConfig{
 		Strategy:       QuoteStrategy(99),
 		PreferredQuote: PreferredSingleQuote,
 	}

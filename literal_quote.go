@@ -36,6 +36,15 @@ type LiteralQuoteConfig struct {
 	PreferredQuote PreferredQuote
 }
 
+// LiteralFormatOptions holds settings that apply only to the literal preset ([LiteralFormatConfig]
+// and clones). Other presets ignore this field. A future major release may move literal-specific
+// configuration off [FormatConfig] entirely; callers should set options via literal constructors
+// or [WithLiteralQuote] rather than assuming a stable nested layout.
+type LiteralFormatOptions struct {
+	// Quote selects the outer delimiter policy for string and bytes SQL-style literals.
+	Quote LiteralQuoteConfig
+}
+
 // LiteralOption configures a literal preset returned by [LiteralFormatConfigWithOptions].
 type LiteralOption interface {
 	applyLiteralOption(*FormatConfig)
@@ -51,7 +60,7 @@ func WithLiteralQuote(cfg LiteralQuoteConfig) LiteralOption {
 }
 
 func (o literalQuoteOption) applyLiteralOption(fc *FormatConfig) {
-	fc.LiteralQuote = normalizeLiteralQuote(o.cfg)
+	fc.Literal.Quote = normalizeLiteralQuote(o.cfg)
 }
 
 // LiteralFormatConfigWithOptions returns a copy of [LiteralFormatConfig] with the given options applied.
@@ -138,5 +147,5 @@ func literalQuoteForFormatter(formatter any) LiteralQuoteConfig {
 	if !ok {
 		return LiteralQuoteConfig{}
 	}
-	return fc.LiteralQuote
+	return fc.Literal.Quote
 }

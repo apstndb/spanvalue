@@ -116,7 +116,7 @@ func (fc *FormatConfig) formatSimpleColumn(value spanner.GenericColumnValue) (st
 		return "", err
 	}
 	if nullableFuncsEqual(fc.FormatNullable, formatNullableValueLiteral) {
-		return formatNullableValueLiteralWithQuote(fc.LiteralQuote, nv)
+		return formatNullableValueLiteralWithQuote(fc.Literal.Quote, nv)
 	}
 	return fc.FormatNullable(nv)
 }
@@ -205,13 +205,13 @@ type FormatConfig struct {
 	FormatStruct         FormatStruct
 	FormatComplexPlugins []FormatComplexFunc
 	FormatNullable       FormatNullableFunc
-	// LiteralQuote configures string and bytes literal quoting for the literal preset only.
+	// Literal holds options for the literal preset only ([LiteralFormatOptions]).
 	// Consulted when FormatNullable is the preset formatNullableValueLiteral (including the
 	// formatSimpleColumn slow-path intercept). Custom FormatNullable callbacks ignore this field.
-	// The zero value is legacy suitableQuote behavior (QuoteLegacy + PreferredDoubleQuote).
-	// Stored values are normalized for invalid enum values only.
-	// Escaping uses GoogleSQL backslash rules (outer delimiter only); not PostgreSQL (#126).
-	LiteralQuote LiteralQuoteConfig
+	// Other presets leave Literal at the zero value. Quote zero value is legacy suitableQuote
+	// behavior (QuoteLegacy + PreferredDoubleQuote). Stored Quote values are normalized for
+	// invalid enum values only. Escaping uses GoogleSQL backslash rules; not PostgreSQL (#126).
+	Literal LiteralFormatOptions
 }
 
 type FormatStruct struct {
