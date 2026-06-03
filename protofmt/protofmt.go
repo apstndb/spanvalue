@@ -76,6 +76,24 @@ type EnumNameValueOptions struct {
 // Protobuf text output is display-oriented and intentionally not stable. Tests
 // and callers must not depend on byte-for-byte stable output.
 func FormatProtoTextValue(opts ProtoTextValueOptions) spanvalue.FormatComplexFunc {
+	resolver := opts.Resolver
+	if isNilResolver(resolver) {
+		return func(formatter spanvalue.Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
+			if value.Type.GetCode() != sppb.TypeCode_PROTO {
+				return "", spanvalue.ErrFallthrough
+			}
+			if spanvalue.IsNull(value) {
+				return formatter.GetNullString(), nil
+			}
+			return "", spanvalue.ErrFallthrough
+		}
+	}
+
+	unmarshal := opts.Unmarshal
+	unmarshal.Resolver = resolver
+	marshal := opts.Marshal
+	marshal.Resolver = resolver
+
 	return func(formatter spanvalue.Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
 		if value.Type.GetCode() != sppb.TypeCode_PROTO {
 			return "", spanvalue.ErrFallthrough
@@ -83,15 +101,12 @@ func FormatProtoTextValue(opts ProtoTextValueOptions) spanvalue.FormatComplexFun
 		if spanvalue.IsNull(value) {
 			return formatter.GetNullString(), nil
 		}
-		if isNilResolver(opts.Resolver) {
-			return "", spanvalue.ErrFallthrough
-		}
 
 		typeName := protoreflect.FullName(value.Type.GetProtoTypeFqn())
 		if typeName == "" {
 			return "", spanvalue.ErrFallthrough
 		}
-		messageType, err := opts.Resolver.FindMessageByName(typeName)
+		messageType, err := resolver.FindMessageByName(typeName)
 		if isExactNotFound(err) {
 			return "", spanvalue.ErrFallthrough
 		}
@@ -109,14 +124,10 @@ func FormatProtoTextValue(opts ProtoTextValueOptions) spanvalue.FormatComplexFun
 		}
 
 		message := messageType.New()
-		unmarshal := opts.Unmarshal
-		unmarshal.Resolver = opts.Resolver
 		if err := unmarshal.Unmarshal(payload, message.Interface()); err != nil {
 			return "", err
 		}
 
-		marshal := opts.Marshal
-		marshal.Resolver = opts.Resolver
 		out, err := marshal.Marshal(message.Interface())
 		if err != nil {
 			return "", err
@@ -135,6 +146,19 @@ func FormatProtoTextValue(opts ProtoTextValueOptions) spanvalue.FormatComplexFun
 // enum types with unknown or out-of-range numeric values return the original
 // numeric string.
 func FormatEnumNameValue(opts EnumNameValueOptions) spanvalue.FormatComplexFunc {
+	resolver := opts.Resolver
+	if isNilResolver(resolver) {
+		return func(formatter spanvalue.Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
+			if value.Type.GetCode() != sppb.TypeCode_ENUM {
+				return "", spanvalue.ErrFallthrough
+			}
+			if spanvalue.IsNull(value) {
+				return formatter.GetNullString(), nil
+			}
+			return "", spanvalue.ErrFallthrough
+		}
+	}
+
 	return func(formatter spanvalue.Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
 		if value.Type.GetCode() != sppb.TypeCode_ENUM {
 			return "", spanvalue.ErrFallthrough
@@ -142,15 +166,12 @@ func FormatEnumNameValue(opts EnumNameValueOptions) spanvalue.FormatComplexFunc 
 		if spanvalue.IsNull(value) {
 			return formatter.GetNullString(), nil
 		}
-		if isNilResolver(opts.Resolver) {
-			return "", spanvalue.ErrFallthrough
-		}
 
 		typeName := protoreflect.FullName(value.Type.GetProtoTypeFqn())
 		if typeName == "" {
 			return "", spanvalue.ErrFallthrough
 		}
-		enumType, err := opts.Resolver.FindEnumByName(typeName)
+		enumType, err := resolver.FindEnumByName(typeName)
 		if isExactNotFound(err) {
 			return "", spanvalue.ErrFallthrough
 		}
@@ -208,6 +229,9 @@ func ComposeProtoEnumResolvers(resolvers ...ProtoEnumResolver) ProtoEnumResolver
 		if !isNilResolver(resolver) {
 			active = append(active, resolver)
 		}
+	}
+	if len(active) == 1 {
+		return active[0]
 	}
 	return compositeResolver{resolvers: active}
 }

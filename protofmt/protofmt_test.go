@@ -378,6 +378,16 @@ func TestComposeProtoEnumResolvers_orderedLookup(t *testing.T) {
 	}
 }
 
+func TestComposeProtoEnumResolvers_singleActiveResolver(t *testing.T) {
+	t.Parallel()
+
+	resolver := testResolver(t)
+	got := protofmt.ComposeProtoEnumResolvers(nil, resolver, nil)
+	if got != resolver {
+		t.Fatalf("got %T, want original resolver %T", got, resolver)
+	}
+}
+
 func TestComposeProtoEnumResolvers_errorSemantics(t *testing.T) {
 	t.Parallel()
 
