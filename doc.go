@@ -6,8 +6,11 @@
 // # Primary API
 //
 // Configure output with [FormatConfig]. Use the constructors [LiteralFormatConfig],
-// [SimpleFormatConfig], [SpannerCLICompatibleFormatConfig], and [JSONFormatConfig] to pick
-// a preset. Scalar plugins ([FormatSimpleValue], [FormatLiteralValue],
+// [LiteralFormatConfigWithQuote], [LiteralFormatConfigWithSingleQuotedLiterals],
+// [LiteralFormatConfigWithOptions], [SimpleFormatConfig], [SpannerCLICompatibleFormatConfig],
+// and [JSONFormatConfig] to pick a preset. [WithLiteralQuote] sets [FormatConfig.LiteralQuote]
+// on the literal preset (string/bytes delimiter policy for SQL-style literals).
+// Scalar plugins ([FormatSimpleValue], [FormatLiteralValue],
 // [FormatSpannerCLIValue], [FormatJSONSimpleValue]) format GenericColumnValue directly
 // without Decode; remove them with [FormatConfigWithoutScalarPlugins] or from
 // [FormatConfig.FormatComplexPlugins] to use Decode + [FormatNullable].

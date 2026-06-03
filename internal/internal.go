@@ -163,29 +163,50 @@ func EscapeRune(r rune, isString bool, quote rune) string {
 }
 
 func Float64ToLiteral(v float64) string {
+	return Float64ToLiteralPolicy(v, QuotePolicy{})
+}
+
+func Float64ToLiteralPolicy(v float64, policy QuotePolicy) string {
 	switch {
 	case math.IsNaN(v):
-		return "CAST('nan' AS FLOAT64)"
+		return floatSpecialCastLiteral("nan", "FLOAT64", policy.quoteForSpecialFloatCast())
 	case math.IsInf(v, 1):
-		return "CAST('inf' AS FLOAT64)"
+		return floatSpecialCastLiteral("inf", "FLOAT64", policy.quoteForSpecialFloatCast())
 	case math.IsInf(v, -1):
-		return "CAST('-inf' AS FLOAT64)"
+		return floatSpecialCastLiteral("-inf", "FLOAT64", policy.quoteForSpecialFloatCast())
 	default:
 		return strconv.FormatFloat(v, 'g', -1, 64)
 	}
 }
 
 func Float32ToLiteral(v float32) string {
+	return Float32ToLiteralPolicy(v, QuotePolicy{})
+}
+
+func Float32ToLiteralPolicy(v float32, policy QuotePolicy) string {
 	switch {
 	case math.IsNaN(float64(v)):
-		return "CAST('nan' AS FLOAT32)"
+		return floatSpecialCastLiteral("nan", "FLOAT32", policy.quoteForSpecialFloatCast())
 	case math.IsInf(float64(v), 1):
-		return "CAST('inf' AS FLOAT32)"
+		return floatSpecialCastLiteral("inf", "FLOAT32", policy.quoteForSpecialFloatCast())
 	case math.IsInf(float64(v), -1):
-		return "CAST('-inf' AS FLOAT32)"
+		return floatSpecialCastLiteral("-inf", "FLOAT32", policy.quoteForSpecialFloatCast())
 	default:
 		return fmt.Sprintf("CAST(%v AS FLOAT32)", strconv.FormatFloat(float64(v), 'g', -1, 32))
 	}
+}
+
+func floatSpecialCastLiteral(payload, typ string, quote rune) string {
+	var b strings.Builder
+	b.Grow(len(payload) + len(typ) + 8)
+	b.WriteString("CAST(")
+	b.WriteRune(quote)
+	b.WriteString(payload)
+	b.WriteRune(quote)
+	b.WriteString(" AS ")
+	b.WriteString(typ)
+	b.WriteByte(')')
+	return b.String()
 }
 
 func ToAny[T any](seq iter.Seq[T]) iter.Seq[any] {
@@ -203,25 +224,15 @@ func Pointers[T any, E ~[]T](e E) iter.Seq[*T] {
 }
 
 func suitableQuote(b []byte) rune {
-	var hasDouble bool
-	for _, r := range b {
-		switch r {
-		case '\'':
-			return '"'
-		case '"':
-			hasDouble = true
-		}
-	}
-
-	if hasDouble {
-		return '\''
-	}
-
-	return '"'
+	return legacyQuote(b, PreferredQuoteDouble)
 }
 
 func ToReadableBytesLiteral(v []byte) string {
-	quote := suitableQuote(v)
+	return ToReadableBytesLiteralPolicy(v, QuotePolicy{})
+}
+
+func ToReadableBytesLiteralPolicy(v []byte, policy QuotePolicy) string {
+	quote := policy.quoteForPayload(v)
 
 	var encoded strings.Builder
 	// Grow uses a cheap lower bound only. Escape expansion is content-dependent,
@@ -238,7 +249,11 @@ func ToReadableBytesLiteral(v []byte) string {
 }
 
 func ToStringLiteral(s string) string {
-	quote := suitableQuote([]byte(s))
+	return ToStringLiteralPolicy(s, QuotePolicy{})
+}
+
+func ToStringLiteralPolicy(s string, policy QuotePolicy) string {
+	quote := policy.quoteForPayload([]byte(s))
 
 	var encoded strings.Builder
 	// Grow uses a cheap lower bound only. Escape expansion is content-dependent,

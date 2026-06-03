@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"cloud.google.com/go/civil"
 	"cloud.google.com/go/spanner"
 	databasepb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
@@ -1116,6 +1117,30 @@ func TestSQLInsertWriterInsertKind(t *testing.T) {
 				t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestSQLInsertWriterWithSingleQuotedLiterals(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	cfg := spanvalue.LiteralFormatConfigWithSingleQuotedLiterals()
+	w := mustNewSQLInsertWriter(t,
+		&out,
+		"users",
+		WithMetadata(metadataWithColumnNames("event_date", "note")),
+		WithFormatter(cfg),
+	)
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{
+		gcvctor.DateValue(civil.Date{Year: 2014, Month: 9, Day: 27}),
+		gcvctor.StringValue("it's fine"),
+	}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+
+	want := "INSERT INTO `users` (`event_date`, `note`) VALUES (DATE '2014-09-27', 'it\\'s fine');\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
 	}
 }
 
