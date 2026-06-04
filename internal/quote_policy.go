@@ -1,7 +1,7 @@
 package internal
 
 type bytesSeq interface {
-	~string | ~[]byte
+	string | []byte
 }
 
 // QuoteStrategy selects how the outer string-literal delimiter is chosen.
