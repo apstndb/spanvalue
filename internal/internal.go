@@ -247,7 +247,7 @@ func ToReadableBytesLiteral(v []byte) string {
 }
 
 func ToReadableBytesLiteralPolicy(v []byte, policy QuotePolicy) string {
-	quote := quoteForPayload(policy, v)
+	quote := quoteForPayloadBytes(policy, v)
 
 	var encoded strings.Builder
 	// Grow uses a cheap lower bound only. Escape expansion is content-dependent,
@@ -268,7 +268,7 @@ func ToStringLiteral(s string) string {
 }
 
 func ToStringLiteralPolicy(s string, policy QuotePolicy) string {
-	quote := quoteForPayload(policy, s)
+	quote := quoteForPayloadString(policy, s)
 
 	var encoded strings.Builder
 	// Grow uses a cheap lower bound only. Escape expansion is content-dependent,
