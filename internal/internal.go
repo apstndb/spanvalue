@@ -163,29 +163,65 @@ func EscapeRune(r rune, isString bool, quote rune) string {
 }
 
 func Float64ToLiteral(v float64) string {
+	return Float64ToLiteralPolicy(v, QuotePolicy{})
+}
+
+func Float64ToLiteralPolicy(v float64, policy QuotePolicy) string {
 	switch {
 	case math.IsNaN(v):
-		return "CAST('nan' AS FLOAT64)"
+		return sqlCastQuotedString("nan", "FLOAT64", nonFiniteCastDelimiter(policy))
 	case math.IsInf(v, 1):
-		return "CAST('inf' AS FLOAT64)"
+		return sqlCastQuotedString("inf", "FLOAT64", nonFiniteCastDelimiter(policy))
 	case math.IsInf(v, -1):
-		return "CAST('-inf' AS FLOAT64)"
+		return sqlCastQuotedString("-inf", "FLOAT64", nonFiniteCastDelimiter(policy))
 	default:
 		return strconv.FormatFloat(v, 'g', -1, 64)
 	}
 }
 
 func Float32ToLiteral(v float32) string {
+	return Float32ToLiteralPolicy(v, QuotePolicy{})
+}
+
+func Float32ToLiteralPolicy(v float32, policy QuotePolicy) string {
 	switch {
 	case math.IsNaN(float64(v)):
-		return "CAST('nan' AS FLOAT32)"
+		return sqlCastQuotedString("nan", "FLOAT32", nonFiniteCastDelimiter(policy))
 	case math.IsInf(float64(v), 1):
-		return "CAST('inf' AS FLOAT32)"
+		return sqlCastQuotedString("inf", "FLOAT32", nonFiniteCastDelimiter(policy))
 	case math.IsInf(float64(v), -1):
-		return "CAST('-inf' AS FLOAT32)"
+		return sqlCastQuotedString("-inf", "FLOAT32", nonFiniteCastDelimiter(policy))
 	default:
 		return fmt.Sprintf("CAST(%v AS FLOAT32)", strconv.FormatFloat(float64(v), 'g', -1, 32))
 	}
+}
+
+// nonFiniteCastDelimiter selects the outer delimiter for NaN/±Inf CAST payloads.
+// v0.5 compat: QuoteStrategyLegacy keeps historical single quotes; Always and
+// MinEscape use PreferredQuote. Planned v0.6: align with quoteForPayload.
+func nonFiniteCastDelimiter(policy QuotePolicy) rune {
+	switch policy.Strategy {
+	case QuoteStrategyAlways, QuoteStrategyMinEscape:
+		if policy.Preferred == PreferredQuoteDouble {
+			return '"'
+		}
+		return '\''
+	default:
+		return '\''
+	}
+}
+
+func sqlCastQuotedString(payload, castType string, quote rune) string {
+	var b strings.Builder
+	b.Grow(len(payload) + len(castType) + 12)
+	b.WriteString("CAST(")
+	b.WriteRune(quote)
+	b.WriteString(payload)
+	b.WriteRune(quote)
+	b.WriteString(" AS ")
+	b.WriteString(castType)
+	b.WriteByte(')')
+	return b.String()
 }
 
 func ToAny[T any](seq iter.Seq[T]) iter.Seq[any] {
@@ -203,25 +239,15 @@ func Pointers[T any, E ~[]T](e E) iter.Seq[*T] {
 }
 
 func suitableQuote(b []byte) rune {
-	var hasDouble bool
-	for _, r := range b {
-		switch r {
-		case '\'':
-			return '"'
-		case '"':
-			hasDouble = true
-		}
-	}
-
-	if hasDouble {
-		return '\''
-	}
-
-	return '"'
+	return legacyQuote(b, PreferredQuoteDouble)
 }
 
 func ToReadableBytesLiteral(v []byte) string {
-	quote := suitableQuote(v)
+	return ToReadableBytesLiteralPolicy(v, QuotePolicy{})
+}
+
+func ToReadableBytesLiteralPolicy(v []byte, policy QuotePolicy) string {
+	quote := quoteForPayload(policy, v)
 
 	var encoded strings.Builder
 	// Grow uses a cheap lower bound only. Escape expansion is content-dependent,
@@ -238,7 +264,11 @@ func ToReadableBytesLiteral(v []byte) string {
 }
 
 func ToStringLiteral(s string) string {
-	quote := suitableQuote([]byte(s))
+	return ToStringLiteralPolicy(s, QuotePolicy{})
+}
+
+func ToStringLiteralPolicy(s string, policy QuotePolicy) string {
+	quote := quoteForPayload(policy, s)
 
 	var encoded strings.Builder
 	// Grow uses a cheap lower bound only. Escape expansion is content-dependent,

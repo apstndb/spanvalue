@@ -115,6 +115,9 @@ func (fc *FormatConfig) formatSimpleColumn(value spanner.GenericColumnValue) (st
 	if err != nil {
 		return "", err
 	}
+	if nullableFuncsEqual(fc.FormatNullable, formatNullableValueLiteral) {
+		return formatNullableValueLiteralWithQuote(fc.Literal.Quote, nv)
+	}
 	return fc.FormatNullable(nv)
 }
 
@@ -150,7 +153,8 @@ func FormatProtoAsCast(formatter Formatter, value spanner.GenericColumnValue, to
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("CAST(%v AS `%v`)", internal.ToReadableBytesLiteral(b), typeFQN), nil
+	policy := toInternalQuotePolicy(literalQuoteForFormatter(formatter))
+	return fmt.Sprintf("CAST(%v AS `%v`)", internal.ToReadableBytesLiteralPolicy(b, policy), typeFQN), nil
 }
 
 func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
@@ -201,6 +205,15 @@ type FormatConfig struct {
 	FormatStruct         FormatStruct
 	FormatComplexPlugins []FormatComplexFunc
 	FormatNullable       FormatNullableFunc
+	// Literal holds options for the literal preset only ([LiteralFormatOptions]).
+	// Quote is read when FormatNullable is the preset formatNullableValueLiteral (including the
+	// formatSimpleColumn slow-path intercept) and by literal preset complex plugins such as
+	// [FormatLiteralValue] and [FormatProtoAsCast]. Custom FormatNullable callbacks do not
+	// consult this field. Other presets leave Literal at the zero value. Quote zero value is
+	// legacy suitableQuote behavior (QuoteLegacy + PreferredDoubleQuote). Invalid enum values
+	// are normalized when literal options are applied and again when Quote is read at format
+	// time. Escaping uses GoogleSQL backslash rules; not PostgreSQL (#126).
+	Literal LiteralFormatOptions
 }
 
 type FormatStruct struct {

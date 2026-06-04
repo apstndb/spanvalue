@@ -119,7 +119,8 @@ func FormatLiteralValue(formatter Formatter, value spanner.GenericColumnValue, _
 	if IsNull(value) {
 		return formatter.GetNullString(), nil
 	}
-	return formatGCVScalarLiteral(value)
+	q := literalQuoteForFormatter(formatter)
+	return formatGCVScalarLiteral(q, value)
 }
 
 // FormatSpannerCLIValue is a [FormatComplexFunc] for [SpannerCLICompatibleFormatConfig].
@@ -170,10 +171,11 @@ func formatGCVScalarSimple(gcv spanner.GenericColumnValue) (string, error) {
 	}
 }
 
-func formatGCVScalarLiteral(gcv spanner.GenericColumnValue) (string, error) {
+func formatGCVScalarLiteral(q LiteralQuoteConfig, gcv spanner.GenericColumnValue) (string, error) {
 	if err := validateScalarWire(gcv); err != nil {
 		return "", err
 	}
+	policy := toInternalQuotePolicy(q)
 	switch gcv.Type.GetCode() {
 	case sppb.TypeCode_BOOL:
 		return strconv.FormatBool(gcv.Value.GetBoolValue()), nil
@@ -188,34 +190,34 @@ func formatGCVScalarLiteral(gcv spanner.GenericColumnValue) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return internal.Float32ToLiteral(f), nil
+		return internal.Float32ToLiteralPolicy(f, policy), nil
 	case sppb.TypeCode_FLOAT64:
 		f, err := gcvFloat64(gcv.Value)
 		if err != nil {
 			return "", err
 		}
-		return internal.Float64ToLiteral(f), nil
+		return internal.Float64ToLiteralPolicy(f, policy), nil
 	case sppb.TypeCode_STRING:
-		return internal.ToStringLiteral(gcv.Value.GetStringValue()), nil
+		return internal.ToStringLiteralPolicy(gcv.Value.GetStringValue(), policy), nil
 	case sppb.TypeCode_BYTES, sppb.TypeCode_PROTO:
 		b, err := internal.DecodeBase64Wire(gcv.Value.GetStringValue())
 		if err != nil {
 			return "", err
 		}
-		return internal.ToReadableBytesLiteral(b), nil
+		return internal.ToReadableBytesLiteralPolicy(b, policy), nil
 	case sppb.TypeCode_TIMESTAMP:
-		return stringBasedLiteral("TIMESTAMP", gcv.Value.GetStringValue()), nil
+		return stringBasedLiteral("TIMESTAMP", gcv.Value.GetStringValue(), policy), nil
 	case sppb.TypeCode_DATE:
-		return stringBasedLiteral("DATE", gcv.Value.GetStringValue()), nil
+		return stringBasedLiteral("DATE", gcv.Value.GetStringValue(), policy), nil
 	case sppb.TypeCode_NUMERIC:
-		return stringBasedLiteral("NUMERIC", numericWireString(gcv)), nil
+		return stringBasedLiteral("NUMERIC", numericWireString(gcv), policy), nil
 	case sppb.TypeCode_JSON:
 		s := gcv.Value.GetStringValue()
-		return stringBasedLiteral("JSON", s), nil
+		return stringBasedLiteral("JSON", s, policy), nil
 	case sppb.TypeCode_INTERVAL:
-		return stringLiteralCast("INTERVAL", gcv.Value.GetStringValue()), nil
+		return stringLiteralCast("INTERVAL", gcv.Value.GetStringValue(), policy), nil
 	case sppb.TypeCode_UUID:
-		return stringLiteralCast("UUID", gcv.Value.GetStringValue()), nil
+		return stringLiteralCast("UUID", gcv.Value.GetStringValue(), policy), nil
 	case sppb.TypeCode_TYPE_CODE_UNSPECIFIED:
 		fallthrough
 	default:
