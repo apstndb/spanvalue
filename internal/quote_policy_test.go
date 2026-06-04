@@ -76,25 +76,10 @@ func TestQuoteForPayloadStringMatchesBytes(t *testing.T) {
 	}
 	for _, policy := range policies {
 		for _, payload := range payloads {
-			gotStr := quoteForPayloadString(policy, payload)
-			gotBytes := quoteForPayloadBytes(policy, []byte(payload))
+			gotStr := quoteForPayload(policy, payload)
+			gotBytes := quoteForPayload(policy, []byte(payload))
 			if gotStr != gotBytes {
 				t.Fatalf("policy=%+v payload=%q: string=%q bytes=%q", policy, payload, gotStr, gotBytes)
-			}
-		}
-	}
-}
-
-func TestLegacyQuoteStringMatchesBytes(t *testing.T) {
-	t.Parallel()
-
-	payloads := []string{"plain", "it's", `say "hi"`, `"it's"`}
-	for _, preferred := range []PreferredQuote{PreferredQuoteDouble, PreferredQuoteSingle} {
-		for _, payload := range payloads {
-			gotStr := legacyQuoteString(payload, preferred)
-			gotBytes := legacyQuoteBytes([]byte(payload), preferred)
-			if gotStr != gotBytes {
-				t.Fatalf("preferred=%v payload=%q: string=%q bytes=%q", preferred, payload, gotStr, gotBytes)
 			}
 		}
 	}
