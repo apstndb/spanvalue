@@ -11,4 +11,8 @@
 // [google.golang.org/protobuf/reflect/protoregistry.GlobalTypes] when their
 // generated packages are imported and linked into the binary, including by
 // blank import.
+//
+// To enable descriptor-aware display, clone an existing spanvalue format preset
+// and prepend [FormatProtoTextValue] and [FormatEnumNameValue] before the
+// preset's existing plugins. See the package examples for the minimal pattern.
 package protofmt

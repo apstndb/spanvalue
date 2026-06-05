@@ -81,6 +81,38 @@ result, err := writer.RunRowIterator(txn.Query(ctx, stmt), writer.NewRowIterator
 	}))
 ```
 
+For complex adapters with several app-owned sinks, keep the state in a small
+local helper and expose that helper through hooks:
+
+```go
+type exportSink struct {
+	formatter appFormatter
+	metrics   appMetrics
+}
+
+var sink exportSink
+hooks := writer.NewRowIteratorHooks().
+	WithPrepareMetadata(func(md *spannerpb.ResultSetMetadata) error {
+		return sink.formatter.Prepare(md)
+	}).
+	WithWriteRow(func(row *spanner.Row) error {
+		if err := sink.metrics.ObserveRow(); err != nil {
+			return err
+		}
+		return sink.formatter.Write(row)
+	}).
+	WithFinish(func(result *writer.RowIteratorResult) error {
+		return sink.formatter.Finish(result)
+	})
+
+result, err := writer.RunRowIterator(txn.Query(ctx, stmt), hooks)
+```
+
+This keeps transformation, metrics, and finalization policy in the application
+while still using `RunRowIterator` for iterator ownership, metadata timing, and
+result collection. Prefer this pattern until a shared composition helper removes
+enough real downstream boilerplate to justify another writer API.
+
 When the app consumes `Next` but skips row bodies, register `PrepareRowType(iter.Metadata.GetRowType())` after the loop, then `Flush` for a header-only delimited export—see package godoc.
 
 **Manual loops:** bind the iterator, `defer iter.Stop()`, propagate `Flush()` errors (`return w.Flush()`, not `defer w.Flush()`), and read metadata or stats only after consuming to `iterator.Done`.
