@@ -76,7 +76,7 @@ func ExampleIntervalStringValue() {
 func ExampleEmptyArrayOf() {
 	elemType := typector.CodeToSimpleType(sppb.TypeCode_STRING)
 	empty := gcvctor.EmptyArrayOf(elemType)
-	viaArrayValueOf := must(gcvctor.ArrayValueOf(elemType))
+	viaArrayValueOf := gcvctor.MustArrayValueOf(elemType)
 
 	fmt.Println(spanvalue.IsNull(empty), len(empty.Value.GetListValue().GetValues()))
 	fmt.Println(empty.Type.ArrayElementType.Code.String())
@@ -100,18 +100,21 @@ func ExampleNullArrayOf() {
 }
 
 func ExampleNullOf_structContainer() {
-	structType := must(typector.NameCodeSlicesToStructType(
+	structType, err := typector.NameCodeSlicesToStructType(
 		[]string{"id", "name"},
 		[]sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_STRING},
-	))
+	)
+	if err != nil {
+		panic(err)
+	}
 	nullStruct := gcvctor.NullOf(structType)
-	fieldsAllNull := must(gcvctor.StructValueOf(
+	fieldsAllNull := gcvctor.MustStructValueOf(
 		[]string{"id", "name"},
 		[]spanner.GenericColumnValue{
 			gcvctor.NullOf(typector.CodeToSimpleType(sppb.TypeCode_INT64)),
 			gcvctor.NullOf(typector.CodeToSimpleType(sppb.TypeCode_STRING)),
 		},
-	))
+	)
 
 	fmt.Println(spanvalue.IsNull(nullStruct), nullStruct.Type.Code.String())
 	fmt.Println(spanvalue.IsNull(fieldsAllNull), fieldsAllNull.Type.Code.String())
