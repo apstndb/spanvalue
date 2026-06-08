@@ -167,7 +167,11 @@ func TestMustStructValueOf_panicsPreserveErrMismatchedCounts(t *testing.T) {
 	if panicked == nil {
 		t.Fatal("expected panic")
 	}
-	if !errors.Is(panicked.(error), gcvctor.ErrMismatchedCounts) {
+	err, ok := panicked.(error)
+	if !ok {
+		t.Fatalf("panic value type = %T, want error", panicked)
+	}
+	if !errors.Is(err, gcvctor.ErrMismatchedCounts) {
 		t.Fatalf("panic = %v, want ErrMismatchedCounts", panicked)
 	}
 }
