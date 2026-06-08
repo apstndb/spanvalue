@@ -976,6 +976,9 @@ type SQLInsertWriter struct {
 }
 
 // NewSQLInsertWriter returns a SQL INSERT writer configured by options.
+// table must be non-empty after trimming whitespace (per strings.TrimSpace); otherwise [NewSQLInsertWriter]
+// returns [ErrEmptyTableName]. Qualified names with empty segments (for example "db..users")
+// are rejected at the first write via [ErrEmptyTableName].
 func NewSQLInsertWriter(out io.Writer, table string, options ...SQLInsertOption) (*SQLInsertWriter, error) {
 	if out == nil {
 		return nil, ErrNilOutputWriter
@@ -986,6 +989,9 @@ func NewSQLInsertWriter(out io.Writer, table string, options ...SQLInsertOption)
 	}
 	if err := w.validateSQLInsertConfig(); err != nil {
 		return nil, err
+	}
+	if strings.TrimSpace(w.table) == "" {
+		return nil, ErrEmptyTableName
 	}
 	if len(w.schema.names) > 0 {
 		if _, err := w.initOrValidateQuotedColumns(nil); err != nil {

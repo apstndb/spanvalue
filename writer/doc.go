@@ -55,6 +55,7 @@
 // # SQL INSERT
 //
 // [NewSQLInsertWriter] accepts [WithSQLInsertKind], [WithSQLDialect], and [WithSQLBatchSize].
+// It rejects an empty table name (after strings.TrimSpace) at construction with [ErrEmptyTableName]. Qualified names with empty segments are rejected on the first write with [ErrEmptyTableName].
 // After any write error from [SQLInsertWriter], discard the writer. [*SQLInsertWriter.Flush]
 // closes a partial batch when batching.
 package writer

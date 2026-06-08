@@ -6,7 +6,7 @@ Stream Cloud Spanner query results to **CSV**, **quoted TSV**, **JSONL**, or **S
 |--------|-------------|--------|
 | Delimited (CSV / TSV) | `NewCSVWriter`, `NewDelimitedWriter` | Uses `encoding/csv`; call `Flush` after the last row |
 | JSONL | `NewJSONLWriter` | `Flush` is a no-op |
-| SQL INSERT | `NewSQLInsertWriter` | `WithSQLBatchSize`, `WithSQLDialect`, `WithSQLInsertKind`; discard writer after a write error |
+| SQL INSERT | `NewSQLInsertWriter` | `WithSQLBatchSize`, `WithSQLDialect`, `WithSQLInsertKind`; empty table name rejected at construction; qualified names with empty segments on first write; discard writer after a write error |
 
 **Write paths:** `WriteRow` (`*spanner.Row`), `WriteStructValues` (`[]*structpb.Value` with registered field types), `WriteGCVs` (pre-built `GenericColumnValue` slices), or per-call `WriteValues`. Use [`Writer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#Writer) for row-only adapters; use [`FlushWriter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#FlushWriter) when the adapter owns finalization.
 
@@ -142,7 +142,7 @@ Match out-of-band headers with [`spanvalue.ColumnNames`](https://pkg.go.dev/gith
 ## Formats and edge cases
 
 - **Quoted TSV:** `NewDelimitedWriter(out, '\t')` uses CSV escaping, not raw tab joins. Legacy raw TAB: implement `Writer` or `RowIteratorWriter` and join formatted columns with `'\t'`.
-- **SQL INSERT:** GoogleSQL quoting by default; `WithSQLDialect` for PostgreSQL identifiers. After any write error from `SQLInsertWriter`, discard the writer.
+- **SQL INSERT:** GoogleSQL quoting by default; `WithSQLDialect` for PostgreSQL identifiers. `NewSQLInsertWriter` rejects an empty table name at construction (whitespace-only per strings.TrimSpace) and qualified names with empty segments on the first write. After any write error from `SQLInsertWriter`, discard the writer.
 - **Delimited vs JSONL vs SQL:** spanvalue formats each cell; encodings differ afterward. One-shot helpers: `FormatDelimitedRow`, `FormatJSONLRow`, `RowData`.
 
 ## Future module split
