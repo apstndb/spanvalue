@@ -35,7 +35,8 @@
 // example [database/sql] scans—see the root README go-sql-spanner section).
 //
 // [DelimitedGCVExportOptions] and [JSONLGCVExportOptions] group metadata, formatter,
-// and unnamed-field namer options for GCV slice export.
+// and unnamed-field namer options for GCV slice export. [WithFormatter] does not call
+// [*spanvalue.FormatConfig.Validate]; validate hand-built formatters before construction.
 //
 // # Quoted delimited text vs raw tab-separated
 //

@@ -30,6 +30,12 @@ func TestColumnNames(t *testing.T) {
 			namer:  IndexedUnnamedFieldNamer,
 			want:   []string{"_0", "_2", "_1"},
 		},
+		{
+			name:   "explicit duplicate aliases preserved",
+			fields: typector.MustNameCodeSlicesToStructType([]string{"a", "a"}, []sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_INT64}).GetStructType().GetFields(),
+			namer:  IndexedUnnamedFieldNamer,
+			want:   []string{"a", "a"},
+		},
 	}
 
 	for _, tt := range tests {
