@@ -401,7 +401,7 @@ type StructFieldValue struct {
 	Value spanner.GenericColumnValue
 }
 
-// StructField returns f as a [StructFieldValue] with name and value.
+// StructField returns a [StructFieldValue] with the given name and value.
 // Empty name is valid for unnamed STRUCT fields.
 func StructField(name string, value spanner.GenericColumnValue) StructFieldValue {
 	return StructFieldValue{Name: name, Value: value}
