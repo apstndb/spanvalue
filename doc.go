@@ -10,6 +10,8 @@
 // [LiteralFormatConfigWithOptions], [SimpleFormatConfig], [SpannerCLICompatibleFormatConfig],
 // and [JSONFormatConfig] to pick a preset. [WithLiteralQuote] sets [FormatConfig].Literal.Quote
 // on the literal preset (string/bytes delimiter policy for SQL-style literals).
+// After hand-assembling a [FormatConfig], call [*FormatConfig.Validate] to catch nil callbacks
+// or an empty [FormatConfig.NullString] before formatting rows.
 // Scalar plugins ([FormatSimpleValue], [FormatLiteralValue],
 // [FormatSpannerCLIValue], [FormatJSONSimpleValue]) format GenericColumnValue directly
 // without Decode; remove them with [FormatConfigWithoutScalarPlugins] or from
