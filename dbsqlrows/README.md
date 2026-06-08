@@ -1,6 +1,7 @@
 # dbsqlrows
 
-Optional Go module for exporting `database/sql` query results through existing
+Package under [`github.com/apstndb/spanvalue`](https://pkg.go.dev/github.com/apstndb/spanvalue)
+for exporting `database/sql` query results through existing
 [`spanvalue/writer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer)
 GenericColumnValue streaming APIs.
 
@@ -10,14 +11,14 @@ data rows → optional stats pseudo-row with proto-decoded GCV columns) that
 not import that driver. Callers configure the driver themselves.
 
 ```text
-module github.com/apstndb/spanvalue/dbsqlrows
+import "github.com/apstndb/spanvalue/dbsqlrows"
 ```
 
 ## Goals
 
 - Own the `*sql.Rows` loop: metadata pseudo-row → data rows → optional stats pseudo-row.
 - Delegate formatting to `writer.WriteGCVs` / `Flush` (same path as the root README manual loop).
-- Keep database/sql drivers **out of** the root `github.com/apstndb/spanvalue` module.
+- Keep database/sql drivers **out of** spanvalue `go.mod` (no go-sql-spanner dependency).
 - Expose **minimal primitives** for apps that split metadata, rendering, and stats (spannersh).
 
 ## Non-goals
@@ -36,10 +37,8 @@ flowchart LR
     A[CLI / service using database/sql]
     D[go-sql-spanner or other driver]
   end
-  subgraph dbsqlrows_mod [github.com/apstndb/spanvalue/dbsqlrows]
-    S[Rows iterator + metadata extraction]
-  end
   subgraph spanvalue_root [github.com/apstndb/spanvalue]
+    S[dbsqlrows iterator + metadata]
     V[FormatConfig / ColumnNames]
     W[writer.WriteGCVs + Flush]
   end
@@ -144,8 +143,7 @@ _ = result.RowsRead
 ## Development
 
 ```bash
-cd dbsqlrows
-go test ./...
+go test ./dbsqlrows/...
+# or from repo root:
+make check
 ```
-
-Root `make check` does not build this module; CI for dbsqlrows is added separately.

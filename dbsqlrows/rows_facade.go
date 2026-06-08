@@ -17,19 +17,19 @@ type sqlRowsFacade struct {
 }
 
 func (f sqlRowsFacade) next() bool {
-	return f.Rows.Next()
+	return f.Next()
 }
 
 func (f sqlRowsFacade) nextResultSet() bool {
-	return f.Rows.NextResultSet()
+	return f.NextResultSet()
 }
 
 func (f sqlRowsFacade) scan(dest ...any) error {
-	return f.Rows.Scan(dest...)
+	return f.Scan(dest...)
 }
 
 func (f sqlRowsFacade) columnCount() (int, error) {
-	cols, err := f.Rows.Columns()
+	cols, err := f.Columns()
 	if err != nil {
 		return 0, err
 	}
@@ -37,5 +37,5 @@ func (f sqlRowsFacade) columnCount() (int, error) {
 }
 
 func (f sqlRowsFacade) err() error {
-	return f.Rows.Err()
+	return f.Err()
 }

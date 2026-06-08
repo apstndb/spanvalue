@@ -22,11 +22,11 @@
 //
 // dbsqlrows does not convert GCV slices to [*spanner.Row] for [writer.Writer.WriteRow].
 //
-// # Module boundary
+// # Module layout
 //
-// This optional module lives under github.com/apstndb/spanvalue/dbsqlrows with its
-// own go.mod. It does not add go-sql-spanner (or any database/sql driver) to the
-// root github.com/apstndb/spanvalue module.
+// Package path github.com/apstndb/spanvalue/dbsqlrows is part of the single
+// github.com/apstndb/spanvalue module. The package does not import go-sql-spanner
+// (or any database/sql driver); callers configure the driver themselves.
 //
 // For metadata-first flows (multi-statement batches, table render before CSV), use
 // [ReadMetadataAndAdvanceToData] then [ExportRowsAtData] or app-owned rendering;

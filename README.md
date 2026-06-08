@@ -10,7 +10,7 @@ Helpers for working with Cloud Spanner’s [`spanner.GenericColumnValue`](https:
 | [`github.com/apstndb/spanvalue/gcvctor`](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor) | Build `spanner.GenericColumnValue` (scalars, `ARRAY`, `STRUCT`, typed nulls). Types are often composed with [`github.com/apstndb/spantype/typector`](https://pkg.go.dev/github.com/apstndb/spantype/typector). |
 | [`github.com/apstndb/spanvalue/protofmt`](https://pkg.go.dev/github.com/apstndb/spanvalue/protofmt) | Opt-in descriptor-aware PROTO and ENUM display plugins for [`FormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig). |
 | [`github.com/apstndb/spanvalue/writer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer) | Stream Spanner rows to CSV, TSV, JSONL, or SQL INSERT ([writer/README.md](writer/README.md)). |
-| [`github.com/apstndb/spanvalue/dbsqlrows`](https://pkg.go.dev/github.com/apstndb/spanvalue/dbsqlrows) | Optional `database/sql` + go-sql-spanner export adapter ([dbsqlrows/README.md](dbsqlrows/README.md)). |
+| [`github.com/apstndb/spanvalue/dbsqlrows`](https://pkg.go.dev/github.com/apstndb/spanvalue/dbsqlrows) | Driver-agnostic `database/sql` export adapter ([dbsqlrows/README.md](dbsqlrows/README.md)); callers supply go-sql-spanner (or another driver). |
 
 ## Identifier quoting helpers
 
