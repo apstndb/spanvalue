@@ -13,8 +13,9 @@
 // Scalar plugins ([FormatSimpleValue], [FormatLiteralValue],
 // [FormatSpannerCLIValue], [FormatJSONSimpleValue]) format GenericColumnValue directly
 // without Decode; remove them with [FormatConfigWithoutScalarPlugins] or from
-// [FormatConfig.FormatComplexPlugins] to use Decode + [FormatNullable].
-// Scalar plugins fall through to that path when [FormatConfig.FormatNullable] is replaced.
+// [FormatConfig.FormatComplexPlugins] to use Decode + [FormatConfig.FormatNullable]
+// (set FormatNullable on the clone; nil returns [ErrFormatNullableRequired]).
+// Scalar plugins fall through to that path when [FormatConfig.FormatNullable] is set.
 // Constructors return a new [FormatConfig]; call [FormatConfig.Clone] before mutating
 // a config you may reuse ([FormatConfig.Clone] copies [FormatConfig.FormatComplexPlugins]).
 // For tuple STRUCT with Spanner CLI scalars, clone [SpannerCLICompatibleFormatConfig]
