@@ -26,13 +26,13 @@ func ExampleNullOf() {
 func ExampleNormalizeArrayElements() {
 	elemType := typector.CodeToSimpleType(sppb.TypeCode_DATE)
 	elems := []spanner.GenericColumnValue{
-		must(gcvctor.DateStringValue("2026-04-01")),
+		gcvctor.MustDateStringValue("2026-04-01"),
 		gcvctor.NullOf(nil),
-		must(gcvctor.DateStringValue("2026-04-03")),
+		gcvctor.MustDateStringValue("2026-04-03"),
 	}
 
-	normalized := must(gcvctor.NormalizeArrayElements(elemType, elems...))
-	array := must(gcvctor.ArrayValueOf(elemType, normalized...))
+	normalized := gcvctor.MustNormalizeArrayElements(elemType, elems...)
+	array := gcvctor.MustArrayValueOf(elemType, normalized...)
 	values := array.Value.GetListValue().Values
 
 	fmt.Println(array.Type.Code.String(), array.Type.ArrayElementType.Code.String(), len(values))
@@ -66,7 +66,7 @@ func ExampleUUIDValue() {
 }
 
 func ExampleIntervalStringValue() {
-	gcv := must(gcvctor.IntervalStringValue("P1Y2M3DT4H5M6S"))
+	gcv := gcvctor.MustIntervalStringValue("P1Y2M3DT4H5M6S")
 
 	fmt.Println(gcv.Type.Code.String(), gcv.Value.GetStringValue())
 	// Output:

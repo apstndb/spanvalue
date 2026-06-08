@@ -54,4 +54,19 @@
 //
 // Formatting these values as strings is provided by the sibling package
 // [github.com/apstndb/spanvalue].
+//
+// # Test fixtures
+//
+// For nested ARRAY and STRUCT trees in tests, prefer [MustArrayValueOf], [MustStructValueOf],
+// and [MustNormalizeArrayElements] over local panic-on-error helpers. They wrap the
+// error-returning constructors and are intended for schema-known fixture data, not production paths.
+//
+// String payloads: [StringBasedValueFromCode] stores the wire string as-is with no validation
+// (no extra imports beyond typector). When the test cares about canonical wire form, use validated
+// helpers such as [DateStringValue] or the corresponding [MustDateStringValue], [MustTimestampStringValue],
+// [MustIntervalStringValue], and [MustJSONValue] for inline nesting. Typed Go inputs ([DateValue] with
+// [cloud.google.com/go/civil.Date], [TimestampValue] with [time.Time], and so on) avoid parse errors
+// when you already hold the native value.
+//
+// See [ExampleStringBasedValueFromCode_validatedDate] and [ExampleNormalizeArrayElements].
 package gcvctor
