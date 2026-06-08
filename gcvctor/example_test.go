@@ -123,6 +123,23 @@ func ExampleNullOf_structContainer() {
 	// false STRUCT
 }
 
+func ExampleStructValueOfFields() {
+	row := gcvctor.MustStructValueOfFields(
+		gcvctor.StructField("Code", gcvctor.StringValue("10")),
+		gcvctor.StructField("DisplayOrder", gcvctor.Int64Value(1)),
+	)
+	unnamed := gcvctor.MustStructValueOfFields(
+		gcvctor.StructField("", gcvctor.StringValue("value")),
+		gcvctor.StructField("", gcvctor.Int64Value(42)),
+	)
+
+	fmt.Println(row.Type.StructType.Fields[0].Name, row.Value.GetListValue().Values[0].GetStringValue())
+	fmt.Println(len(unnamed.Type.StructType.Fields), unnamed.Type.StructType.Fields[0].Name == "")
+	// Output:
+	// Code 10
+	// 2 true
+}
+
 func ExampleInt64FromPtr_fromNullable() {
 	var optional *int64
 	fromPtr := gcvctor.Int64FromPtr(optional)

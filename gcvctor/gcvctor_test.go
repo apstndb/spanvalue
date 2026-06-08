@@ -970,6 +970,129 @@ func TestStructValueOf(t *testing.T) {
 	}
 }
 
+func TestStructValueOfFields(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		desc      string
+		fields    []gcvctor.StructFieldValue
+		want      spanner.GenericColumnValue
+		expectErr bool
+		errIs     error
+		errSubstr string
+	}{
+		{
+			desc: "named fields",
+			fields: []gcvctor.StructFieldValue{
+				gcvctor.StructField("Code", gcvctor.StringValue("10")),
+				gcvctor.StructField("DisplayOrder", gcvctor.Int64Value(1)),
+			},
+			want: spanner.GenericColumnValue{
+				Type: must(typector.NameCodeSlicesToStructType(
+					[]string{"Code", "DisplayOrder"},
+					[]sppb.TypeCode{sppb.TypeCode_STRING, sppb.TypeCode_INT64},
+				)),
+				Value: structpb.NewListValue(&structpb.ListValue{
+					Values: []*structpb.Value{
+						structpb.NewStringValue("10"),
+						structpb.NewStringValue("1"),
+					},
+				}),
+			},
+		},
+		{
+			desc: "unnamed fields",
+			fields: []gcvctor.StructFieldValue{
+				gcvctor.StructField("", gcvctor.StringValue("value")),
+				gcvctor.StructField("", gcvctor.Int64Value(42)),
+			},
+			want: spanner.GenericColumnValue{
+				Type: must(typector.NameCodeSlicesToStructType(
+					[]string{"", ""},
+					[]sppb.TypeCode{sppb.TypeCode_STRING, sppb.TypeCode_INT64},
+				)),
+				Value: structpb.NewListValue(&structpb.ListValue{
+					Values: []*structpb.Value{
+						structpb.NewStringValue("value"),
+						structpb.NewStringValue("42"),
+					},
+				}),
+			},
+		},
+		{
+			desc: "nil field type named",
+			fields: []gcvctor.StructFieldValue{
+				gcvctor.StructField("broken", spanner.GenericColumnValue{}),
+			},
+			expectErr: true,
+			errIs:     gcvctor.ErrNilFieldType,
+			errSubstr: `field 0 ("broken")`,
+		},
+		{
+			desc: "nil field type unnamed",
+			fields: []gcvctor.StructFieldValue{
+				gcvctor.StructField("", spanner.GenericColumnValue{}),
+			},
+			expectErr: true,
+			errIs:     gcvctor.ErrNilFieldType,
+			errSubstr: "field 0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := gcvctor.StructValueOfFields(tt.fields...)
+			if tt.expectErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				if tt.errIs != nil && !errors.Is(err, tt.errIs) {
+					t.Fatalf("errors.Is(err, %v) = false; err = %v", tt.errIs, err)
+				}
+				if tt.errSubstr != "" && !strings.Contains(err.Error(), tt.errSubstr) {
+					t.Fatalf("error %q does not contain %q", err, tt.errSubstr)
+				}
+				var zero spanner.GenericColumnValue
+				if diff := cmp.Diff(zero, got, protocmp.Transform()); diff != "" {
+					t.Errorf("expected zero value on error (-want +got):\n%s", diff)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(tt.want, got, protocmp.Transform()); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestStructValueOfFields_matchesStructValueOf(t *testing.T) {
+	t.Parallel()
+
+	names := []string{"id", "name"}
+	gcvs := []spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.StringValue("foo")}
+	fields := []gcvctor.StructFieldValue{
+		gcvctor.StructField("id", gcvctor.Int64Value(1)),
+		gcvctor.StructField("name", gcvctor.StringValue("foo")),
+	}
+
+	want, err := gcvctor.StructValueOf(names, gcvs)
+	if err != nil {
+		t.Fatalf("StructValueOf: %v", err)
+	}
+	got, err := gcvctor.StructValueOfFields(fields...)
+	if err != nil {
+		t.Fatalf("StructValueOfFields: %v", err)
+	}
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Fatalf("mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestStructValueOfNilFieldTypeReturnsStructFieldError(t *testing.T) {
 	t.Parallel()
 
