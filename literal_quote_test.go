@@ -311,6 +311,13 @@ func TestLiteralQuoteNaNInf(t *testing.T) {
 	if gotLegacySingle != "CAST('nan' AS FLOAT64)" {
 		t.Fatalf("legacy preferred single NaN = %q, want CAST('nan' AS FLOAT64)", gotLegacySingle)
 	}
+	gotLegacySingleF32, err := legacySingle.FormatToplevelColumn(gcvctor.Float32Value(float32(math.NaN())))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotLegacySingleF32 != "CAST('nan' AS FLOAT32)" {
+		t.Fatalf("legacy preferred single float32 NaN = %q, want CAST('nan' AS FLOAT32)", gotLegacySingleF32)
+	}
 
 	minEscapeDouble := LiteralFormatConfigWithQuote(LiteralQuoteConfig{
 		Strategy:       QuoteMinEscape,
