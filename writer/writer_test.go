@@ -1291,18 +1291,26 @@ func TestSQLInsertWriterWriteValuesTableChangeAfterCache(t *testing.T) {
 	}
 }
 
-func TestSQLInsertWriterWriteValuesEmptyTableName(t *testing.T) {
+func TestNewSQLInsertWriterEmptyTableName(t *testing.T) {
 	t.Parallel()
 
-	var out bytes.Buffer
-	w := mustNewSQLInsertWriter(t, &out, "")
-
-	err := w.WriteValues(
-		[]string{"id"},
-		[]spanner.GenericColumnValue{gcvctor.Int64Value(42)},
-	)
+	_, err := NewSQLInsertWriter(&bytes.Buffer{}, "")
 	if !errors.Is(err, ErrEmptyTableName) {
-		t.Fatalf("WriteValues() error = %v, want ErrEmptyTableName", err)
+		t.Fatalf("NewSQLInsertWriter() error = %v, want ErrEmptyTableName", err)
+	}
+
+	_, err = NewSQLInsertWriter(&bytes.Buffer{}, "", WithMetadata(metadataWithColumnNames("id")))
+	if !errors.Is(err, ErrEmptyTableName) {
+		t.Fatalf("NewSQLInsertWriter() with metadata error = %v, want ErrEmptyTableName", err)
+	}
+}
+
+func TestNewSQLInsertWriterWhitespaceTableName(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewSQLInsertWriter(&bytes.Buffer{}, "   ")
+	if !errors.Is(err, ErrEmptyTableName) {
+		t.Fatalf("NewSQLInsertWriter() error = %v, want ErrEmptyTableName", err)
 	}
 }
 
@@ -1330,18 +1338,6 @@ func TestSQLInsertWriterWriteGCVsWithoutMetadata(t *testing.T) {
 	err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(42)})
 	if !errors.Is(err, ErrMissingColumnNames) {
 		t.Fatalf("WriteGCVs() error = %v, want ErrMissingColumnNames", err)
-	}
-}
-
-func TestSQLInsertWriterWriteGCVsEmptyTableName(t *testing.T) {
-	t.Parallel()
-
-	var out bytes.Buffer
-	w := mustNewSQLInsertWriter(t, &out, "", WithMetadata(metadataWithColumnNames("id")))
-
-	err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(42)})
-	if !errors.Is(err, ErrEmptyTableName) {
-		t.Fatalf("WriteGCVs() error = %v, want ErrEmptyTableName", err)
 	}
 }
 
