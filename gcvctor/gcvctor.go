@@ -394,6 +394,31 @@ func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spa
 	}, nil
 }
 
+// StructFieldValue pairs one STRUCT field name with its GCV.
+// An empty Name is valid for unnamed STRUCT fields; see [StructValueOfFields].
+type StructFieldValue struct {
+	Name  string
+	Value spanner.GenericColumnValue
+}
+
+// StructField returns a [StructFieldValue] with the given name and value.
+// Empty name is valid for unnamed STRUCT fields.
+func StructField(name string, value spanner.GenericColumnValue) StructFieldValue {
+	return StructFieldValue{Name: name, Value: value}
+}
+
+// StructValueOfFields is like [StructValueOf] but takes paired fields.
+// Empty field names are valid for unnamed STRUCT fields.
+func StructValueOfFields(fields ...StructFieldValue) (spanner.GenericColumnValue, error) {
+	names := make([]string, len(fields))
+	gcvs := make([]spanner.GenericColumnValue, len(fields))
+	for i, f := range fields {
+		names[i] = f.Name
+		gcvs[i] = f.Value
+	}
+	return StructValueOf(names, gcvs)
+}
+
 // StructValueOf constructs STRUCT GenericColumnValue.
 // A nil field Type returns [ErrNilFieldType] wrapped in [StructFieldError].
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
