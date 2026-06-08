@@ -134,17 +134,17 @@ func TestDecodeColumnLiteral(t *testing.T) {
 		{
 			desc:  "NaN",
 			value: math.NaN(),
-			want:  "CAST('nan' AS FLOAT64)",
+			want:  `CAST("nan" AS FLOAT64)`,
 		},
 		{
 			desc:  "Inf",
 			value: math.Inf(+1),
-			want:  "CAST('inf' AS FLOAT64)",
+			want:  `CAST("inf" AS FLOAT64)`,
 		},
 		{
 			desc:  "-Inf",
 			value: math.Inf(-1),
-			want:  "CAST('-inf' AS FLOAT64)",
+			want:  `CAST("-inf" AS FLOAT64)`,
 		},
 		{
 			desc:  "int64",

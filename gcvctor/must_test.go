@@ -25,6 +25,66 @@ func expectPanic(t *testing.T, fn func()) {
 	fn()
 }
 
+func TestMustStructValueOfFields_matchesStructValueOfFields(t *testing.T) {
+	t.Parallel()
+
+	fields := []gcvctor.StructFieldValue{
+		gcvctor.StructField("id", gcvctor.Int64Value(1)),
+		gcvctor.StructField("name", gcvctor.StringValue("foo")),
+	}
+	want, err := gcvctor.StructValueOfFields(fields...)
+	if err != nil {
+		t.Fatalf("StructValueOfFields: %v", err)
+	}
+	got := gcvctor.MustStructValueOfFields(fields...)
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Fatalf("MustStructValueOfFields mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestMustStructValueOfFields_panicsOnNilFieldType(t *testing.T) {
+	t.Parallel()
+
+	expectPanic(t, func() {
+		gcvctor.MustStructValueOfFields(gcvctor.StructField("broken", spanner.GenericColumnValue{}))
+	})
+}
+
+func TestMustStructValueOfFields_nestedStruct(t *testing.T) {
+	t.Parallel()
+
+	structType, err := typector.NameCodeSlicesToStructType(
+		[]string{"Code", "DisplayOrder"},
+		[]sppb.TypeCode{sppb.TypeCode_STRING, sppb.TypeCode_INT64},
+	)
+	if err != nil {
+		t.Fatalf("NameCodeSlicesToStructType: %v", err)
+	}
+
+	arrayParam := gcvctor.MustArrayValueOf(structType,
+		gcvctor.MustStructValueOfFields(
+			gcvctor.StructField("Code", gcvctor.StringValue("10")),
+			gcvctor.StructField("DisplayOrder", gcvctor.Int64Value(1)),
+		),
+		gcvctor.NullOf(structType),
+	)
+
+	if arrayParam.Type.Code != sppb.TypeCode_ARRAY {
+		t.Fatalf("Type.Code = %v, want ARRAY", arrayParam.Type.Code)
+	}
+	values := arrayParam.Value.GetListValue().Values
+	if len(values) != 2 {
+		t.Fatalf("len(values) = %d, want 2", len(values))
+	}
+	if values[0].GetListValue() == nil {
+		t.Fatal("first element: expected non-null struct list value")
+	}
+	nullElem := spanner.GenericColumnValue{Type: structType, Value: values[1]}
+	if !spanvalue.IsNull(nullElem) {
+		t.Fatal("second element: expected SQL NULL")
+	}
+}
+
 func TestMustStructValueOf_panicsOnMismatchedCounts(t *testing.T) {
 	t.Parallel()
 

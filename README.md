@@ -53,6 +53,20 @@ fc.FormatStruct.FormatStructParen = spanvalue.FormatTupleStruct
 See [ExampleSpannerCLICompatibleFormatConfig_tupleStruct](https://pkg.go.dev/github.com/apstndb/spanvalue#example-SpannerCLICompatibleFormatConfig-TupleStruct).
 Keep product-specific combinations in your application (not as new spanvalue presets).
 
+## Hand-built FormatConfig
+
+Preset constructors ([`LiteralFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#LiteralFormatConfig), [`SimpleFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#SimpleFormatConfig), and others) return configs that pass [`FormatConfig.Validate`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig.Validate). After hand-assembling or mutating a config—[`Clone()`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig.Clone) then edit [`FormatComplexPlugins`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig.FormatComplexPlugins), or strip scalar plugins with [`FormatConfigWithoutScalarPlugins`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfigWithoutScalarPlugins)—call `Validate` before the first format or export so nil callbacks and an empty `NullString` fail at construction time rather than on the first row.
+
+Custom scalar plugins in `FormatComplexPlugins` are not detected by `Validate`; keep `FormatNullable` set when using them. Writers accept any `*FormatConfig` via [`writer.WithFormatter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithFormatter) but do **not** call `Validate` today—validate hand-built formatters before passing them to writers.
+
+```go
+fc := spanvalue.SimpleFormatConfig().Clone()
+fc.FormatComplexPlugins = append(fc.FormatComplexPlugins, myPlugin)
+if err := fc.Validate(); err != nil {
+	return err
+}
+```
+
 ## Adoption snippets
 
 Use the small helper APIs directly when replacing ad hoc downstream formatting
@@ -76,6 +90,19 @@ if err := w.WriteValues(columnNames, gcvs); err != nil {
     return err
 }
 return w.Flush()
+```
+
+Nested ARRAY/STRUCT test fixtures: [`gcvctor.MustStructValueOf`](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor#MustStructValueOf) and [`gcvctor.MustArrayValueOf`](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor#MustArrayValueOf) wrap the error-returning constructors and panic on construction errors—use only in tests with schema-known inputs (see [`gcvctor`](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor) package docs).
+
+```go
+elemType := typector.CodeToSimpleType(sppb.TypeCode_STRING)
+row := gcvctor.MustStructValueOf(
+	[]string{"id", "tags"},
+	[]spanner.GenericColumnValue{
+		gcvctor.Int64Value(1),
+		gcvctor.MustArrayValueOf(elemType, gcvctor.StringValue("a"), gcvctor.StringValue("b")),
+	},
+)
 ```
 
 ## Streaming row exports
@@ -128,6 +155,8 @@ is appropriate. For display headers outside the writer, use
 on the **same** field list with the **same**
 [`spanvalue.UnnamedFieldNamer`](https://pkg.go.dev/github.com/apstndb/spanvalue#UnnamedFieldNamer)
 as [`writer.WithUnnamedFieldNamer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithUnnamedFieldNamer).
+
+**Duplicate aliases:** explicit duplicate field names from Spanner (for example `SELECT 1 AS a, 2 AS a`) are preserved in `ColumnNames` output (`["a", "a"]`). Only `UnnamedFieldNamer` collisions return errors. CSV/TSV headers and JSONL field names follow the same resolved names; see [writer/README.md](writer/README.md).
 
 **CSV / JSONL:** register schema and formatting at construction, stream rows, then
 `Flush` (CSV may emit a header on zero-row `SELECT`; JSONL `Flush` is a no-op).

@@ -259,11 +259,11 @@ func TestLiteralQuoteNaNInf(t *testing.T) {
 		gcv  spanner.GenericColumnValue
 		want string
 	}{
-		{"float64 nan legacy", gcvctor.Float64Value(math.NaN()), "CAST('nan' AS FLOAT64)"},
-		{"float64 inf legacy", gcvctor.Float64Value(math.Inf(1)), "CAST('inf' AS FLOAT64)"},
-		{"float64 neg inf legacy", gcvctor.Float64Value(math.Inf(-1)), "CAST('-inf' AS FLOAT64)"},
-		{"float32 nan legacy", gcvctor.Float32Value(float32(math.NaN())), "CAST('nan' AS FLOAT32)"},
-		{"float32 inf legacy", gcvctor.Float32Value(float32(math.Inf(1))), "CAST('inf' AS FLOAT32)"},
+		{"float64 nan legacy", gcvctor.Float64Value(math.NaN()), `CAST("nan" AS FLOAT64)`},
+		{"float64 inf legacy", gcvctor.Float64Value(math.Inf(1)), `CAST("inf" AS FLOAT64)`},
+		{"float64 neg inf legacy", gcvctor.Float64Value(math.Inf(-1)), `CAST("-inf" AS FLOAT64)`},
+		{"float32 nan legacy", gcvctor.Float32Value(float32(math.NaN())), `CAST("nan" AS FLOAT32)`},
+		{"float32 inf legacy", gcvctor.Float32Value(float32(math.Inf(1))), `CAST("inf" AS FLOAT32)`},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -298,6 +298,25 @@ func TestLiteralQuoteNaNInf(t *testing.T) {
 				t.Fatalf("double always got %q, want %q", got, tt.want)
 			}
 		})
+	}
+
+	legacySingle := LiteralFormatConfigWithQuote(LiteralQuoteConfig{
+		Strategy:       QuoteLegacy,
+		PreferredQuote: PreferredSingleQuote,
+	})
+	gotLegacySingle, err := legacySingle.FormatToplevelColumn(gcvctor.Float64Value(math.NaN()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotLegacySingle != "CAST('nan' AS FLOAT64)" {
+		t.Fatalf("legacy preferred single NaN = %q, want CAST('nan' AS FLOAT64)", gotLegacySingle)
+	}
+	gotLegacySingleF32, err := legacySingle.FormatToplevelColumn(gcvctor.Float32Value(float32(math.NaN())))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotLegacySingleF32 != "CAST('nan' AS FLOAT32)" {
+		t.Fatalf("legacy preferred single float32 NaN = %q, want CAST('nan' AS FLOAT32)", gotLegacySingleF32)
 	}
 
 	minEscapeDouble := LiteralFormatConfigWithQuote(LiteralQuoteConfig{

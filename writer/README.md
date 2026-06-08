@@ -10,7 +10,7 @@ Stream Cloud Spanner query results to **CSV**, **quoted TSV**, **JSONL**, or **S
 
 **Write paths:** `WriteRow` (`*spanner.Row`), `WriteStructValues` (`[]*structpb.Value` with registered field types), `WriteGCVs` (pre-built `GenericColumnValue` slices), or per-call `WriteValues`. Use [`Writer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#Writer) for row-only adapters; use [`FlushWriter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#FlushWriter) when the adapter owns finalization.
 
-**Formatter:** set [`WithFormatter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithFormatter) at construction; inspect the effective preset with [`FormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#DelimitedWriter.FormatConfig) on delimited, JSONL, or SQL INSERT writers (fields are not exported in v0.5.0+).
+**Formatter:** set [`WithFormatter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithFormatter) at construction; inspect the effective preset with [`FormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#DelimitedWriter.FormatConfig) on delimited, JSONL, or SQL INSERT writers (fields are not exported in v0.5.0+). Writers do not call [`spanvalue.FormatConfig.Validate`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig.Validate) on the supplied config—validate hand-built formatters before construction (see root README).
 
 ## RowIterator
 
@@ -141,6 +141,7 @@ Match out-of-band headers with [`spanvalue.ColumnNames`](https://pkg.go.dev/gith
 
 ## Formats and edge cases
 
+- **Duplicate column headers:** CSV/TSV header rows follow resolved [`spanvalue.ColumnNames`](https://pkg.go.dev/github.com/apstndb/spanvalue#ColumnNames) output, **including duplicate explicit aliases** (for example `SELECT 1 AS a, 2 AS a` → header `a,a`). RFC 4180 permits repeated header names; consumers that require unique headers must disambiguate in the application. JSONL object keys from duplicate aliases are a separate concern—see [`spanvalue.NewJSONObjectStructFormatter`](https://pkg.go.dev/github.com/apstndb/spanvalue#NewJSONObjectStructFormatter) and root JSON row docs for duplicate-key behavior.
 - **Quoted TSV:** `NewDelimitedWriter(out, '\t')` uses CSV escaping, not raw tab joins. Legacy raw TAB: implement `Writer` or `RowIteratorWriter` and join formatted columns with `'\t'`.
 - **SQL INSERT:** GoogleSQL quoting by default; `WithSQLDialect` for PostgreSQL identifiers. `NewSQLInsertWriter` rejects an empty table name at construction (whitespace-only per strings.TrimSpace) and qualified names with empty segments on the first write. After any write error from `SQLInsertWriter`, discard the writer.
 - **Delimited vs JSONL vs SQL:** spanvalue formats each cell; encodings differ afterward. One-shot helpers: `FormatDelimitedRow`, `FormatJSONLRow`, `RowData`.

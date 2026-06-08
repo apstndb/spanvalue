@@ -15,7 +15,9 @@ import (
 // is used to generate names for unnamed fields. If a non-nil UnnamedFieldNamer
 // returns an empty string or repeatedly returns colliding names such that a
 // unique column name cannot be chosen, ColumnNames returns a non-nil error
-// describing the contract violation.
+// describing the contract violation. Explicit duplicate field names from the
+// query schema (for example SELECT 1 AS a, 2 AS a) are preserved as-is; only
+// namer-resolution collisions are errors.
 func ColumnNames(fields []*sppb.StructType_Field, namer UnnamedFieldNamer) ([]string, error) {
 	names := make([]string, len(fields))
 	for i, field := range fields {

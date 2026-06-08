@@ -345,6 +345,8 @@ type formatterOption struct {
 // [DelimitedWriter] uses [spanvalue.SimpleFormatConfig],
 // [JSONLWriter] uses [spanvalue.JSONFormatConfig],
 // and [SQLInsertWriter] uses [spanvalue.LiteralFormatConfig].
+// Writers do not call [*spanvalue.FormatConfig.Validate] on the supplied config;
+// validate hand-built formatters before construction when early failure is desired.
 func WithFormatter(formatter *spanvalue.FormatConfig) Option {
 	return formatterOption{formatter: formatter}
 }
