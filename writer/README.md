@@ -90,7 +90,10 @@ type exportSink struct {
 	metrics   appMetrics
 }
 
-var sink exportSink
+sink := exportSink{
+	formatter: appFormatterImpl{},
+	metrics:   appMetricsImpl{},
+}
 hooks := writer.NewRowIteratorHooks().
 	WithPrepareMetadata(func(md *spannerpb.ResultSetMetadata) error {
 		return sink.formatter.Prepare(md)
