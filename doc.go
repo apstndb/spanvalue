@@ -11,8 +11,8 @@
 // and [JSONFormatConfig] to pick a preset. [WithLiteralQuote] sets [FormatConfig].Literal.Quote
 // on the literal preset (string/bytes delimiter policy for SQL-style literals).
 // After hand-assembling a [FormatConfig], call [*FormatConfig.Validate] at construction
-// time (or immediately after [FormatConfig.Clone] and mutation) to catch nil callbacks
-// or an empty [FormatConfig.NullString] before the first [FormatConfig.FormatRow] call.
+// time (or immediately after [*FormatConfig.Clone] and mutation) to catch nil callbacks
+// or an empty [FormatConfig.NullString] before the first [*FormatConfig.FormatRow] call.
 // [FormatConfigWithoutScalarPlugins] and edits to [FormatConfig.FormatComplexPlugins]
 // can remove preset scalar plugins; re-validate after such changes. Custom scalar
 // plugins in [FormatConfig.FormatComplexPlugins] are not detected by Validate—keep
@@ -25,8 +25,8 @@
 // [FormatConfig.FormatComplexPlugins] to use Decode + [FormatConfig.FormatNullable]
 // (set FormatNullable on the clone; nil returns [ErrFormatNullableRequired]).
 // Scalar plugins fall through to that path when [FormatConfig.FormatNullable] is set.
-// Constructors return a new [FormatConfig]; call [FormatConfig.Clone] before mutating
-// a config you may reuse ([FormatConfig.Clone] copies [FormatConfig.FormatComplexPlugins]).
+// Constructors return a new [FormatConfig]; call [*FormatConfig.Clone] before mutating
+// a config you may reuse ([*FormatConfig.Clone] copies [FormatConfig.FormatComplexPlugins]).
 // For tuple STRUCT with Spanner CLI scalars, clone [SpannerCLICompatibleFormatConfig]
 // and set [FormatTupleStruct] (see README).
 // [FormatConfig.FormatColumn] runs [FormatComplexFunc] plugins first, then built-in

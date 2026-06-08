@@ -36,7 +36,7 @@
 //
 // [DelimitedGCVExportOptions] and [JSONLGCVExportOptions] group metadata, formatter,
 // and unnamed-field namer options for GCV slice export. [WithFormatter] does not call
-// [spanvalue.FormatConfig.Validate]; validate hand-built formatters before construction.
+// [*spanvalue.FormatConfig.Validate]; validate hand-built formatters before construction.
 //
 // # Quoted delimited text vs raw tab-separated
 //
