@@ -25,7 +25,9 @@ func FormatColumnLiteral(value spanner.GenericColumnValue) (string, error) {
 }
 
 // LiteralFormatConfig returns a new FormatConfig that produces parseable SQL
-// literal expressions with type annotations.
+// literal expressions with type annotations. ARRAY values use
+// [FormatOptionallyTypedArray]: scalar and empty top-level arrays omit the
+// ARRAY<...> prefix; arrays of STRUCT or nested ARRAY may include it when typed.
 func LiteralFormatConfig() *FormatConfig {
 	return &FormatConfig{
 		NullString:     nullStringUpperCase,

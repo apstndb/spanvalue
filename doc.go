@@ -10,8 +10,15 @@
 // [LiteralFormatConfigWithOptions], [SimpleFormatConfig], [SpannerCLICompatibleFormatConfig],
 // and [JSONFormatConfig] to pick a preset. [WithLiteralQuote] sets [FormatConfig].Literal.Quote
 // on the literal preset (string/bytes delimiter policy for SQL-style literals).
-// After hand-assembling a [FormatConfig], call [*FormatConfig.Validate] to catch nil callbacks
-// or an empty [FormatConfig.NullString] before formatting rows.
+// After hand-assembling a [FormatConfig], call [*FormatConfig.Validate] at construction
+// time (or immediately after [FormatConfig.Clone] and mutation) to catch nil callbacks
+// or an empty [FormatConfig.NullString] before the first [FormatConfig.FormatRow] call.
+// [FormatConfigWithoutScalarPlugins] and edits to [FormatConfig.FormatComplexPlugins]
+// can remove preset scalar plugins; re-validate after such changes. Custom scalar
+// plugins in [FormatConfig.FormatComplexPlugins] are not detected by Validate—keep
+// [FormatConfig.FormatNullable] non-nil when using them. Package writer does not call
+// Validate on [writer.WithFormatter] configs; validate hand-built formatters before
+// passing them to writers.
 // Scalar plugins ([FormatSimpleValue], [FormatLiteralValue],
 // [FormatSpannerCLIValue], [FormatJSONSimpleValue]) format GenericColumnValue directly
 // without Decode; remove them with [FormatConfigWithoutScalarPlugins] or from

@@ -52,6 +52,11 @@ func FormatUntypedArray(_ *sppb.Type, _ bool, elemStrings []string) (string, err
 	return "[" + strings.Join(elemStrings, ", ") + "]", nil
 }
 
+// FormatOptionallyTypedArray formats ARRAY values for SQL literals. It prefixes the
+// bracket list with an ARRAY<...> type annotation only when toplevel is true and the
+// array element type is complex (STRUCT or nested ARRAY). Scalar element arrays at
+// top level are untyped ([1, 2], not ARRAY<INT64>[1, 2]). Empty arrays format as
+// [] regardless of element type. [LiteralFormatConfig] wires this as [FormatConfig.FormatArray].
 func FormatOptionallyTypedArray(typ *sppb.Type, toplevel bool, elemStrings []string) (string, error) {
 	return fmt.Sprintf("%v[%v]",
 		lo.Ternary(toplevel && isComplexType(typ.ArrayElementType.GetCode()), spantype.FormatTypeVerbose(typ), ""),
