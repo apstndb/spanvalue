@@ -1,6 +1,7 @@
 package spanvalue
 
 import (
+	"errors"
 	"math"
 	"math/big"
 	"reflect"
@@ -17,6 +18,12 @@ import (
 	"github.com/samber/lo"
 	"google.golang.org/protobuf/types/known/structpb"
 )
+
+func formatConfigDecodePath(fc *FormatConfig, nv FormatNullableFunc) *FormatConfig {
+	stripped := FormatConfigWithoutScalarPlugins(fc)
+	stripped.FormatNullable = nv
+	return stripped
+}
 
 func formatConfigNullableOnly(fc *FormatConfig) *FormatConfig {
 	return FormatConfigWithoutScalarPlugins(fc)
@@ -89,6 +96,43 @@ func TestFormatGCVScalarPluginsMatchNullablePath(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestFormatConfig_nilFormatNullableFailFast(t *testing.T) {
+	t.Parallel()
+
+	fc := formatConfigDecodePath(SimpleFormatConfig(), nil)
+	_, err := fc.FormatToplevelColumn(gcvctor.BoolValue(true))
+	if !errors.Is(err, ErrFormatNullableRequired) {
+		t.Fatalf("got err %v want %v", err, ErrFormatNullableRequired)
+	}
+}
+
+func TestFormatConfig_nullScalarSkipsFormatNullable(t *testing.T) {
+	t.Parallel()
+
+	fc := formatConfigDecodePath(SimpleFormatConfig(), nil)
+	got, err := fc.FormatToplevelColumn(gcvctor.NullOf(typector.CodeToSimpleType(sppb.TypeCode_BOOL)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != fc.GetNullString() {
+		t.Fatalf("got %q want %q", got, fc.GetNullString())
+	}
+}
+
+func TestFormatConfig_nilFormatNullableKeepsScalarPlugins(t *testing.T) {
+	t.Parallel()
+
+	fc := SimpleFormatConfig()
+	fc.FormatNullable = nil
+	got, err := fc.FormatToplevelColumn(gcvctor.BoolValue(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "true" {
+		t.Fatalf("got %q want true", got)
 	}
 }
 

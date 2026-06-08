@@ -21,6 +21,9 @@ var (
 	ErrMismatchedFields           = errors.New("mismatched struct value/field count")
 	ErrUnexpectedComplexValueKind = errors.New("unexpected complex value kind")
 	ErrEmptyTypeFQN               = errors.New("empty type FQN")
+	// ErrFormatNullableRequired is returned from the scalar slow path when
+	// [FormatConfig.FormatNullable] is nil (no Decode-based formatting).
+	ErrFormatNullableRequired = errors.New("format nullable required")
 )
 
 const (
@@ -111,6 +114,9 @@ func (fc *FormatConfig) formatSimpleColumn(value spanner.GenericColumnValue) (st
 	if IsNull(value) {
 		return fc.GetNullString(), nil
 	}
+	if fc.FormatNullable == nil {
+		return "", ErrFormatNullableRequired
+	}
 	nv, err := simpleGCVToNullable(value)
 	if err != nil {
 		return "", err
@@ -181,8 +187,8 @@ type Formatter interface {
 // FormatConfig controls how Spanner values are formatted. Preset constructors
 // such as [LiteralFormatConfig] return a fresh instance with non-nil callbacks
 // for the value kinds they support. [FormatConfig.FormatColumn] calls FormatArray,
-// FormatStruct, and FormatNullable directly; a nil callback panics when that
-// branch runs unless a [FormatComplexFunc] plugin handles the value first.
+// FormatStruct, and FormatNullable directly; a nil callback returns an error when
+// that branch runs unless a [FormatComplexFunc] plugin handles the value first.
 //
 // Nil field behavior:
 //   - FormatArray: required for non-NULL ARRAY values. NULL ARRAY values use
@@ -194,9 +200,11 @@ type Formatter interface {
 //     append a trailing scalar plugin ([FormatSimpleValue], [FormatLiteralValue],
 //     [FormatSpannerCLIValue], or [FormatJSONSimpleValue]) that formats scalars directly
 //     from GenericColumnValue without Decode; use [FormatConfigWithoutScalarPlugins] or remove
-//     them on a clone to use the legacy path. Plugins fall through when [FormatNullable] is replaced.
-//   - FormatNullable: formats non-NULL scalars after Decode when no scalar plugin handles
-//     the value. NULL scalars use [FormatConfig.GetNullString] before FormatNullable runs.
+//     them on a clone to use the legacy path. Plugins fall through when [FormatNullable] is set.
+//   - FormatNullable: optional extension hook. When set, formats non-NULL scalars after Decode
+//     when no scalar plugin handles the value. When nil, the scalar slow path returns
+//     [ErrFormatNullableRequired] without Decode. NULL scalars use [FormatConfig.GetNullString]
+//     before the slow path runs (FormatNullable is not called for NULL).
 //
 // Use [FormatConfig.Clone] to customize a preset without mutating shared instances.
 type FormatConfig struct {

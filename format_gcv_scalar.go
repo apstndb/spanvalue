@@ -49,7 +49,8 @@ func nullableFuncsEqual(a, b FormatNullableFunc) bool {
 }
 
 // FormatConfigWithoutScalarPlugins returns a clone of fc with preset scalar fast-path plugins
-// removed so scalars use Decode and [FormatNullable].
+// removed so scalars use Decode and [FormatConfig.FormatNullable]. Set FormatNullable on the
+// clone before formatting non-NULL scalars; nil FormatNullable returns [ErrFormatNullableRequired].
 func FormatConfigWithoutScalarPlugins(fc *FormatConfig) *FormatConfig {
 	if fc == nil {
 		return nil
@@ -70,6 +71,9 @@ func scalarTypeCode(value spanner.GenericColumnValue) (sppb.TypeCode, bool) {
 func scalarFastPathActive(formatter Formatter, presetNullable FormatNullableFunc) bool {
 	fc, ok := formatter.(*FormatConfig)
 	if !ok {
+		return true
+	}
+	if fc.FormatNullable == nil {
 		return true
 	}
 	return nullableFuncsEqual(fc.FormatNullable, presetNullable)
