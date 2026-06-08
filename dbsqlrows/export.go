@@ -1,13 +1,11 @@
 package dbsqlrows
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	spannerdriver "github.com/googleapis/go-sql-spanner"
 
 	"github.com/apstndb/spanvalue"
 )
@@ -19,20 +17,10 @@ var (
 	ErrNilWriter = errors.New("nil GCV stream writer")
 	// ErrNilMetadata reports that ExportRowsAtData was called with nil metadata.
 	ErrNilMetadata = errors.New("nil result set metadata")
-	// ErrMissingMetadataRow reports that ReturnResultSetMetadata was enabled but
-	// the iterator produced no metadata pseudo-row.
+	// ErrMissingMetadataRow reports that the iterator produced no metadata
+	// pseudo-row when ExportRows expected one.
 	ErrMissingMetadataRow = errors.New("missing result set metadata row")
 )
-
-// DefaultExecOptions is the recommended go-sql-spanner configuration for
-// [ExportRows] and [QueryExport]: proto-decoded rows plus a leading metadata
-// pseudo result set ([spannerdriver.ExecOptions.ReturnResultSetMetadata]).
-// ReturnResultSetStats is false so callers can read stats after export (for
-// example spannersh execution summaries).
-var DefaultExecOptions = spannerdriver.ExecOptions{
-	DecodeOption:            spannerdriver.DecodeOptionProto,
-	ReturnResultSetMetadata: true,
-}
 
 // GCVStreamWriter is the subset of [github.com/apstndb/spanvalue/writer] types
 // that dbsqlrows drives. Built-in writers also implement PrepareRowType or
@@ -43,13 +31,8 @@ type GCVStreamWriter interface {
 	Flush() error
 }
 
-// ExportConfig configures a go-sql-spanner export run.
+// ExportConfig configures an export run.
 type ExportConfig struct {
-	// ExecOptions is passed to [database/sql.DB.QueryContext] by [QueryExport].
-	// When zero, [DefaultExecOptions] is used. [ExportRows] also uses
-	// ExecOptions.ReturnResultSetStats to decide whether to consume the trailing
-	// stats pseudo-row; leave false when the caller reads stats after export.
-	ExecOptions spannerdriver.ExecOptions
 	// Formatter and Namer are reserved for constructor helpers that build writers
 	// after metadata is known (see README). ExportRows does not read them when the
 	// caller supplies a pre-built writer.
@@ -57,9 +40,7 @@ type ExportConfig struct {
 	Namer     spanvalue.UnnamedFieldNamer
 	// ReadResultSetStats, when true, advances past data rows to read the stats
 	// pseudo-row into [ExportResult.Stats]. For [ExportRowsAtData] this field is
-	// consulted directly (default false). For [ExportRows] it overrides
-	// ExecOptions.ReturnResultSetStats when set together with a non-zero
-	// ExecOptions via [ExportConfig.WithReadResultSetStats].
+	// consulted directly (default false). For [ExportRows] the same field applies.
 	ReadResultSetStats bool
 }
 
@@ -69,8 +50,8 @@ func (cfg ExportConfig) WithReadResultSetStats(read bool) ExportConfig {
 	return cfg
 }
 
-// ExportResult holds metadata and stats surfaced from go-sql-spanner pseudo
-// result sets, analogous to [writer.RowIteratorResult] for native iterators.
+// ExportResult holds metadata and stats surfaced from driver pseudo result sets,
+// analogous to [writer.RowIteratorResult] for native iterators.
 // On error paths after metadata is known, Metadata and RowsRead reflect progress
 // at the abort point (same partial-result contract as writer row-iterator helpers).
 type ExportResult struct {
@@ -79,17 +60,18 @@ type ExportResult struct {
 	RowsRead int
 }
 
-// ExportRows streams an open *sql.Rows (proto-decoded, metadata-first result
-// sets when [DefaultExecOptions] apply) into w. The caller retains ownership of
-// rows and must Close it and check [sql.Rows.Err] when appropriate.
+// ExportRows streams an open *sql.Rows positioned at the metadata pseudo-row
+// into w. The caller must open rows with a driver that returns proto-decoded
+// GCV columns and a leading metadata pseudo result set (see README). The caller
+// retains ownership of rows and must Close it and check [sql.Rows.Err] when
+// appropriate.
 //
 // On success ExportRows calls [GCVStreamWriter.Flush] and returns its error
-// explicitly (do not defer Flush at the call site). Metadata is read from the
-// first pseudo result set when ExecOptions request it; data rows are scanned into
-// []spanner.GenericColumnValue per [spannerdriver.DecodeOptionProto].
+// explicitly (do not defer Flush at the call site). Data rows are scanned into
+// []spanner.GenericColumnValue.
 //
-// When ExecOptions.ReturnResultSetStats is false (the default), rows remain on the
-// data result set after export so the caller can advance to stats separately.
+// When ReadResultSetStats is false (the default), rows remain on the data
+// result set after export so the caller can advance to stats separately.
 func ExportRows(rows *sql.Rows, w GCVStreamWriter, cfg ExportConfig) (*ExportResult, error) {
 	if rows == nil {
 		return nil, ErrNilRows
@@ -97,10 +79,9 @@ func ExportRows(rows *sql.Rows, w GCVStreamWriter, cfg ExportConfig) (*ExportRes
 	if w == nil {
 		return nil, ErrNilWriter
 	}
-	opts := effectiveExecOptions(cfg)
 	return exportRows(sqlRowsFacade{rows}, w, exportRunConfig{
-		readMetadataPseudoRow: opts.ReturnResultSetMetadata,
-		readResultSetStats:    consumeResultSetStats(cfg, opts),
+		readMetadataPseudoRow: true,
+		readResultSetStats:    cfg.ReadResultSetStats,
 	})
 }
 
@@ -131,48 +112,6 @@ func ExportRowsAtData(
 		readMetadataPseudoRow: false,
 		readResultSetStats:    cfg.ReadResultSetStats,
 	})
-}
-
-// QueryExport runs db.QueryContext with cfg.ExecOptions and exports the result.
-// It closes rows before returning.
-func QueryExport(
-	ctx context.Context,
-	db *sql.DB,
-	query string,
-	args []any,
-	w GCVStreamWriter,
-	cfg ExportConfig,
-) (*ExportResult, error) {
-	if db == nil {
-		return nil, errors.New("nil *sql.DB")
-	}
-	opts := effectiveExecOptions(cfg)
-	queryArgs := make([]any, 0, len(args)+1)
-	queryArgs = append(queryArgs, opts)
-	queryArgs = append(queryArgs, args...)
-	rows, err := db.QueryContext(ctx, query, queryArgs...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	return ExportRows(rows, w, cfg)
-}
-
-func effectiveExecOptions(cfg ExportConfig) spannerdriver.ExecOptions {
-	if cfg.ExecOptions == (spannerdriver.ExecOptions{}) {
-		return DefaultExecOptions
-	}
-	return cfg.ExecOptions
-}
-
-func consumeResultSetStats(cfg ExportConfig, opts spannerdriver.ExecOptions) bool {
-	if cfg.ReadResultSetStats {
-		return true
-	}
-	if cfg.ExecOptions != (spannerdriver.ExecOptions{}) {
-		return opts.ReturnResultSetStats
-	}
-	return false
 }
 
 type exportRunConfig struct {
@@ -267,6 +206,7 @@ func readResultSetStats(fac rowsFacade) (*sppb.ResultSetStats, error) {
 	if err := fac.scan(&stats); err != nil {
 		return nil, err
 	}
+	_ = fac.nextResultSet()
 	return stats, nil
 }
 

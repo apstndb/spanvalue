@@ -1,6 +1,9 @@
-// Package dbsqlrows streams [database/sql] query results from
-// [github.com/googleapis/go-sql-spanner] into [github.com/apstndb/spanvalue/writer]
-// using the GenericColumnValue slice export path.
+// Package dbsqlrows streams [database/sql] query results into
+// [github.com/apstndb/spanvalue/writer] using the GenericColumnValue slice export path.
+//
+// Callers that use a Spanner database/sql driver (for example
+// [github.com/googleapis/go-sql-spanner]) configure driver-specific options
+// themselves; this package only iterates [*sql.Rows] once they are open.
 //
 // # Naming
 //
@@ -15,16 +18,16 @@
 // | Path | Iterator | Row shape | spanvalue entry |
 // |------|----------|-----------|-----------------|
 // | Native client | [*spanner.RowIterator] | [*spanner.Row] | [writer.WriteRowIterator] |
-// | go-sql-spanner | [*sql.Rows] | []spanner.GenericColumnValue | [writer.DelimitedWriter.WriteGCVs] |
-// | dbsqlrows | [*sql.Rows] (owned by helper) | []spanner.GenericColumnValue | same WriteGCVs path |
+// | database/sql driver | [*sql.Rows] | []spanner.GenericColumnValue | [writer.DelimitedWriter.WriteGCVs] |
+// | dbsqlrows | [*sql.Rows] (caller-owned) | []spanner.GenericColumnValue | same WriteGCVs path |
 //
 // dbsqlrows does not convert GCV slices to [*spanner.Row] for [writer.Writer.WriteRow].
 //
 // # Module boundary
 //
-// go-sql-spanner is required only by this module's go.mod, not by the root
-// github.com/apstndb/spanvalue module. Importers that never require dbsqlrows do
-// not pull go-sql-spanner transitively.
+// This optional module lives under github.com/apstndb/spanvalue/dbsqlrows with its
+// own go.mod. It does not add go-sql-spanner (or any database/sql driver) to the
+// root github.com/apstndb/spanvalue module.
 //
 // For metadata-first flows (multi-statement batches, table render before CSV), use
 // [ReadMetadataAndAdvanceToData] then [ExportRowsAtData] or app-owned rendering;

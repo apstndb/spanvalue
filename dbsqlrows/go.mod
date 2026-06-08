@@ -6,7 +6,6 @@ require (
 	cloud.google.com/go/spanner v1.84.1
 	github.com/apstndb/spanvalue v0.6.0
 	github.com/google/go-cmp v0.7.0
-	github.com/googleapis/go-sql-spanner v1.15.0
 	google.golang.org/protobuf v1.36.6
 )
 
@@ -35,7 +34,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.15.0 // indirect
-	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/samber/lo v1.53.0 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.5.0 // indirect

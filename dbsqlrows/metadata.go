@@ -8,8 +8,8 @@ import (
 )
 
 // ReadMetadataAndAdvanceToData reads the metadata pseudo-row from rows and advances
-// to the data result set (go-sql-spanner ReturnResultSetMetadata). Use before
-// [ExportRowsAtData] or custom rendering when metadata is consumed outside export.
+// to the data result set. Use before [ExportRowsAtData] or custom rendering when
+// metadata is consumed outside export.
 //
 // If there is no metadata row, returns ok=false and err=rows.Err() (nil on clean EOF).
 func ReadMetadataAndAdvanceToData(rows *sql.Rows) (*sppb.ResultSetMetadata, bool, error) {

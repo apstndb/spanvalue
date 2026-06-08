@@ -9,7 +9,6 @@ import (
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/google/go-cmp/cmp"
-	spannerdriver "github.com/googleapis/go-sql-spanner"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/apstndb/spanvalue"
@@ -230,6 +229,38 @@ func TestExportRows_zeroDataRowsFlushHeader(t *testing.T) {
 	}
 }
 
+func TestExportRowsAtData_zeroDataRowsFlushMultiColumnHeader(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id", "name", "score")
+	stub := &stubSQLRows{
+		columns:    []string{"id", "name", "score"},
+		resultSets: [][]stubRow{nil},
+	}
+
+	var out bytes.Buffer
+	w, err := writer.NewCSVWriter(&out, writer.DelimitedGCVExportOptions(
+		md,
+		spanvalue.SimpleFormatConfig(),
+		spanvalue.IndexedUnnamedFieldNamer,
+	)...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := exportRows(stub, w, exportRunConfig{metadata: md})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RowsRead != 0 {
+		t.Fatalf("RowsRead = %d, want 0", got.RowsRead)
+	}
+	want := "id,name,score\n"
+	if out.String() != want {
+		t.Fatalf("output = %q, want %q", out.String(), want)
+	}
+}
+
 func TestExportRows_statsPseudoRow(t *testing.T) {
 	t.Parallel()
 
@@ -437,17 +468,51 @@ func TestExportRowsAtData_readsStatsWhenRequested(t *testing.T) {
 	}
 }
 
-func TestDefaultExecOptions(t *testing.T) {
+func TestExportRows_statsThenReadMetadataMultiStatement(t *testing.T) {
 	t.Parallel()
 
-	if DefaultExecOptions.DecodeOption != spannerdriver.DecodeOptionProto {
-		t.Fatalf("DecodeOption = %v, want DecodeOptionProto", DefaultExecOptions.DecodeOption)
+	md1 := metadataWithNames("id")
+	md2 := metadataWithNames("name")
+	stats := &sppb.ResultSetStats{
+		RowCount: &sppb.ResultSetStats_RowCountExact{RowCountExact: 0},
 	}
-	if !DefaultExecOptions.ReturnResultSetMetadata {
-		t.Fatal("ReturnResultSetMetadata = false, want true")
+	stub := &stubSQLRows{
+		columns: []string{"id"},
+		resultSets: [][]stubRow{
+			{{values: []any{md1}}},
+			nil,
+			{{values: []any{stats}}},
+			{{values: []any{md2}}},
+			{{values: []any{gcvctor.StringValue("x")}}},
+		},
 	}
-	if DefaultExecOptions.ReturnResultSetStats {
-		t.Fatal("ReturnResultSetStats = true, want false")
+
+	got, err := exportRows(stub, &stubGCVWriter{}, exportRunConfig{
+		readMetadataPseudoRow: true,
+		readResultSetStats:    true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(stats, got.Stats, protocmp.Transform()); diff != "" {
+		t.Fatalf("Stats mismatch (-want +got):\n%s", diff)
+	}
+	if stub.set != 3 || stub.row != 0 {
+		t.Fatalf("cursor set=%d row=%d, want set=3 row=0 before next metadata", stub.set, stub.row)
+	}
+
+	gotMD, ok, err := readMetadataAndAdvanceToData(stub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+	if diff := cmp.Diff(md2, gotMD, protocmp.Transform()); diff != "" {
+		t.Fatalf("Metadata mismatch (-want +got):\n%s", diff)
+	}
+	if stub.set != 4 || stub.row != 0 {
+		t.Fatalf("cursor set=%d row=%d, want set=4 row=0 on second data result set", stub.set, stub.row)
 	}
 }
 
