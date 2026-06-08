@@ -5,7 +5,7 @@
 // [FlushWriter] interfaces. Register column schema with [WithColumnNames], [WithRowType],
 // or [WithMetadata] (or [DelimitedWriter.PrepareRowType] / [DelimitedWriter.PrepareColumnNames]
 // after construction). [DelimitedWriter] buffers through encoding/csv—call [Flusher.Flush]
-// after the final row.
+// after the final row, or pass [WithFlushEachRow] for per-row flush during streaming.
 //
 // Extended documentation, RowIterator recipes, and module-split notes:
 // https://github.com/apstndb/spanvalue/blob/main/writer/README.md
