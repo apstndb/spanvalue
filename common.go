@@ -201,7 +201,7 @@ type Formatter interface {
 //     append a trailing scalar plugin ([FormatSimpleValue], [FormatLiteralValue],
 //     [FormatSpannerCLIValue], or [FormatJSONSimpleValue]) that formats scalars directly
 //     from GenericColumnValue without Decode; use [FormatConfigWithoutScalarPlugins] or remove
-//     them on a clone to use the legacy path. Plugins fall through when [FormatNullable] is set.
+//     them on a clone to use the legacy path. Plugins fall through when the FormatNullable field is set.
 //   - FormatNullable: optional extension hook. When set, formats non-NULL scalars after Decode
 //     when no scalar plugin handles the value. When nil, the scalar slow path returns
 //     [ErrFormatNullableRequired] without Decode. NULL scalars use [*FormatConfig.GetNullString]
