@@ -21,8 +21,21 @@ var (
 	ErrMismatchedFields           = errors.New("mismatched struct value/field count")
 	ErrUnexpectedComplexValueKind = errors.New("unexpected complex value kind")
 	ErrEmptyTypeFQN               = errors.New("empty type FQN")
+	// ErrNilFormatConfig is returned by [FormatConfig.Validate] when the receiver is nil.
+	ErrNilFormatConfig = errors.New("nil format config")
+	// ErrEmptyNullString is returned by [FormatConfig.Validate] when [FormatConfig.NullString] is empty.
+	ErrEmptyNullString = errors.New("empty null string")
+	// ErrNilFormatArray is returned by [FormatConfig.Validate] when [FormatConfig.FormatArray] is nil.
+	ErrNilFormatArray = errors.New("nil format array callback")
+	// ErrNilFormatStructField is returned by [FormatConfig.Validate] when
+	// [FormatStruct.FormatStructField] is nil.
+	ErrNilFormatStructField = errors.New("nil format struct field callback")
+	// ErrNilFormatStructParen is returned by [FormatConfig.Validate] when
+	// [FormatStruct.FormatStructParen] is nil.
+	ErrNilFormatStructParen = errors.New("nil format struct paren callback")
 	// ErrFormatNullableRequired is returned from the scalar slow path when
-	// [FormatConfig.FormatNullable] is nil (no Decode-based formatting).
+	// [FormatConfig.FormatNullable] is nil (no Decode-based formatting), and by
+	// [FormatConfig.Validate] when FormatNullable is nil and no preset scalar plugin is configured.
 	ErrFormatNullableRequired = errors.New("format nullable required")
 )
 
@@ -214,6 +227,8 @@ type Formatter interface {
 //     before the slow path runs (FormatNullable is not called for NULL).
 //
 // Use [FormatConfig.Clone] to customize a preset without mutating shared instances.
+// Call [FormatConfig.Validate] after hand-assembling a config to fail fast on nil callbacks
+// or an empty [FormatConfig.NullString].
 type FormatConfig struct {
 	NullString           string
 	FormatArray          FormatArrayFunc

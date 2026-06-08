@@ -1,10 +1,122 @@
 package spanvalue
 
 import (
+	"errors"
 	"testing"
 
 	"cloud.google.com/go/spanner"
 )
+
+func TestFormatConfigValidate_presets(t *testing.T) {
+	t.Parallel()
+
+	presets := []*FormatConfig{
+		LiteralFormatConfig(),
+		SimpleFormatConfig(),
+		SpannerCLICompatibleFormatConfig(),
+		JSONFormatConfig(),
+	}
+	for i, fc := range presets {
+		if err := fc.Validate(); err != nil {
+			t.Errorf("preset[%d].Validate() = %v, want nil", i, err)
+		}
+	}
+}
+
+func TestFormatConfigValidate_handBuiltInvalid(t *testing.T) {
+	t.Parallel()
+
+	valid := &FormatConfig{
+		NullString:           "NULL",
+		FormatArray:          FormatCompactArray,
+		FormatStruct:         TypedStructFormat(),
+		FormatNullable:       formatNullableValueSimple,
+		FormatComplexPlugins: []FormatComplexFunc{FormatSimpleValue},
+	}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid.Validate() = %v, want nil", err)
+	}
+
+	tests := []struct {
+		name    string
+		mutate  func(*FormatConfig)
+		wantErr error
+	}{
+		{
+			name:    "nil config",
+			wantErr: ErrNilFormatConfig,
+		},
+		{
+			name: "empty null string",
+			mutate: func(fc *FormatConfig) {
+				*fc = *valid
+				fc.NullString = ""
+			},
+			wantErr: ErrEmptyNullString,
+		},
+		{
+			name: "nil format array",
+			mutate: func(fc *FormatConfig) {
+				*fc = *valid
+				fc.FormatArray = nil
+			},
+			wantErr: ErrNilFormatArray,
+		},
+		{
+			name: "nil format struct field",
+			mutate: func(fc *FormatConfig) {
+				*fc = *valid
+				fc.FormatStruct.FormatStructField = nil
+			},
+			wantErr: ErrNilFormatStructField,
+		},
+		{
+			name: "nil format struct paren",
+			mutate: func(fc *FormatConfig) {
+				*fc = *valid
+				fc.FormatStruct.FormatStructParen = nil
+			},
+			wantErr: ErrNilFormatStructParen,
+		},
+		{
+			name: "nil format nullable without scalar plugins",
+			mutate: func(fc *FormatConfig) {
+				*fc = *valid
+				fc.FormatNullable = nil
+				fc.FormatComplexPlugins = nil
+			},
+			wantErr: ErrFormatNullableRequired,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var fc *FormatConfig
+			if tt.name == "nil config" {
+				fc = nil
+			} else {
+				fc = valid.Clone()
+				tt.mutate(fc)
+			}
+			err := fc.Validate()
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Validate() = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestFormatConfigValidate_nilFormatNullableWithScalarPlugins(t *testing.T) {
+	t.Parallel()
+
+	fc := SimpleFormatConfig()
+	fc.FormatNullable = nil
+	if err := fc.Validate(); err != nil {
+		t.Fatalf("Validate() = %v, want nil when scalar plugins remain", err)
+	}
+}
 
 func TestFormatConfigClone(t *testing.T) {
 	t.Parallel()
