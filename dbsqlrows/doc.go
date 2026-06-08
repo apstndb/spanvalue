@@ -7,11 +7,10 @@
 //
 // # Naming
 //
-// The module name combines db (standard library [database/sql]), sqlrows
-// ([*sql.Rows] as input), and lives under the spanvalue repository. It is
-// intentionally explicit: nine characters, comparable to spanvalue, and distinct
-// from the native-client path in [github.com/apstndb/spanvalue/writer] that drives
-// [*cloud.google.com/go/spanner.RowIterator] via [writer.WriteRowIterator].
+// The name combines db (standard library [database/sql]) and sqlrows
+// ([*sql.Rows] as input). For the native-client export path, use
+// [github.com/apstndb/spanvalue/writer] ([writer.WriteRowIterator] on
+// [*cloud.google.com/go/spanner.RowIterator]).
 //
 // # writer vs dbsqlrows
 //
