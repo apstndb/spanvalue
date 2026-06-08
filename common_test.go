@@ -322,3 +322,56 @@ func TestFormatColumnRejectsNilStructFieldDescriptor(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatProtoEnumCastRejectsNonStringWire(t *testing.T) {
+	t.Parallel()
+
+	const (
+		protoFQN = "package.ProtoType"
+		enumFQN  = "package.EnumType"
+	)
+
+	tests := []struct {
+		name string
+		gcv  spanner.GenericColumnValue
+	}{
+		{
+			name: "proto bool wire",
+			gcv: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_PROTO, ProtoTypeFqn: protoFQN},
+				Value: structpb.NewBoolValue(true),
+			},
+		},
+		{
+			name: "proto number wire",
+			gcv: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_PROTO, ProtoTypeFqn: protoFQN},
+				Value: structpb.NewNumberValue(1),
+			},
+		},
+		{
+			name: "enum bool wire",
+			gcv: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_ENUM, ProtoTypeFqn: enumFQN},
+				Value: structpb.NewBoolValue(true),
+			},
+		},
+		{
+			name: "enum number wire",
+			gcv: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_ENUM, ProtoTypeFqn: enumFQN},
+				Value: structpb.NewNumberValue(42),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := LiteralFormatConfig().FormatToplevelColumn(tt.gcv)
+			if !errors.Is(err, ErrUnknownType) {
+				t.Fatalf("error = %v, want ErrUnknownType", err)
+			}
+		})
+	}
+}
