@@ -1274,7 +1274,7 @@ func (w *SQLInsertWriter) initOrValidateQuotedColumns(columnNames []string) (str
 	if err != nil {
 		return "", err
 	}
-	if len(w.schema.names) == 0 && len(names) > 0 {
+	if len(w.schema.names) == 0 {
 		w.schema.names = names
 	}
 	w.schema.registered = true
@@ -1467,10 +1467,13 @@ func initOrValidateColumnNames(schema *columnSchema, columnNames []string) error
 func validatedColumnNames(existing []string, registered bool, columnNames []string) ([]string, error) {
 	if len(existing) == 0 {
 		if len(columnNames) == 0 {
+			if registered {
+				return nil, nil
+			}
 			return nil, ErrMissingColumnNames
 		}
 		if registered {
-			return nil, fmt.Errorf("%w: got %v want %v", ErrColumnNamesMismatch, columnNames, existing)
+			return nil, fmt.Errorf("%w: got %v, want zero-column schema (registered empty row type)", ErrColumnNamesMismatch, columnNames)
 		}
 		return slices.Clone(columnNames), nil
 	}
