@@ -74,3 +74,13 @@ func MustJSONValue(v any) spanner.GenericColumnValue {
 	}
 	return gcv
 }
+
+// MustPGJSONBValue is like [PGJSONBValue] but panics on error.
+// Use only in tests and table-driven fixtures where inputs are known good.
+func MustPGJSONBValue(v any) spanner.GenericColumnValue {
+	gcv, err := PGJSONBValue(v)
+	if err != nil {
+		panic(err)
+	}
+	return gcv
+}

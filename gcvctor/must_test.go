@@ -69,6 +69,14 @@ func TestMustJSONValue_panicsOnMarshalError(t *testing.T) {
 	})
 }
 
+func TestMustPGJSONBValue_panicsOnMarshalError(t *testing.T) {
+	t.Parallel()
+
+	expectPanic(t, func() {
+		gcvctor.MustPGJSONBValue(make(chan int))
+	})
+}
+
 func TestMustStructValueOf_matchesStructValueOf(t *testing.T) {
 	t.Parallel()
 
