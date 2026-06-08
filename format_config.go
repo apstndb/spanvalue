@@ -45,6 +45,19 @@ func hasPresetScalarPlugin(fc *FormatConfig) bool {
 	return slices.ContainsFunc(fc.FormatComplexPlugins, isPresetScalarPlugin)
 }
 
+// WithComplexPlugin returns a clone of fc with plugin appended to FormatComplexPlugins.
+// The original config, including shared preset singletons, is not mutated. Chain
+// further calls on the returned config for additional plugins. Nil fc or nil plugin
+// returns nil.
+func (fc *FormatConfig) WithComplexPlugin(plugin FormatComplexFunc) *FormatConfig {
+	if fc == nil || plugin == nil {
+		return nil
+	}
+	clone := fc.Clone()
+	clone.FormatComplexPlugins = append(clone.FormatComplexPlugins, plugin)
+	return clone
+}
+
 // Clone returns a shallow copy of fc with a copied FormatComplexPlugins slice.
 // The returned config is independent for field assignment and plugin list
 // mutation; callback values themselves are shared with the source.

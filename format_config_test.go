@@ -156,6 +156,92 @@ func TestFormatConfigClone(t *testing.T) {
 	}
 }
 
+func TestFormatConfigWithComplexPlugin(t *testing.T) {
+	t.Parallel()
+
+	plugin := FormatComplexFunc(func(Formatter, spanner.GenericColumnValue, bool) (string, error) {
+		return "plugin", nil
+	})
+	other := FormatComplexFunc(func(Formatter, spanner.GenericColumnValue, bool) (string, error) {
+		return "other", nil
+	})
+
+	t.Run("nil receiver", func(t *testing.T) {
+		t.Parallel()
+		if got := (*FormatConfig)(nil).WithComplexPlugin(plugin); got != nil {
+			t.Fatalf("WithComplexPlugin on nil receiver = %v, want nil", got)
+		}
+	})
+
+	t.Run("nil plugin", func(t *testing.T) {
+		t.Parallel()
+		fc := SimpleFormatConfig()
+		if got := fc.WithComplexPlugin(nil); got != nil {
+			t.Fatalf("WithComplexPlugin(nil) = %v, want nil", got)
+		}
+	})
+
+	t.Run("preset singleton unchanged", func(t *testing.T) {
+		t.Parallel()
+		preset := SimpleFormatConfig()
+		before := len(preset.FormatComplexPlugins)
+		got := preset.WithComplexPlugin(plugin)
+		if len(preset.FormatComplexPlugins) != before {
+			t.Fatalf("preset len = %d, want %d unchanged", len(preset.FormatComplexPlugins), before)
+		}
+		if got == preset {
+			t.Fatal("WithComplexPlugin returned preset singleton")
+		}
+		if len(got.FormatComplexPlugins) != before+1 {
+			t.Fatalf("len(FormatComplexPlugins) = %d, want %d", len(got.FormatComplexPlugins), before+1)
+		}
+		if got.FormatComplexPlugins[len(got.FormatComplexPlugins)-1] == nil {
+			t.Fatal("appended nil plugin")
+		}
+	})
+
+	t.Run("chain", func(t *testing.T) {
+		t.Parallel()
+		preset := SimpleFormatConfig()
+		before := len(preset.FormatComplexPlugins)
+		got := preset.WithComplexPlugin(plugin).WithComplexPlugin(other)
+		if len(preset.FormatComplexPlugins) != before {
+			t.Fatalf("preset len = %d, want %d unchanged", len(preset.FormatComplexPlugins), before)
+		}
+		if len(got.FormatComplexPlugins) != before+2 {
+			t.Fatalf("len(FormatComplexPlugins) = %d, want %d", len(got.FormatComplexPlugins), before+2)
+		}
+		if err := got.Validate(); err != nil {
+			t.Fatalf("Validate() = %v, want nil", err)
+		}
+	})
+
+	t.Run("hand-built clone isolation", func(t *testing.T) {
+		t.Parallel()
+		original := &FormatConfig{
+			NullString:           "NULL",
+			FormatArray:          FormatCompactArray,
+			FormatStruct:         TypedStructFormat(),
+			FormatNullable:       formatNullableValueSimple,
+			FormatComplexPlugins: []FormatComplexFunc{plugin},
+		}
+		got := original.WithComplexPlugin(other)
+		if got == original {
+			t.Fatal("WithComplexPlugin returned same pointer as original")
+		}
+		if len(original.FormatComplexPlugins) != 1 {
+			t.Fatalf("original len = %d, want 1", len(original.FormatComplexPlugins))
+		}
+		if len(got.FormatComplexPlugins) != 2 {
+			t.Fatalf("got len = %d, want 2", len(got.FormatComplexPlugins))
+		}
+		got.FormatComplexPlugins[0] = nil
+		if original.FormatComplexPlugins[0] == nil {
+			t.Fatal("mutating returned config changed original plugin slice element")
+		}
+	})
+}
+
 func TestFormatConfigClonePluginAppendIsolation(t *testing.T) {
 	t.Parallel()
 
