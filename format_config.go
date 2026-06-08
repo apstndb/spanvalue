@@ -47,11 +47,15 @@ func hasPresetScalarPlugin(fc *FormatConfig) bool {
 
 // WithComplexPlugin returns a clone of fc with plugin appended to FormatComplexPlugins.
 // The original config, including shared preset singletons, is not mutated. Chain
-// further calls on the returned config for additional plugins. Nil fc or nil plugin
-// returns nil.
+// further calls on the returned config for additional plugins. Nil fc returns nil.
+// A nil plugin panics so a mistaken nil in a chain fails at the call site instead of
+// collapsing the chain to nil.
 func (fc *FormatConfig) WithComplexPlugin(plugin FormatComplexFunc) *FormatConfig {
-	if fc == nil || plugin == nil {
+	if fc == nil {
 		return nil
+	}
+	if plugin == nil {
+		panic("spanvalue: WithComplexPlugin: nil plugin")
 	}
 	clone := fc.Clone()
 	clone.FormatComplexPlugins = append(clone.FormatComplexPlugins, plugin)

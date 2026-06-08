@@ -173,12 +173,15 @@ func TestFormatConfigWithComplexPlugin(t *testing.T) {
 		}
 	})
 
-	t.Run("nil plugin", func(t *testing.T) {
+	t.Run("nil plugin panics", func(t *testing.T) {
 		t.Parallel()
 		fc := SimpleFormatConfig()
-		if got := fc.WithComplexPlugin(nil); got != nil {
-			t.Fatalf("WithComplexPlugin(nil) = %v, want nil", got)
-		}
+		defer func() {
+			if recover() == nil {
+				t.Fatal("WithComplexPlugin(nil) did not panic")
+			}
+		}()
+		_ = fc.WithComplexPlugin(nil)
 	})
 
 	t.Run("preset singleton unchanged", func(t *testing.T) {
