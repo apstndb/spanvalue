@@ -5,12 +5,12 @@ import "slices"
 // Validate reports invalid hand-built [FormatConfig] values. Preset constructors return
 // configs that pass Validate. Nil fc returns [ErrNilFormatConfig].
 //
-// Static checks: non-empty [FormatConfig.NullString]; non-nil [FormatConfig.FormatArray]
+// Static checks: non-empty [FormatConfig.NullString] (empty is rejected so NULL output is explicit, not ambiguous with an empty STRING); non-nil [FormatConfig.FormatArray]
 // and [FormatStruct] callbacks. [FormatConfig.FormatNullable] may be nil when a preset
 // scalar plugin is present in [FormatConfig.FormatComplexPlugins]; when scalar plugins
 // are absent, nil FormatNullable fails validation because non-NULL scalars have no
 // formatter (runtime behavior is defined in #163). Validate does not prove that
-// plugin-only configs format every type.
+// plugin-only configs format every type. Only preset scalar plugins satisfy the FormatNullable exemption; custom scalar plugins in FormatComplexPlugins are not detected, so keep FormatNullable non-nil to pass Validate when using custom plugins.
 func (fc *FormatConfig) Validate() error {
 	if fc == nil {
 		return ErrNilFormatConfig

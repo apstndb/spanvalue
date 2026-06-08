@@ -49,7 +49,6 @@ func TestFormatConfigValidate_handBuiltInvalid(t *testing.T) {
 		{
 			name: "empty null string",
 			mutate: func(fc *FormatConfig) {
-				*fc = *valid
 				fc.NullString = ""
 			},
 			wantErr: ErrEmptyNullString,
@@ -57,7 +56,6 @@ func TestFormatConfigValidate_handBuiltInvalid(t *testing.T) {
 		{
 			name: "nil format array",
 			mutate: func(fc *FormatConfig) {
-				*fc = *valid
 				fc.FormatArray = nil
 			},
 			wantErr: ErrNilFormatArray,
@@ -65,7 +63,6 @@ func TestFormatConfigValidate_handBuiltInvalid(t *testing.T) {
 		{
 			name: "nil format struct field",
 			mutate: func(fc *FormatConfig) {
-				*fc = *valid
 				fc.FormatStruct.FormatStructField = nil
 			},
 			wantErr: ErrNilFormatStructField,
@@ -73,7 +70,6 @@ func TestFormatConfigValidate_handBuiltInvalid(t *testing.T) {
 		{
 			name: "nil format struct paren",
 			mutate: func(fc *FormatConfig) {
-				*fc = *valid
 				fc.FormatStruct.FormatStructParen = nil
 			},
 			wantErr: ErrNilFormatStructParen,
@@ -81,7 +77,6 @@ func TestFormatConfigValidate_handBuiltInvalid(t *testing.T) {
 		{
 			name: "nil format nullable without scalar plugins",
 			mutate: func(fc *FormatConfig) {
-				*fc = *valid
 				fc.FormatNullable = nil
 				fc.FormatComplexPlugins = nil
 			},
