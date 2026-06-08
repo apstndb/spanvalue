@@ -23,6 +23,8 @@ type stubSQLRows struct {
 	set        int
 	row        int
 	scanErr    error
+	nextRSErr  error
+	lastErr    error
 	nextRSOK   bool
 	columns    []string
 }
@@ -46,6 +48,10 @@ func (s *stubSQLRows) next() bool {
 }
 
 func (s *stubSQLRows) nextResultSet() bool {
+	if s.nextRSErr != nil {
+		s.lastErr = s.nextRSErr
+		return false
+	}
 	if s.set+1 >= len(s.resultSets) {
 		s.nextRSOK = false
 		return false
@@ -105,7 +111,7 @@ func (s *stubSQLRows) columnCount() (int, error) {
 }
 
 func (s *stubSQLRows) err() error {
-	return nil
+	return s.lastErr
 }
 
 func metadataWithNames(names ...string) *sppb.ResultSetMetadata {
@@ -347,6 +353,71 @@ func TestExportRows_writeErrorPartialResult(t *testing.T) {
 	}
 	if got.RowsRead != 0 {
 		t.Fatalf("RowsRead = %d, want 0 on first-row write error", got.RowsRead)
+	}
+}
+
+func TestExportRows_nextResultSetErrorAfterMetadataPartialResult(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	wantErr := errors.New("next result set failed")
+	stub := &stubSQLRows{
+		nextRSErr: wantErr,
+		resultSets: [][]stubRow{
+			{{values: []any{md}}},
+		},
+	}
+
+	got, err := exportRows(stub, &stubGCVWriter{}, exportRunConfig{readMetadataPseudoRow: true})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error = %v, want %v", err, wantErr)
+	}
+	if got.Metadata == nil {
+		t.Fatal("Metadata is nil on nextResultSet error after metadata")
+	}
+	if diff := cmp.Diff(md, got.Metadata, protocmp.Transform()); diff != "" {
+		t.Fatalf("Metadata mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestReadMetadataAndAdvanceToData_missingDataResultSet(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	stub := &stubSQLRows{
+		resultSets: [][]stubRow{
+			{{values: []any{md}}},
+		},
+	}
+
+	_, ok, err := readMetadataAndAdvanceToData(stub)
+	if !errors.Is(err, ErrMissingDataResultSet) {
+		t.Fatalf("error = %v, want ErrMissingDataResultSet", err)
+	}
+	if ok {
+		t.Fatal("ok = true, want false")
+	}
+}
+
+func TestExportRows_missingStatsRow(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	stub := &stubSQLRows{
+		columns: []string{"id"},
+		resultSets: [][]stubRow{
+			{{values: []any{md}}},
+			nil,
+			nil,
+		},
+	}
+
+	_, err := exportRows(stub, &stubGCVWriter{}, exportRunConfig{
+		readMetadataPseudoRow: true,
+		readResultSetStats:    true,
+	})
+	if !errors.Is(err, ErrMissingStatsRow) {
+		t.Fatalf("error = %v, want ErrMissingStatsRow", err)
 	}
 }
 

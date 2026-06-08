@@ -1,8 +1,10 @@
 module github.com/apstndb/spanvalue/dbsqlrows/gospanner
 
+// go 1.25 is required by go-sql-spanner v1.25.1; root spanvalue stays on go 1.23.
 go 1.25.0
 
 require (
+	// Downstream go get needs spanvalue v0.6.0+ (first release with dbsqlrows).
 	github.com/apstndb/spanvalue v0.6.0
 	github.com/googleapis/go-sql-spanner v1.25.1
 )
@@ -61,4 +63,5 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
+// Dev-only: ignored by downstream consumers. Remove or bump after v0.6.0 is tagged.
 replace github.com/apstndb/spanvalue => ../..

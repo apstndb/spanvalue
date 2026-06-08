@@ -6,8 +6,6 @@ import (
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-
-	"github.com/apstndb/spanvalue"
 )
 
 var (
@@ -20,6 +18,11 @@ var (
 	// ErrMissingMetadataRow reports that the iterator produced no metadata
 	// pseudo-row when ExportRows expected one.
 	ErrMissingMetadataRow = errors.New("missing result set metadata row")
+	// ErrMissingDataResultSet reports that NextResultSet did not advance to the
+	// data rows result set after the metadata pseudo-row.
+	ErrMissingDataResultSet = errors.New("missing data rows result set after metadata")
+	// ErrMissingStatsRow reports that the stats result set had no stats pseudo-row.
+	ErrMissingStatsRow = errors.New("missing result set stats row")
 )
 
 // GCVStreamWriter is the subset of [github.com/apstndb/spanvalue/writer] types
@@ -33,11 +36,6 @@ type GCVStreamWriter interface {
 
 // ExportConfig configures an export run.
 type ExportConfig struct {
-	// Formatter and Namer are reserved for constructor helpers that build writers
-	// after metadata is known (see README). ExportRows does not read them when the
-	// caller supplies a pre-built writer.
-	Formatter *spanvalue.FormatConfig
-	Namer     spanvalue.UnnamedFieldNamer
 	// ReadResultSetStats, when true, advances past data rows to read the stats
 	// pseudo-row into [ExportResult.Stats]. For [ExportRowsAtData] this field is
 	// consulted directly (default false). For [ExportRows] the same field applies.
@@ -141,7 +139,7 @@ func exportRows(fac rowsFacade, w GCVStreamWriter, run exportRunConfig) (*Export
 		run.metadata = md
 		if !fac.nextResultSet() {
 			if err := fac.err(); err != nil {
-				return nil, err
+				return abort(err)
 			}
 			if err := prepareWriterMetadata(w, md); err != nil {
 				return abort(err)
@@ -175,12 +173,12 @@ func exportRows(fac rowsFacade, w GCVStreamWriter, run exportRunConfig) (*Export
 }
 
 func exportDataRows(fac rowsFacade, w GCVStreamWriter, result *ExportResult) error {
+	n, err := fac.columnCount()
+	if err != nil {
+		return err
+	}
+	gcvs, dest := gcvScanTargets(n)
 	for fac.next() {
-		n, err := fac.columnCount()
-		if err != nil {
-			return err
-		}
-		gcvs, dest := gcvScanTargets(n)
 		if err := fac.scan(dest...); err != nil {
 			return err
 		}
@@ -200,7 +198,7 @@ func readResultSetStats(fac rowsFacade) (*sppb.ResultSetStats, error) {
 		return nil, nil
 	}
 	if !fac.next() {
-		return nil, errors.New("expected result set stats row")
+		return nil, ErrMissingStatsRow
 	}
 	var stats *sppb.ResultSetStats
 	if err := fac.scan(&stats); err != nil {
