@@ -7,7 +7,7 @@ import "slices"
 //
 // Static checks: non-empty [FormatConfig.NullString] (empty is rejected so NULL
 // output is explicit, not ambiguous with an empty STRING); non-nil
-// [FormatConfig.FormatArray] and [FormatStruct] callbacks; non-nil elements in
+// [FormatConfig.FormatArray] and [FormatStruct] callback fields; non-nil elements in
 // [FormatConfig.FormatComplexPlugins]. [FormatConfig.FormatNullable] may be nil when
 // a preset scalar plugin is present in FormatComplexPlugins; when scalar plugins are
 // absent, nil FormatNullable fails validation because non-NULL scalars have no
