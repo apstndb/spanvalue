@@ -2,6 +2,7 @@ package spanvalue
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"cloud.google.com/go/spanner"
@@ -73,6 +74,13 @@ func TestFormatConfigValidate_handBuiltInvalid(t *testing.T) {
 				fc.FormatStruct.FormatStructParen = nil
 			},
 			wantErr: ErrNilFormatStructParen,
+		},
+		{
+			name: "nil plugin in format complex plugins",
+			mutate: func(fc *FormatConfig) {
+				fc.FormatComplexPlugins = append(slices.Clone(fc.FormatComplexPlugins), nil)
+			},
+			wantErr: ErrNilFormatComplexPlugin,
 		},
 		{
 			name: "nil format nullable without scalar plugins",

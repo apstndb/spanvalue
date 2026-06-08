@@ -33,6 +33,9 @@ var (
 	// ErrNilFormatStructParen is returned by [*FormatConfig.Validate] when
 	// [FormatStruct.FormatStructParen] is nil.
 	ErrNilFormatStructParen = errors.New("nil format struct paren callback")
+	// ErrNilFormatComplexPlugin is returned by [*FormatConfig.Validate] when
+	// [FormatConfig.FormatComplexPlugins] contains a nil element.
+	ErrNilFormatComplexPlugin = errors.New("nil format complex plugin")
 	// ErrFormatNullableRequired is returned from the scalar slow path when
 	// [FormatConfig.FormatNullable] is nil (no Decode-based formatting), and by
 	// [*FormatConfig.Validate] when FormatNullable is nil and no preset scalar plugin is configured.
