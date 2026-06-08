@@ -139,6 +139,53 @@ func TestDelimitedWriterWriteValuesWithCustomDelimiter(t *testing.T) {
 	}
 }
 
+func TestDelimitedWriterWithFlushEachRowIncrementalOutput(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := mustNewDelimitedWriter(t, &out, Comma,
+		WithMetadata(metadataWithColumnNames("name")),
+		WithFlushEachRow(),
+	)
+
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")}); err != nil {
+		t.Fatalf("WriteGCVs() first row error = %v", err)
+	}
+	want := "name\nAlice\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output after first row mismatch (-want +got):\n%s", diff)
+	}
+
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Bob")}); err != nil {
+		t.Fatalf("WriteGCVs() second row error = %v", err)
+	}
+	want = "name\nAlice\nBob\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output after second row mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestDelimitedWriterWithoutFlushEachRowBuffersUntilFlush(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := mustNewDelimitedWriter(t, &out, Comma, WithMetadata(metadataWithColumnNames("name")))
+
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("output before Flush = %q, want empty buffer", out.String())
+	}
+
+	flushDelimitedWriter(t, w)
+
+	want := "name\nAlice\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output after Flush mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestDelimitedWriterWithOptions(t *testing.T) {
 	t.Parallel()
 

@@ -4,7 +4,7 @@ Stream Cloud Spanner query results to **CSV**, **quoted TSV**, **JSONL**, or **S
 
 | Writer | Constructor | Notes |
 |--------|-------------|--------|
-| Delimited (CSV / TSV) | `NewCSVWriter`, `NewDelimitedWriter` | Uses `encoding/csv`; call `Flush` after the last row |
+| Delimited (CSV / TSV) | `NewCSVWriter`, `NewDelimitedWriter` | Uses `encoding/csv`; call `Flush` after the last row, or `WithFlushEachRow` for incremental output |
 | JSONL | `NewJSONLWriter` | `Flush` is a no-op |
 | SQL INSERT | `NewSQLInsertWriter` | `WithSQLBatchSize`, `WithSQLDialect`, `WithSQLInsertKind`; discard writer after a write error |
 
@@ -51,7 +51,7 @@ Construct hooks with [`NewRowIteratorHooks`](https://pkg.go.dev/github.com/apstn
 
 - [`WithRowOrdinal`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithRowOrdinal) — 1-based row index for diagnostics
 - [`ObserveWriteRow`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#ObserveWriteRow) — callback before each row
-- [`AfterEachSuccessfulWriteRow`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#AfterEachSuccessfulWriteRow) — e.g. flush buffered I/O per row (not `SQLInsertWriter.Flush`)
+- [`AfterEachSuccessfulWriteRow`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#AfterEachSuccessfulWriteRow) — custom per-row hooks (for delimited streaming without type assertions, prefer [`WithFlushEachRow`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithFlushEachRow); not `SQLInsertWriter.Flush`)
 
 `RowsRead` counts successful `WriteRow` hook calls; it differs from [`RowIteratorStats.RowCount`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorStats.RowCount) (Spanner DML semantics). Decorators that only observe rows may call [`MarkOmitRowsRead`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorHooks.MarkOmitRowsRead) so side-effect-only `WriteRow` wrappers do not increment `RowsRead`.
 

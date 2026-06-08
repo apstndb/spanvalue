@@ -397,6 +397,16 @@ func (o unnamedFieldNamerOption) applyJSONLOption(w *JSONLWriter) error {
 	return nil
 }
 
+// WithFlushEachRow configures [DelimitedWriter] to flush the underlying encoding/csv
+// buffer after each successful data row. Use for interactive streaming when consumers
+// should see output before the export finishes; the default buffers until [Flusher.Flush].
+func WithFlushEachRow() DelimitedOption {
+	return delimitedOptionFunc(func(w *DelimitedWriter) error {
+		w.flushEachRow = true
+		return nil
+	})
+}
+
 // WithHeader sets whether [DelimitedWriter] emits a CSV/TSV header (default true).
 // The header is written before the first data row, or on [DelimitedWriter.Flush] if only
 // names were registered. See [DelimitedWriter.WriteHeader] to emit it earlier.
@@ -430,7 +440,8 @@ func (s *columnSchema) applyNamesOnly(names []string) {
 	s.registered = true
 }
 
-// DelimitedWriter writes rows as CSV-style delimited text. Call Flush after the final write.
+// DelimitedWriter writes rows as CSV-style delimited text. By default, call Flush after the
+// final write; [WithFlushEachRow] flushes encoding/csv after each data row instead.
 // Header controls automatic header output; see [WithHeader] and [DelimitedWriter.WriteHeader].
 type DelimitedWriter struct {
 	formatter *spanvalue.FormatConfig
@@ -446,6 +457,7 @@ type DelimitedWriter struct {
 	out                 io.Writer
 	writer              *csv.Writer
 	delimiter           rune
+	flushEachRow        bool
 	wroteHeader         bool
 	wroteData           bool
 }
@@ -618,6 +630,10 @@ func (w *DelimitedWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 		return err
 	}
 	w.wroteData = true
+	if w.flushEachRow {
+		csvWriter.Flush()
+		return csvWriter.Error()
+	}
 	return nil
 }
 
