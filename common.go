@@ -37,8 +37,8 @@ var (
 	// [FormatConfig.FormatComplexPlugins] contains a nil element.
 	ErrNilFormatComplexPlugin = errors.New("nil format complex plugin")
 	// ErrFormatNullableRequired is returned from the scalar slow path when
-	// [FormatConfig.FormatNullable] is nil (no Decode-based formatting), and by
-	// [*FormatConfig.Validate] when FormatNullable is nil and no preset scalar plugin is configured.
+	// the FormatNullable field is nil (no Decode-based formatting), and by
+	// [*FormatConfig.Validate] when the FormatNullable field is nil and no preset scalar plugin is configured.
 	ErrFormatNullableRequired = errors.New("format nullable required")
 )
 
