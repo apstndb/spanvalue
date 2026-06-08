@@ -26,5 +26,9 @@
 // github.com/apstndb/spanvalue module. Importers that never require dbsqlrows do
 // not pull go-sql-spanner transitively.
 //
+// For metadata-first flows (multi-statement batches, table render before CSV), use
+// [ReadMetadataAndAdvanceToData] then [ExportRowsAtData] or app-owned rendering;
+// leave stats on rows unless [ExportConfig.ReadResultSetStats] is set.
+//
 // Extended goals, non-goals, and dependency diagram: see README.md in this directory.
 package dbsqlrows

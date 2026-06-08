@@ -8,10 +8,11 @@ import (
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	spannerdriver "github.com/googleapis/go-sql-spanner"
 	"github.com/google/go-cmp/cmp"
+	spannerdriver "github.com/googleapis/go-sql-spanner"
 	"google.golang.org/protobuf/testing/protocmp"
 
+	"github.com/apstndb/spanvalue"
 	"github.com/apstndb/spanvalue/gcvctor"
 	"github.com/apstndb/spanvalue/writer"
 )
@@ -143,6 +144,15 @@ func TestExportRows_nilWriter(t *testing.T) {
 	}
 }
 
+func TestExportRowsAtData_nilMetadata(t *testing.T) {
+	t.Parallel()
+
+	_, err := ExportRowsAtData(&sql.Rows{}, nil, &stubGCVWriter{}, ExportConfig{})
+	if !errors.Is(err, ErrNilMetadata) {
+		t.Fatalf("error = %v, want ErrNilMetadata", err)
+	}
+}
+
 func TestExportRows_metadataAndDataRows(t *testing.T) {
 	t.Parallel()
 
@@ -170,7 +180,7 @@ func TestExportRows_metadataAndDataRows(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := exportRows(stub, w, DefaultExecOptions)
+	got, err := exportRows(stub, w, exportRunConfig{readMetadataPseudoRow: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,9 +214,12 @@ func TestExportRows_zeroDataRowsFlushHeader(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := exportRows(stub, w, DefaultExecOptions)
+	got, err := exportRows(stub, w, exportRunConfig{readMetadataPseudoRow: true})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if got.Metadata == nil {
+		t.Fatal("Metadata is nil")
 	}
 	if got.RowsRead != 0 {
 		t.Fatalf("RowsRead = %d, want 0", got.RowsRead)
@@ -237,10 +250,10 @@ func TestExportRows_statsPseudoRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	opts := DefaultExecOptions
-	opts.ReturnResultSetStats = true
-
-	got, err := exportRows(stub, w, opts)
+	got, err := exportRows(stub, w, exportRunConfig{
+		readMetadataPseudoRow: true,
+		readResultSetStats:    true,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,26 +262,178 @@ func TestExportRows_statsPseudoRow(t *testing.T) {
 	}
 }
 
-func TestExportRows_writeError(t *testing.T) {
+func TestExportRows_skipsStatsByDefault(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	stats := &sppb.ResultSetStats{RowCount: &sppb.ResultSetStats_RowCountExact{RowCountExact: 1}}
+	stub := &stubSQLRows{
+		columns: []string{"id"},
+		resultSets: [][]stubRow{
+			{{values: []any{md}}},
+			nil,
+			{{values: []any{stats}}},
+		},
+	}
+
+	got, err := exportRows(stub, &stubGCVWriter{}, exportRunConfig{readMetadataPseudoRow: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Stats != nil {
+		t.Fatalf("Stats = %v, want nil when stats not consumed", got.Stats)
+	}
+	if stub.set != 1 {
+		t.Fatalf("cursor set = %d, want data result set (1) after export", stub.set)
+	}
+}
+
+func TestExportRows_writeErrorPartialResult(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithNames("id")
 	stub := &stubSQLRows{
 		columns: []string{"id"},
 		resultSets: [][]stubRow{
-			{{values: []any{md}}},
-			{{values: []any{gcvctor.Int64Value(1)}}},
+			{
+				{values: []any{gcvctor.Int64Value(1)}},
+				{values: []any{gcvctor.Int64Value(2)}},
+			},
 		},
 	}
 	wantErr := errors.New("write failed")
 	sw := &stubGCVWriter{writeErr: wantErr}
 
-	got, err := exportRows(stub, sw, DefaultExecOptions)
+	got, err := exportRows(stub, sw, exportRunConfig{
+		metadata:              md,
+		readMetadataPseudoRow: false,
+	})
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("error = %v, want %v", err, wantErr)
 	}
+	if got.Metadata == nil {
+		t.Fatal("Metadata is nil on write error")
+	}
 	if got.RowsRead != 0 {
-		t.Fatalf("RowsRead = %d, want 0 on write error before increment", got.RowsRead)
+		t.Fatalf("RowsRead = %d, want 0 on first-row write error", got.RowsRead)
+	}
+}
+
+func TestExportRows_prepareErrorPartialResult(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	stub := &stubSQLRows{
+		columns: []string{"id"},
+		resultSets: [][]stubRow{
+			{{values: []any{gcvctor.Int64Value(1)}}},
+		},
+	}
+	wantErr := errors.New("prepare failed")
+	sw := &stubGCVWriter{prepareErr: wantErr}
+
+	got, err := exportRows(stub, sw, exportRunConfig{
+		metadata:              md,
+		readMetadataPseudoRow: false,
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error = %v, want %v", err, wantErr)
+	}
+	if got.Metadata != md {
+		t.Fatal("Metadata not set on prepare error")
+	}
+	if got.RowsRead != 0 {
+		t.Fatalf("RowsRead = %d, want 0", got.RowsRead)
+	}
+}
+
+func TestReadMetadataAndAdvanceToData(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id", "name")
+	stub := &stubSQLRows{
+		columns: []string{"id", "name"},
+		resultSets: [][]stubRow{
+			{{values: []any{md}}},
+			{{values: []any{gcvctor.Int64Value(1), gcvctor.StringValue("x")}}},
+		},
+	}
+
+	gotMD, ok, err := readMetadataAndAdvanceToData(stub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+	if diff := cmp.Diff(md, gotMD, protocmp.Transform()); diff != "" {
+		t.Fatalf("Metadata mismatch (-want +got):\n%s", diff)
+	}
+	if stub.set != 1 || stub.row != 0 {
+		t.Fatalf("cursor set=%d row=%d, want set=1 row=0 on data result set", stub.set, stub.row)
+	}
+}
+
+func TestExportRowsAtData_oneRowDelimitedGCVExportOptions(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	stub := &stubSQLRows{
+		columns: []string{"id"},
+		resultSets: [][]stubRow{
+			{{values: []any{gcvctor.Int64Value(42)}}},
+		},
+	}
+
+	var out bytes.Buffer
+	w, err := writer.NewCSVWriter(&out, writer.DelimitedGCVExportOptions(
+		md,
+		spanvalue.SimpleFormatConfig(),
+		spanvalue.IndexedUnnamedFieldNamer,
+	)...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := exportRows(stub, w, exportRunConfig{metadata: md})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RowsRead != 1 {
+		t.Fatalf("RowsRead = %d, want 1", got.RowsRead)
+	}
+	if got.Metadata != md {
+		t.Fatal("Metadata not set")
+	}
+	if !bytes.Contains(out.Bytes(), []byte("42")) {
+		t.Fatalf("output = %q, want row with 42", out.String())
+	}
+}
+
+func TestExportRowsAtData_readsStatsWhenRequested(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	stats := &sppb.ResultSetStats{
+		RowCount: &sppb.ResultSetStats_RowCountExact{RowCountExact: 0},
+	}
+	stub := &stubSQLRows{
+		columns: []string{"id"},
+		resultSets: [][]stubRow{
+			nil,
+			{{values: []any{stats}}},
+		},
+	}
+
+	got, err := exportRows(stub, &stubGCVWriter{}, exportRunConfig{
+		metadata:           md,
+		readResultSetStats: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Stats == nil {
+		t.Fatal("Stats is nil")
 	}
 }
 
@@ -281,12 +446,16 @@ func TestDefaultExecOptions(t *testing.T) {
 	if !DefaultExecOptions.ReturnResultSetMetadata {
 		t.Fatal("ReturnResultSetMetadata = false, want true")
 	}
+	if DefaultExecOptions.ReturnResultSetStats {
+		t.Fatal("ReturnResultSetStats = true, want false")
+	}
 }
 
 type stubGCVWriter struct {
-	writeErr error
-	flushErr error
-	flushed  bool
+	writeErr   error
+	flushErr   error
+	prepareErr error
+	flushed    bool
 }
 
 func (s *stubGCVWriter) WriteGCVs([]spanner.GenericColumnValue) error {
@@ -296,4 +465,8 @@ func (s *stubGCVWriter) WriteGCVs([]spanner.GenericColumnValue) error {
 func (s *stubGCVWriter) Flush() error {
 	s.flushed = true
 	return s.flushErr
+}
+
+func (s *stubGCVWriter) PrepareRowType(*sppb.StructType) error {
+	return s.prepareErr
 }
