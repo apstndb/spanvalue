@@ -646,7 +646,7 @@ func (w *DelimitedWriter) setColumnNames(names []string) {
 
 func (w *DelimitedWriter) initOrValidateColumnNames(columnNames []string) error {
 	initialized := len(w.schema.names) == 0
-	if err := initOrValidateColumnNames(&w.schema.names, columnNames); err != nil {
+	if err := initOrValidateColumnNames(&w.schema, columnNames); err != nil {
 		return err
 	}
 	if len(w.schema.names) > 0 {
@@ -900,7 +900,7 @@ func (w *JSONLWriter) setColumnNames(names []string) {
 
 func (w *JSONLWriter) initOrValidateColumnNames(columnNames []string) error {
 	initialized := len(w.schema.names) == 0
-	if err := initOrValidateColumnNames(&w.schema.names, columnNames); err != nil {
+	if err := initOrValidateColumnNames(&w.schema, columnNames); err != nil {
 		return err
 	}
 	if len(w.schema.names) > 0 {
@@ -1266,7 +1266,7 @@ func (w *SQLInsertWriter) initOrValidateQuotedColumns(columnNames []string) (str
 	if len(columnNames) == 0 && w.quotedColumnNames != "" {
 		return w.quotedColumnNames, nil
 	}
-	names, err := validatedColumnNames(w.schema.names, columnNames)
+	names, err := validatedColumnNames(w.schema.names, w.schema.registered, columnNames)
 	if err != nil {
 		return "", err
 	}
@@ -1274,7 +1274,7 @@ func (w *SQLInsertWriter) initOrValidateQuotedColumns(columnNames []string) (str
 	if err != nil {
 		return "", err
 	}
-	if len(w.schema.names) == 0 {
+	if len(w.schema.names) == 0 && len(names) > 0 {
 		w.schema.names = names
 	}
 	w.schema.registered = true
@@ -1450,24 +1450,27 @@ func gcvsFromStructValues(types []*sppb.Type, values []*structpb.Value) ([]spann
 	return gcvs, nil
 }
 
-// initOrValidateColumnNames initializes dst from the first non-empty
+// initOrValidateColumnNames initializes schema.names from the first non-empty
 // columnNames slice it sees. Once initialized, subsequent non-empty inputs must
 // match exactly; empty inputs are accepted only after initialization.
-func initOrValidateColumnNames(dst *[]string, columnNames []string) error {
-	validated, err := validatedColumnNames(*dst, columnNames)
+func initOrValidateColumnNames(schema *columnSchema, columnNames []string) error {
+	validated, err := validatedColumnNames(schema.names, schema.registered, columnNames)
 	if err != nil {
 		return err
 	}
-	if len(*dst) == 0 {
-		*dst = validated
+	if len(schema.names) == 0 {
+		schema.names = validated
 	}
 	return nil
 }
 
-func validatedColumnNames(existing []string, columnNames []string) ([]string, error) {
+func validatedColumnNames(existing []string, registered bool, columnNames []string) ([]string, error) {
 	if len(existing) == 0 {
 		if len(columnNames) == 0 {
 			return nil, ErrMissingColumnNames
+		}
+		if registered {
+			return nil, fmt.Errorf("%w: got %v want %v", ErrColumnNamesMismatch, columnNames, existing)
 		}
 		return slices.Clone(columnNames), nil
 	}
@@ -1489,7 +1492,7 @@ func validatePrepareRowTypeTransition(schema *columnSchema, columnNames []string
 		}
 		return nil
 	}
-	_, err := validatedColumnNames(schema.names, columnNames)
+	_, err := validatedColumnNames(schema.names, schema.registered, columnNames)
 	return err
 }
 
