@@ -16,6 +16,7 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 | `gcvctor/` | Build `GenericColumnValue` from Go types (strict; no format) |
 | `writer/` | CSV/TSV/JSONL/SQL INSERT; `WriteGCVs`, `WriteRowIterator` ([writer/README.md](writer/README.md)) |
 | `dbsqlrows/` | `*sql.Rows` → `writer.WriteGCVs` loop; driver-agnostic ([dbsqlrows/README.md](dbsqlrows/README.md)) |
+| `dbsqlrows/gospanner/` | Optional nested module: go-sql-spanner `QueryExport` ([dbsqlrows/gospanner/README.md](dbsqlrows/gospanner/README.md)) |
 | `internal/` | Escape/literal/iterator helpers |
 
 ## Formatting
@@ -45,7 +46,7 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 
 ## Adoption boundaries (do not expand spanvalue into)
 
-- **`dbsqlrows/`** owns the shared `*sql.Rows` GCV export loop; no go-sql-spanner (or other driver) in root `go.mod`. Table render, batch orchestration, and driver `ExecOptions` stay in apps (e.g. spannersh). See [#109](https://github.com/apstndb/spanvalue/issues/109) / [#110](https://github.com/apstndb/spanvalue/issues/110).
+- **`dbsqlrows/`** owns the shared `*sql.Rows` GCV export loop; no go-sql-spanner in root `go.mod`. Optional nested module **`dbsqlrows/gospanner/`** (`github.com/apstndb/spanvalue/dbsqlrows/gospanner`) imports go-sql-spanner only there (`QueryExport`, `DefaultExecOptions`). Table render, batch orchestration, and custom `ExecOptions` stay in apps (e.g. spannersh). See [#109](https://github.com/apstndb/spanvalue/issues/109) / [#110](https://github.com/apstndb/spanvalue/issues/110).
 - **No string→GCV parsing** in `FormatConfig` (`gcvctor` / app). PG table cells: **spanpg**, not spanvalue.
 
 ## gcvctor & errors (short)

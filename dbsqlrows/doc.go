@@ -26,7 +26,8 @@
 //
 // Package path github.com/apstndb/spanvalue/dbsqlrows is part of the single
 // github.com/apstndb/spanvalue module. The package does not import go-sql-spanner
-// (or any database/sql driver); callers configure the driver themselves.
+// (or any database/sql driver); callers configure the driver themselves. Optional
+// one-shot helpers live in nested module github.com/apstndb/spanvalue/dbsqlrows/gospanner.
 //
 // For metadata-first flows (multi-statement batches, table render before CSV), use
 // [ReadMetadataAndAdvanceToData] then [ExportRowsAtData] or app-owned rendering;

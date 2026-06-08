@@ -67,7 +67,9 @@ flowchart LR
 
 [`ExportRows`](export.go) and [`ExportRowsAtData`](export.go) do not consume the trailing stats pseudo-row unless [`ExportConfig.ReadResultSetStats`](export.go) is true. When stats are read, the iterator advances with `NextResultSet()` so multi-statement batches can read the next metadata row.
 
-## go-sql-spanner cookbook
+## go-sql-spanner integration
+
+### Option A: core cookbook (driver-agnostic)
 
 Apps using [go-sql-spanner](https://github.com/googleapis/go-sql-spanner) configure
 `ExecOptions` at query time, then pass the open `*sql.Rows` to dbsqlrows:
@@ -108,6 +110,18 @@ _ = result.Metadata
 Set `ReturnResultSetStats: true` on the driver only when the app does not need to
 render data before reading stats. Otherwise leave it false and use
 `ExportConfig.ReadResultSetStats` or app-owned stats draining.
+
+### Option B: optional `gospanner` nested module
+
+When the app already depends on go-sql-spanner and wants a one-shot query +
+export helper, use the separate module
+[`github.com/apstndb/spanvalue/dbsqlrows/gospanner`](gospanner/README.md):
+
+- [`DefaultExecOptions`](gospanner/export.go) — recommended `ExecOptions`
+- [`QueryExport`](gospanner/export.go) — `QueryContext` + `ExportRows`
+
+Root `go.mod` still has no go-sql-spanner; only importers of `gospanner` pull
+the driver in.
 
 ## spannersh integration sketch
 

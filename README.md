@@ -114,9 +114,13 @@ Writer package details (GCV export options, `RowIterator` vs `WriteGCVs`): [writ
 
 [go-sql-spanner](https://github.com/googleapis/go-sql-spanner) apps often decode query
 rows into `[]spanner.GenericColumnValue` (for example via proto decode options) and
-export with `spanvalue` writers. `spanvalue` does **not** wrap `database/sql` or
-`*sql.Rows`; keep a thin application loop (scan → GCV slice →
-[`writer.WriteGCVs`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#DelimitedWriter.WriteGCVs)).
+export with `spanvalue` writers. Use [`dbsqlrows`](dbsqlrows/README.md) for the
+shared metadata → data → optional stats loop, or
+[`dbsqlrows/gospanner`](dbsqlrows/gospanner/README.md) for one-shot
+`QueryExport` when the app already depends on go-sql-spanner. Root `go.mod` still
+has no go-sql-spanner; the manual loop below remains valid:
+scan → GCV slice →
+[`writer.WriteGCVs`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#DelimitedWriter.WriteGCVs).
 
 **Column names:** `database/sql` does not surface Spanner
 `*spannerpb.ResultSetMetadata`; register columns with
