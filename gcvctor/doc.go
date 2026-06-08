@@ -68,5 +68,5 @@
 // [cloud.google.com/go/civil.Date], [TimestampValue] with [time.Time], and so on) avoid parse errors
 // when you already hold the native value.
 //
-// See [ExampleStringBasedValueFromCode_validatedDate] and [ExampleNormalizeArrayElements].
+// See ExampleStringBasedValueFromCode_validatedDate and ExampleNormalizeArrayElements.
 package gcvctor

@@ -156,7 +156,7 @@ func TestMustDateStringValue_wrapsParseError(t *testing.T) {
 	}
 }
 
-func TestMustArrayValueOf_panicsPreserveErrMismatchedCounts(t *testing.T) {
+func TestMustStructValueOf_panicsPreserveErrMismatchedCounts(t *testing.T) {
 	t.Parallel()
 
 	var panicked any
