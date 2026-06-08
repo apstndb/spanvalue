@@ -144,6 +144,9 @@ func FormatProtoAsCast(formatter Formatter, value spanner.GenericColumnValue, to
 	if IsNull(value) {
 		return formatter.GetNullString(), nil
 	}
+	if err := requireStringWire(value.Value, sppb.TypeCode_PROTO); err != nil {
+		return "", err
+	}
 
 	b, err := base64.StdEncoding.DecodeString(value.Value.GetStringValue())
 	if err != nil {
@@ -164,6 +167,9 @@ func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, top
 
 	if IsNull(value) {
 		return formatter.GetNullString(), nil
+	}
+	if err := requireStringWire(value.Value, sppb.TypeCode_ENUM); err != nil {
+		return "", err
 	}
 
 	typeFQN, err := requireTypeFQN(value.Type)
