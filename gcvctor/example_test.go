@@ -72,3 +72,74 @@ func ExampleIntervalStringValue() {
 	// Output:
 	// INTERVAL P1Y2M3DT4H5M6S
 }
+
+func ExampleEmptyArrayOf() {
+	elemType := typector.CodeToSimpleType(sppb.TypeCode_STRING)
+	empty := gcvctor.EmptyArrayOf(elemType)
+	viaArrayValueOf := gcvctor.MustArrayValueOf(elemType)
+
+	fmt.Println(spanvalue.IsNull(empty), len(empty.Value.GetListValue().GetValues()))
+	fmt.Println(empty.Type.ArrayElementType.Code.String())
+	fmt.Println(spanvalue.IsNull(viaArrayValueOf), len(viaArrayValueOf.Value.GetListValue().GetValues()))
+	// Output:
+	// false 0
+	// STRING
+	// false 0
+}
+
+func ExampleNullArrayOf() {
+	elemType := typector.CodeToSimpleType(sppb.TypeCode_STRING)
+	nullArray := gcvctor.NullArrayOf(elemType)
+	nullViaNullOf := gcvctor.NullOf(typector.ElemTypeToArrayType(elemType))
+
+	fmt.Println(spanvalue.IsNull(nullArray), nullArray.Type.ArrayElementType.Code.String())
+	fmt.Println(spanvalue.IsNull(nullViaNullOf))
+	// Output:
+	// true STRING
+	// true
+}
+
+func ExampleNullOf_structContainer() {
+	structType, err := typector.NameCodeSlicesToStructType(
+		[]string{"id", "name"},
+		[]sppb.TypeCode{sppb.TypeCode_INT64, sppb.TypeCode_STRING},
+	)
+	if err != nil {
+		panic(err)
+	}
+	nullStruct := gcvctor.NullOf(structType)
+	fieldsAllNull := gcvctor.MustStructValueOf(
+		[]string{"id", "name"},
+		[]spanner.GenericColumnValue{
+			gcvctor.NullOf(typector.CodeToSimpleType(sppb.TypeCode_INT64)),
+			gcvctor.NullOf(typector.CodeToSimpleType(sppb.TypeCode_STRING)),
+		},
+	)
+
+	fmt.Println(spanvalue.IsNull(nullStruct), nullStruct.Type.Code.String())
+	fmt.Println(spanvalue.IsNull(fieldsAllNull), fieldsAllNull.Type.Code.String())
+	// Output:
+	// true STRUCT
+	// false STRUCT
+}
+
+func ExampleInt64FromPtr_fromNullable() {
+	var optional *int64
+	fromPtr := gcvctor.Int64FromPtr(optional)
+	fromNullable := gcvctor.Int64FromNullable(spanner.NullInt64{})
+
+	fmt.Println(spanvalue.IsNull(fromPtr))
+	fmt.Println(spanvalue.IsNull(fromNullable))
+
+	v := int64(42)
+	fromPtr = gcvctor.Int64FromPtr(&v)
+	fromNullable = gcvctor.Int64FromNullable(spanner.NullInt64{Int64: 42, Valid: true})
+
+	fmt.Println(fromPtr.Value.GetStringValue())
+	fmt.Println(fromNullable.Value.GetStringValue())
+	// Output:
+	// true
+	// true
+	// 42
+	// 42
+}
