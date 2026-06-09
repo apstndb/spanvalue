@@ -606,3 +606,197 @@ func (s *stubGCVWriter) Flush() error {
 func (s *stubGCVWriter) PrepareRowType(*sppb.StructType) error {
 	return s.prepareErr
 }
+
+func TestRunRowsAtData_zeroRowsPrepareAndFinish(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id", "name", "score")
+	stub := &stubSQLRows{
+		columns:    []string{"id", "name", "score"},
+		resultSets: [][]stubRow{nil},
+	}
+
+	var prepared bool
+	var finished bool
+	var writeCalls int
+
+	hooks := NewSQLRowsHooks().
+		WithPrepareMetadata(func(got *sppb.ResultSetMetadata) error {
+			prepared = true
+			if diff := cmp.Diff(md, got, protocmp.Transform()); diff != "" {
+				t.Fatalf("PrepareMetadata metadata mismatch (-want +got):\n%s", diff)
+			}
+			return nil
+		}).
+		WithWriteDataRow(func([]spanner.GenericColumnValue) error {
+			writeCalls++
+			return nil
+		}).
+		WithFinish(func(*ExportResult) error {
+			finished = true
+			return nil
+		})
+
+	got, err := runRows(stub, hooks, exportRunConfig{metadata: md})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !prepared || !finished {
+		t.Fatalf("prepared=%v finished=%v, want both true", prepared, finished)
+	}
+	if writeCalls != 0 {
+		t.Fatalf("WriteDataRow calls = %d, want 0", writeCalls)
+	}
+	if got.RowsRead != 0 {
+		t.Fatalf("RowsRead = %d, want 0", got.RowsRead)
+	}
+}
+
+func TestRunRowsAtData_writeErrorPartialResult(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	stub := &stubSQLRows{
+		columns: []string{"id"},
+		resultSets: [][]stubRow{
+			{
+				{values: []any{gcvctor.Int64Value(1)}},
+				{values: []any{gcvctor.Int64Value(2)}},
+			},
+		},
+	}
+	wantErr := errors.New("write row failed")
+
+	got, err := runRows(stub, NewSQLRowsHooks().
+		WithPrepareMetadata(func(*sppb.ResultSetMetadata) error { return nil }).
+		WithWriteDataRow(func([]spanner.GenericColumnValue) error { return wantErr }),
+		exportRunConfig{metadata: md})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error = %v, want %v", err, wantErr)
+	}
+	if got.Metadata != md {
+		t.Fatal("Metadata not set on write error")
+	}
+	if got.RowsRead != 0 {
+		t.Fatalf("RowsRead = %d, want 0 on first-row write error", got.RowsRead)
+	}
+}
+
+func TestRunRowsAtData_prepareErrorPartialResult(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	stub := &stubSQLRows{
+		columns: []string{"id"},
+		resultSets: [][]stubRow{
+			{{values: []any{gcvctor.Int64Value(1)}}},
+		},
+	}
+	wantErr := errors.New("prepare failed")
+
+	got, err := runRows(stub, NewSQLRowsHooks().
+		WithPrepareMetadata(func(*sppb.ResultSetMetadata) error { return wantErr }),
+		exportRunConfig{metadata: md})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error = %v, want %v", err, wantErr)
+	}
+	if got.Metadata != md {
+		t.Fatal("Metadata not set on prepare error")
+	}
+	if got.RowsRead != 0 {
+		t.Fatalf("RowsRead = %d, want 0", got.RowsRead)
+	}
+}
+
+func TestRunRowsAtData_tableShapedHooks(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id", "name")
+	stub := &stubSQLRows{
+		columns: []string{"id", "name"},
+		resultSets: [][]stubRow{
+			{
+				{values: []any{gcvctor.Int64Value(1), gcvctor.StringValue("Alice")}},
+				{values: []any{gcvctor.Int64Value(2), gcvctor.StringValue("Bob")}},
+			},
+		},
+	}
+
+	var header []string
+	var rows [][]string
+
+	hooks := NewSQLRowsHooks().
+		WithPrepareMetadata(func(m *sppb.ResultSetMetadata) error {
+			for _, f := range m.GetRowType().GetFields() {
+				header = append(header, f.GetName())
+			}
+			return nil
+		}).
+		WithWriteDataRow(func(gcvs []spanner.GenericColumnValue) error {
+			row := make([]string, len(gcvs))
+			for i, gcv := range gcvs {
+				s, err := spanvalue.FormatColumnLiteral(gcv)
+				if err != nil {
+					return err
+				}
+				row[i] = s
+			}
+			rows = append(rows, row)
+			return nil
+		}).
+		WithFinish(func(res *ExportResult) error {
+			if res.RowsRead != len(rows) {
+				return errors.New("finish: row count mismatch")
+			}
+			return nil
+		})
+
+	got, err := runRows(stub, hooks, exportRunConfig{metadata: md})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RowsRead != 2 {
+		t.Fatalf("RowsRead = %d, want 2", got.RowsRead)
+	}
+	wantHeader := []string{"id", "name"}
+	if diff := cmp.Diff(wantHeader, header); diff != "" {
+		t.Fatalf("header mismatch (-want +got):\n%s", diff)
+	}
+	wantRows := [][]string{{"1", `"Alice"`}, {"2", `"Bob"`}}
+	if diff := cmp.Diff(wantRows, rows); diff != "" {
+		t.Fatalf("rows mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestSQLRowsHooksFromGCVWriter_matchesExportRowsAtData(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	stub := &stubSQLRows{
+		columns: []string{"id"},
+		resultSets: [][]stubRow{
+			{{values: []any{gcvctor.Int64Value(7)}}},
+		},
+	}
+
+	var out bytes.Buffer
+	w, err := writer.NewCSVWriter(&out, writer.DelimitedGCVExportOptions(
+		md,
+		spanvalue.SimpleFormatConfig(),
+		spanvalue.IndexedUnnamedFieldNamer,
+	)...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := runRows(stub, SQLRowsHooksFromGCVWriter(w), exportRunConfig{metadata: md})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RowsRead != 1 {
+		t.Fatalf("RowsRead = %d, want 1", got.RowsRead)
+	}
+	if !bytes.Contains(out.Bytes(), []byte("7")) {
+		t.Fatalf("output = %q, want row with 7", out.String())
+	}
+}

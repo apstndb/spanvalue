@@ -25,7 +25,8 @@ import "github.com/apstndb/spanvalue/dbsqlrows"
 
 - Native `*spanner.RowIterator` export ([`writer.WriteRowIterator`](../writer/README.md)).
 - String → GCV parsing, PostgreSQL table cells ([spanpg](https://github.com/apstndb/spanpg)), or `gcvctor` changes.
-- Table rendering, batch orchestration, drain-only modes, or statement hooks — callers (e.g. [spannersh](https://github.com/apstndb/spannersh)) keep app-specific logic.
+- Built-in ASCII table layout (`tablewriter` or similar) — apps supply [`SQLRowsHooks`](hooks.go).
+- Batch orchestration or statement hooks — callers (e.g. [spannersh](https://github.com/apstndb/spannersh)) keep app loops.
 - SQL INSERT export in v1 unless trivial.
 - Owning `db.QueryContext` or driver `ExecOptions` — callers open `*sql.Rows`.
 
@@ -57,9 +58,20 @@ flowchart LR
 
 | Entry point | When to use |
 |-------------|-------------|
-| [`ExportRows`](export.go) | Open `*sql.Rows` at metadata pseudo-row; reads metadata then data |
+| [`ExportRows`](export.go) | Open `*sql.Rows` at metadata pseudo-row; csv/jsonl via [`GCVStreamWriter`](export.go) |
+| [`RunRows`](hooks.go) / [`RunRowsAtData`](hooks.go) | Custom sinks via [`SQLRowsHooks`](hooks.go) (table, observe-only) |
 | [`ReadMetadataAndAdvanceToData`](metadata.go) | Metadata-first apps; advances cursor to data rows |
-| [`ExportRowsAtData`](export.go) | Rows already at data + metadata known (after table render or batch step) |
+| [`ExportRowsAtData`](export.go) | Thin wrapper: `RunRowsAtData` + [`SQLRowsHooksFromGCVWriter`](hooks.go) |
+
+### writer ↔ dbsqlrows symmetry
+
+| writer (native client) | dbsqlrows (database/sql) |
+|------------------------|--------------------------|
+| [`RunRowIterator`](../writer/row_iterator.go) | [`RunRows`](hooks.go) / [`RunRowsAtData`](hooks.go) |
+| [`RowIteratorHooks`](../writer/row_iterator.go) | [`SQLRowsHooks`](hooks.go) |
+| [`RowIteratorHooksFromWriter`](../writer/row_iterator.go) | [`SQLRowsHooksFromGCVWriter`](hooks.go) |
+| [`RowIteratorResult`](../writer/row_iterator.go) | [`ExportResult`](export.go) |
+| `*spanner.Row` | `[]spanner.GenericColumnValue` |
 
 [`ExportResult`](export.go) always carries `Metadata` when known (including error paths after prepare/write, matching [`writer.RowIteratorResult`](../writer/row_iterator.go) partial-result semantics).
 
@@ -125,7 +137,7 @@ the driver in.
 
 ## spannersh integration sketch
 
-spannersh keeps table render, batch loops, EXPLAIN drain, and hooks in-repo. dbsqlrows supplies the shared GCV export loop:
+spannersh keeps batch loops, EXPLAIN drain, and layout libraries in-repo. dbsqlrows owns the shared `*sql.Rows` loop; apps own formatting.
 
 ```go
 // Multi-statement batch: read metadata, render, read stats outside dbsqlrows.
@@ -133,17 +145,24 @@ md, ok, err := dbsqlrows.ReadMetadataAndAdvanceToData(rows)
 if err != nil || !ok {
     return err
 }
-n, err := renderTable(out, md, rows) // spannersh-owned
-if err != nil {
-    return err
-}
-rss, err := fetchResultSetStatsAfterDataRows(rows) // spannersh-owned
-// ...
 
-// CSV/JSONL at data rows (writer built with metadata via DelimitedGCVExportOptions):
+// Table (spannersh-owned tablewriter + cell formatting):
+result, err := dbsqlrows.RunRowsAtData(rows, md, dbsqlrows.NewSQLRowsHooks().
+    WithPrepareMetadata(func(md *sppb.ResultSetMetadata) error {
+        return table.PrepareHeader(md) // app
+    }).
+    WithWriteDataRow(func(gcvs []spanner.GenericColumnValue) error {
+        return table.AppendRow(gcvs) // app
+    }).
+    WithFinish(func(*dbsqlrows.ExportResult) error {
+        return table.Render() // app
+    }),
+    dbsqlrows.ExportConfig{},
+)
+
+// CSV/JSONL: ExportRowsAtData + writer (or SQLRowsHooksFromGCVWriter):
 w, err := writer.NewCSVWriter(out, writer.DelimitedGCVExportOptions(md, fc, namer)...)
 result, err := dbsqlrows.ExportRowsAtData(rows, md, w, dbsqlrows.ExportConfig{})
-_ = result.Metadata // same md
 _ = result.RowsRead
 ```
 

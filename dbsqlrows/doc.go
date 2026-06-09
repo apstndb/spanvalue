@@ -30,8 +30,13 @@
 // one-shot helpers live in nested module github.com/apstndb/spanvalue/dbsqlrows/gospanner.
 //
 // For metadata-first flows (multi-statement batches, table render before CSV), use
-// [ReadMetadataAndAdvanceToData] then [ExportRowsAtData] or app-owned rendering;
-// leave stats on rows unless [ExportConfig.ReadResultSetStats] is set.
+// [ReadMetadataAndAdvanceToData] then [RunRowsAtData] with [SQLRowsHooks] or
+// [ExportRowsAtData] for writer sinks; leave stats on rows unless
+// [ExportConfig.ReadResultSetStats] is set.
+//
+// Custom sinks (ASCII table, observe-only) mirror [writer.RunRowIterator]: use
+// [RunRows] or [RunRowsAtData] with [SQLRowsHooks]; csv/jsonl use
+// [SQLRowsHooksFromGCVWriter] via [ExportRows] / [ExportRowsAtData].
 //
 // Extended goals, non-goals, and dependency diagram: see README.md in this directory.
 package dbsqlrows
