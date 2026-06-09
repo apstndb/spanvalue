@@ -27,7 +27,7 @@ func TestDefaultExecOptions(t *testing.T) {
 func TestQueryExport_nilDB(t *testing.T) {
 	t.Parallel()
 
-	_, err := QueryExport(t.Context(), nil, "SELECT 1", nil, nil, dbsqlrows.ExportConfig{})
+	_, err := QueryExport(t.Context(), nil, "SELECT 1", nil, nil, dbsqlrows.SQLRowsConfig{})
 	if !errors.Is(err, errNilDB) {
 		t.Fatalf("error = %v, want %v", err, errNilDB)
 	}

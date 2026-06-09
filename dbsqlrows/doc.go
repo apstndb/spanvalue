@@ -21,7 +21,7 @@
 // |------|----------|-----------|-----------------|
 // | Native client | [*spanner.RowIterator] | [*spanner.Row] | [writer.WriteRowIterator] |
 // | database/sql driver | [*sql.Rows] | []spanner.GenericColumnValue | [writer.DelimitedWriter.WriteGCVs] |
-// | dbsqlrows | [*sql.Rows] (caller-owned) | []spanner.GenericColumnValue | [RunRowsAtData] / [ExportRowsAtData] |
+// | dbsqlrows | [*sql.Rows] (caller-owned) | []spanner.GenericColumnValue | [RunRowsAtData] / [WriteRowsAtData] |
 //
 // dbsqlrows does not convert GCV slices to [*spanner.Row] for [writer.Writer.WriteRow].
 //
@@ -50,10 +50,10 @@
 //
 // | Entry point | When to use |
 // |-------------|-------------|
-// | [ExportRows] | Open [*sql.Rows] at metadata pseudo-row; csv/jsonl via [GCVStreamWriter] |
+// | [WriteRows] | Open [*sql.Rows] at metadata pseudo-row; csv/jsonl via [GCVStreamWriter] |
 // | [RunRows] / [RunRowsAtData] | Custom sinks via [SQLRowsHooks] |
 // | [ReadMetadataAndAdvanceToData] | Metadata-first apps; advances cursor to data rows |
-// | [ExportRowsAtData] | [RunRowsAtData] + [SQLRowsHooksFromGCVWriter] |
+// | [WriteRowsAtData] | [RunRowsAtData] + [SQLRowsHooksFromGCVWriter] |
 //
 // Symmetry with writer:
 //
@@ -62,11 +62,11 @@
 // | [writer.RunRowIterator] | [RunRows] / [RunRowsAtData] |
 // | [writer.RowIteratorHooks] | [SQLRowsHooks] |
 // | [writer.RowIteratorHooksFromWriter] | [SQLRowsHooksFromGCVWriter] |
-// | [writer.RowIteratorResult] | [ExportResult] |
+// | [writer.RowIteratorResult] | [SQLRowsResult] |
 //
-// [ExportResult] carries Metadata when known on error paths (partial-result contract
+// [SQLRowsResult] carries Metadata when known on error paths (partial-result contract
 // matching [writer.RowIteratorResult]). Stats are not consumed unless
-// [ExportConfig.ReadResultSetStats] is true; the iterator then advances with
+// [SQLRowsConfig.ReadResultSetStats] is true; the iterator then advances with
 // NextResultSet for multi-statement batches.
 //
 // An empty [SQLRowsHooks] value advances past data rows without per-row decode when
@@ -77,7 +77,7 @@
 // # go-sql-spanner integration
 //
 // Option A (driver-agnostic): configure ExecOptions at query time, then pass
-// open [*sql.Rows] to [ExportRows] or [RunRows]:
+// open [*sql.Rows] to [WriteRows] or [RunRows]:
 //
 //	opts := spannerdriver.ExecOptions{
 //	    DecodeOption:            spannerdriver.DecodeOptionProto,
@@ -86,12 +86,12 @@
 //	}
 //	rows, err := db.QueryContext(ctx, q, opts)
 //	// ...
-//	result, err := dbsqlrows.ExportRows(rows, w, dbsqlrows.ExportConfig{})
+//	result, err := dbsqlrows.WriteRows(rows, w, dbsqlrows.SQLRowsConfig{})
 //
 // Option B: nested module github.com/apstndb/spanvalue/dbsqlrows/gospanner provides
 // DefaultExecOptions and QueryExport for one-shot query → csv/jsonl export when
 // the app already depends on go-sql-spanner. It is a thin reference integration
-// (ExecOptions + QueryContext + [ExportRows]); root go.mod still has no go-sql-spanner.
+// (ExecOptions + QueryContext + [WriteRows]); root go.mod still has no go-sql-spanner.
 // Interactive shells, metadata-first batches, EXPLAIN, and per-query driver options
 // (QueryMode, DirectExecuteQuery) should use Option A with app-owned ExecOptions
 // instead — validated by [spannersh](https://github.com/apstndb/spannersh).
@@ -99,7 +99,7 @@
 // # Stats: driver vs export
 //
 // A common REPL pattern: set ReturnResultSetStats true on the driver at
-// QueryContext, keep [ExportConfig.ReadResultSetStats] false during csv/jsonl/table
+// QueryContext, keep [SQLRowsConfig.ReadResultSetStats] false during csv/jsonl/table
 // export, then read the stats pseudo-row in application code after render. dbsqlrows
 // leaves the cursor on the data result set until export completes or
 // ReadResultSetStats is enabled.
@@ -113,9 +113,9 @@
 // [SQLRowsHooks.WithWriteDataRow], and [SQLRowsHooks.WithFinish] — apps own layout
 // libraries and cell formatting.
 //
-// csv/jsonl: [ExportRowsAtData] with [writer.DelimitedGCVExportOptions] or
+// csv/jsonl: [WriteRowsAtData] with [writer.DelimitedGCVExportOptions] or
 // [writer.JSONLGCVExportOptions] at writer construction.
 //
 // EXPLAIN / drain: [RunRowsAtData] with [NewSQLRowsHooks] and
-// ExportConfig.WithReadResultSetStats(true).
+// SQLRowsConfig.WithReadResultSetStats(true).
 package dbsqlrows

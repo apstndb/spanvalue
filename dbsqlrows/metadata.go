@@ -7,7 +7,7 @@ import (
 )
 
 // ReadMetadataAndAdvanceToData reads the metadata pseudo-row from rows and advances
-// to the data result set. Use before [ExportRowsAtData] or custom rendering when
+// to the data result set. Use before [WriteRowsAtData] or custom rendering when
 // metadata is consumed outside export.
 //
 // If there is no metadata row, returns ok=false and err=rows.Err() (nil on clean EOF).
@@ -27,6 +27,9 @@ func readMetadataAndAdvanceToData(fac rowsFacade) (*sppb.ResultSetMetadata, bool
 		return nil, false, err
 	}
 	if !fac.nextResultSet() {
+		if err := fac.err(); err != nil {
+			return nil, false, err
+		}
 		return nil, false, ErrMissingDataResultSet
 	}
 	return md, true, nil

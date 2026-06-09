@@ -10,22 +10,22 @@ import (
 // SQLRowsHooks drives [RunRows] and [RunRowsAtData]. Nil function fields are skipped.
 //
 // An empty hooks value (from [NewSQLRowsHooks]) still advances past data rows and
-// increments [ExportResult.RowsRead] while WriteDataRow is nil (no per-row decode).
+// increments [SQLRowsResult.RowsRead] while WriteDataRow is nil (no per-row decode).
 // Use that to drain rows before reading stats (for example EXPLAIN with
-// [ExportConfig.ReadResultSetStats]).
+// [SQLRowsConfig.ReadResultSetStats]).
 //
 // PrepareMetadata runs once after metadata is known and before data rows are scanned.
 // WriteDataRow runs per data row when set. The []spanner.GenericColumnValue argument
 // is reused across calls: valid only for the duration of WriteDataRow; copy or
 // format synchronously before returning if the sink retains row data. Finish runs only after all rows and
 // optional stats consumption succeed; it is not called when PrepareMetadata or
-// WriteDataRow returns an error. The returned [ExportResult] still carries
+// WriteDataRow returns an error. The returned [SQLRowsResult] still carries
 // Metadata and RowsRead at the abort point (same partial-result contract as
 // [writer.RowIteratorHooks] and [writer.RunRowIterator]).
 type SQLRowsHooks struct {
 	PrepareMetadata func(*sppb.ResultSetMetadata) error
 	WriteDataRow    func([]spanner.GenericColumnValue) error
-	Finish          func(*ExportResult) error
+	Finish          func(*SQLRowsResult) error
 }
 
 // NewSQLRowsHooks returns an empty hooks value for custom decoration or
@@ -48,7 +48,7 @@ func (h SQLRowsHooks) WithWriteDataRow(fn func([]spanner.GenericColumnValue) err
 }
 
 // WithFinish sets Finish and returns h.
-func (h SQLRowsHooks) WithFinish(fn func(*ExportResult) error) SQLRowsHooks {
+func (h SQLRowsHooks) WithFinish(fn func(*SQLRowsResult) error) SQLRowsHooks {
 	h.Finish = fn
 	return h
 }
@@ -67,39 +67,39 @@ func SQLRowsHooksFromGCVWriter(w GCVStreamWriter) SQLRowsHooks {
 			return prepareWriterMetadata(w, md)
 		}).
 		WithWriteDataRow(w.WriteGCVs).
-		WithFinish(func(*ExportResult) error {
+		WithFinish(func(*SQLRowsResult) error {
 			return w.Flush()
 		})
 }
 
 // RunRows streams an open *sql.Rows positioned at the metadata pseudo-row using
-// hooks. See [ExportRows] for driver conventions, ownership, and stats behavior.
-func RunRows(rows *sql.Rows, hooks SQLRowsHooks, cfg ExportConfig) (*ExportResult, error) {
+// hooks. See [WriteRows] for driver conventions, ownership, and stats behavior.
+func RunRows(rows *sql.Rows, hooks SQLRowsHooks, cfg SQLRowsConfig) (*SQLRowsResult, error) {
 	if rows == nil {
 		return nil, ErrNilRows
 	}
-	return runRows(sqlRowsFacade{rows}, hooks, exportRunConfig{
+	return runRows(sqlRowsFacade{rows}, hooks, sqlRowsRunConfig{
 		readMetadataPseudoRow: true,
 		readResultSetStats:    cfg.ReadResultSetStats,
 	})
 }
 
 // RunRowsAtData streams rows already positioned on the data result set using hooks.
-// metadata must be non-nil. See [ExportRowsAtData] for stats and partial-result
+// metadata must be non-nil. See [WriteRowsAtData] for stats and partial-result
 // semantics.
 func RunRowsAtData(
 	rows *sql.Rows,
 	metadata *sppb.ResultSetMetadata,
 	hooks SQLRowsHooks,
-	cfg ExportConfig,
-) (*ExportResult, error) {
+	cfg SQLRowsConfig,
+) (*SQLRowsResult, error) {
 	if rows == nil {
 		return nil, ErrNilRows
 	}
 	if metadata == nil {
 		return nil, ErrNilMetadata
 	}
-	return runRows(sqlRowsFacade{rows}, hooks, exportRunConfig{
+	return runRows(sqlRowsFacade{rows}, hooks, sqlRowsRunConfig{
 		metadata:              metadata,
 		readMetadataPseudoRow: false,
 		readResultSetStats:    cfg.ReadResultSetStats,

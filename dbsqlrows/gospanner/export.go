@@ -16,7 +16,7 @@ var errNilDB = errors.New("nil *sql.DB")
 // proto-decoded GCV export with a leading metadata pseudo result set
 // ([spannerdriver.ExecOptions.ReturnResultSetMetadata]). ReturnResultSetStats
 // is false so callers can read stats after export (for example spannersh
-// execution summaries) or set [dbsqlrows.ExportConfig.ReadResultSetStats].
+// execution summaries) or set [dbsqlrows.SQLRowsConfig.ReadResultSetStats].
 func DefaultExecOptions() spannerdriver.ExecOptions {
 	return spannerdriver.ExecOptions{
 		DecodeOption:            spannerdriver.DecodeOptionProto,
@@ -26,15 +26,15 @@ func DefaultExecOptions() spannerdriver.ExecOptions {
 }
 
 // QueryExport runs db.QueryContext with [DefaultExecOptions] and exports the
-// result via [dbsqlrows.ExportRows]. It closes rows before returning.
+// result via [dbsqlrows.WriteRows]. It closes rows before returning.
 func QueryExport(
 	ctx context.Context,
 	db *sql.DB,
 	query string,
 	args []any,
 	w dbsqlrows.GCVStreamWriter,
-	cfg dbsqlrows.ExportConfig,
-) (*dbsqlrows.ExportResult, error) {
+	cfg dbsqlrows.SQLRowsConfig,
+) (*dbsqlrows.SQLRowsResult, error) {
 	return QueryExportWithOptions(ctx, db, query, args, w, cfg, DefaultExecOptions())
 }
 
@@ -45,9 +45,9 @@ func QueryExportWithOptions(
 	query string,
 	args []any,
 	w dbsqlrows.GCVStreamWriter,
-	cfg dbsqlrows.ExportConfig,
+	cfg dbsqlrows.SQLRowsConfig,
 	opts spannerdriver.ExecOptions,
-) (*dbsqlrows.ExportResult, error) {
+) (*dbsqlrows.SQLRowsResult, error) {
 	if db == nil {
 		return nil, errNilDB
 	}
@@ -58,6 +58,10 @@ func QueryExportWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	return dbsqlrows.ExportRows(rows, w, cfg)
+	result, writeErr := dbsqlrows.WriteRows(rows, w, cfg)
+	closeErr := rows.Close()
+	if writeErr != nil {
+		return result, writeErr
+	}
+	return result, closeErr
 }

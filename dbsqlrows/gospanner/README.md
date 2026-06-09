@@ -38,7 +38,7 @@ This nested module targets **Go 1.25** (required by go-sql-spanner v1.25.1). The
 | Function | Role |
 |----------|------|
 | [`DefaultExecOptions`](export.go) | Proto decode + metadata pseudo-row; stats left for caller |
-| [`QueryExport`](export.go) | `QueryContext` + [`dbsqlrows.ExportRows`](../export.go) |
+| [`QueryExport`](export.go) | `QueryContext` + [`dbsqlrows.WriteRows`](../export.go) |
 | [`QueryExportWithOptions`](export.go) | Same with explicit `ExecOptions` |
 
 ## Example
@@ -59,7 +59,7 @@ if err != nil {
     return err
 }
 result, err := gospanner.QueryExport(
-    ctx, db, "SELECT id, name FROM Users", nil, w, dbsqlrows.ExportConfig{},
+    ctx, db, "SELECT id, name FROM Users", nil, w, dbsqlrows.SQLRowsConfig{},
 )
 if err != nil {
     return err

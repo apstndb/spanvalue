@@ -975,7 +975,7 @@ func TestStructValueOfFields(t *testing.T) {
 
 	tests := []struct {
 		desc      string
-		fields    []gcvctor.StructFieldValue
+		fields    []gcvctor.StructField
 		want      spanner.GenericColumnValue
 		expectErr bool
 		errIs     error
@@ -983,9 +983,9 @@ func TestStructValueOfFields(t *testing.T) {
 	}{
 		{
 			desc: "named fields",
-			fields: []gcvctor.StructFieldValue{
-				gcvctor.StructField("Code", gcvctor.StringValue("10")),
-				gcvctor.StructField("DisplayOrder", gcvctor.Int64Value(1)),
+			fields: []gcvctor.StructField{
+				{Name: "Code", Value: gcvctor.StringValue("10")},
+				{Name: "DisplayOrder", Value: gcvctor.Int64Value(1)},
 			},
 			want: spanner.GenericColumnValue{
 				Type: must(typector.NameCodeSlicesToStructType(
@@ -1002,9 +1002,9 @@ func TestStructValueOfFields(t *testing.T) {
 		},
 		{
 			desc: "unnamed fields",
-			fields: []gcvctor.StructFieldValue{
-				gcvctor.StructField("", gcvctor.StringValue("value")),
-				gcvctor.StructField("", gcvctor.Int64Value(42)),
+			fields: []gcvctor.StructField{
+				{Name: "", Value: gcvctor.StringValue("value")},
+				{Name: "", Value: gcvctor.Int64Value(42)},
 			},
 			want: spanner.GenericColumnValue{
 				Type: must(typector.NameCodeSlicesToStructType(
@@ -1021,8 +1021,8 @@ func TestStructValueOfFields(t *testing.T) {
 		},
 		{
 			desc: "nil field type named",
-			fields: []gcvctor.StructFieldValue{
-				gcvctor.StructField("broken", spanner.GenericColumnValue{}),
+			fields: []gcvctor.StructField{
+				{Name: "broken", Value: spanner.GenericColumnValue{}},
 			},
 			expectErr: true,
 			errIs:     gcvctor.ErrNilFieldType,
@@ -1030,8 +1030,8 @@ func TestStructValueOfFields(t *testing.T) {
 		},
 		{
 			desc: "nil field type unnamed",
-			fields: []gcvctor.StructFieldValue{
-				gcvctor.StructField("", spanner.GenericColumnValue{}),
+			fields: []gcvctor.StructField{
+				{Name: "", Value: spanner.GenericColumnValue{}},
 			},
 			expectErr: true,
 			errIs:     gcvctor.ErrNilFieldType,
@@ -1075,9 +1075,9 @@ func TestStructValueOfFields_matchesStructValueOf(t *testing.T) {
 
 	names := []string{"id", "name"}
 	gcvs := []spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.StringValue("foo")}
-	fields := []gcvctor.StructFieldValue{
-		gcvctor.StructField("id", gcvctor.Int64Value(1)),
-		gcvctor.StructField("name", gcvctor.StringValue("foo")),
+	fields := []gcvctor.StructField{
+		{Name: "id", Value: gcvctor.Int64Value(1)},
+		{Name: "name", Value: gcvctor.StringValue("foo")},
 	}
 
 	want, err := gcvctor.StructValueOf(names, gcvs)
