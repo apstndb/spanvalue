@@ -984,17 +984,17 @@ func TestStructValueOfFields(t *testing.T) {
 		{
 			desc: "named fields",
 			fields: []gcvctor.StructFieldKV{
-				gcvctor.StructFieldKVOf("Code", gcvctor.StringValue("10")),
-				gcvctor.StructFieldKVOf("DisplayOrder", gcvctor.Int64Value(1)),
+				gcvctor.StructFieldKVOf("name", gcvctor.StringValue("alice")),
+				gcvctor.StructFieldKVOf("id", gcvctor.Int64Value(1)),
 			},
 			want: spanner.GenericColumnValue{
 				Type: must(typector.NameCodeSlicesToStructType(
-					[]string{"Code", "DisplayOrder"},
+					[]string{"name", "id"},
 					[]sppb.TypeCode{sppb.TypeCode_STRING, sppb.TypeCode_INT64},
 				)),
 				Value: structpb.NewListValue(&structpb.ListValue{
 					Values: []*structpb.Value{
-						structpb.NewStringValue("10"),
+						structpb.NewStringValue("alice"),
 						structpb.NewStringValue("1"),
 					},
 				}),

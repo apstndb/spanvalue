@@ -125,8 +125,8 @@ func ExampleNullOf_structContainer() {
 
 func ExampleStructValueOfFields() {
 	row, err := gcvctor.StructValueOfFields(
-		gcvctor.StructFieldKVOf("Code", gcvctor.StringValue("10")),
-		gcvctor.StructFieldKVOf("DisplayOrder", gcvctor.Int64Value(1)),
+		gcvctor.StructFieldKVOf("name", gcvctor.StringValue("alice")),
+		gcvctor.StructFieldKVOf("id", gcvctor.Int64Value(1)),
 	)
 	if err != nil {
 		panic(err)
@@ -142,19 +142,19 @@ func ExampleStructValueOfFields() {
 	fmt.Println(row.Type.StructType.Fields[0].Name, row.Value.GetListValue().Values[0].GetStringValue())
 	fmt.Println(len(unnamed.Type.StructType.Fields), unnamed.Type.StructType.Fields[0].Name == "")
 	// Output:
-	// Code 10
+	// name alice
 	// 2 true
 }
 
 func ExampleMustStructValueOfFields() {
 	row := gcvctor.MustStructValueOfFields(
-		gcvctor.StructFieldKVOf("Code", gcvctor.StringValue("10")),
-		gcvctor.StructFieldKVOf("DisplayOrder", gcvctor.Int64Value(1)),
+		gcvctor.StructFieldKVOf("name", gcvctor.StringValue("alice")),
+		gcvctor.StructFieldKVOf("id", gcvctor.Int64Value(1)),
 	)
 
 	fmt.Println(row.Type.StructType.Fields[1].Name, row.Value.GetListValue().Values[1].GetStringValue())
 	// Output:
-	// DisplayOrder 1
+	// id 1
 }
 
 func ExampleInt64FromPtr_fromNullable() {
