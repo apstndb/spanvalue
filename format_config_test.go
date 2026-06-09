@@ -198,8 +198,8 @@ func TestFormatConfigWithComplexPlugin(t *testing.T) {
 		if len(got.FormatComplexPlugins) != before+1 {
 			t.Fatalf("len(FormatComplexPlugins) = %d, want %d", len(got.FormatComplexPlugins), before+1)
 		}
-		if got.FormatComplexPlugins[len(got.FormatComplexPlugins)-1] == nil {
-			t.Fatal("appended nil plugin")
+		if got.FormatComplexPlugins[0] == nil {
+			t.Fatal("prepended nil plugin")
 		}
 	})
 
@@ -213,6 +213,16 @@ func TestFormatConfigWithComplexPlugin(t *testing.T) {
 		}
 		if len(got.FormatComplexPlugins) != before+2 {
 			t.Fatalf("len(FormatComplexPlugins) = %d, want %d", len(got.FormatComplexPlugins), before+2)
+		}
+		if got.FormatComplexPlugins[0] == nil || got.FormatComplexPlugins[1] == nil {
+			t.Fatal("chained prepend left nil plugin slot")
+		}
+		// Most recent WithComplexPlugin call prepends first (other before plugin).
+		if s, err := got.FormatComplexPlugins[0](nil, spanner.GenericColumnValue{}, false); err != nil || s != "other" {
+			t.Fatalf("first plugin = %q, want other", s)
+		}
+		if s, err := got.FormatComplexPlugins[1](nil, spanner.GenericColumnValue{}, false); err != nil || s != "plugin" {
+			t.Fatalf("second plugin = %q, want plugin", s)
 		}
 		if err := got.Validate(); err != nil {
 			t.Fatalf("Validate() = %v, want nil", err)

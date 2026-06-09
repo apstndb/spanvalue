@@ -58,6 +58,10 @@ func QueryExportWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	return dbsqlrows.WriteRows(rows, w, cfg)
+	result, writeErr := dbsqlrows.WriteRows(rows, w, cfg)
+	closeErr := rows.Close()
+	if writeErr != nil {
+		return result, writeErr
+	}
+	return result, closeErr
 }
