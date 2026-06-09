@@ -54,7 +54,7 @@ func TestMustStructValueOfFields_nestedStruct(t *testing.T) {
 	t.Parallel()
 
 	structType, err := typector.NameCodeSlicesToStructType(
-		[]string{"Code", "DisplayOrder"},
+		[]string{"name", "id"},
 		[]sppb.TypeCode{sppb.TypeCode_STRING, sppb.TypeCode_INT64},
 	)
 	if err != nil {
@@ -63,8 +63,8 @@ func TestMustStructValueOfFields_nestedStruct(t *testing.T) {
 
 	arrayParam := gcvctor.MustArrayValueOf(structType,
 		gcvctor.MustStructValueOfFields(
-			gcvctor.StructFieldKVOf("Code", gcvctor.StringValue("10")),
-			gcvctor.StructFieldKVOf("DisplayOrder", gcvctor.Int64Value(1)),
+			gcvctor.StructFieldKVOf("name", gcvctor.StringValue("alice")),
+			gcvctor.StructFieldKVOf("id", gcvctor.Int64Value(1)),
 		),
 		gcvctor.NullOf(structType),
 	)
@@ -156,7 +156,7 @@ func TestMustArrayValueOf_nestedStruct(t *testing.T) {
 	t.Parallel()
 
 	structType, err := typector.NameCodeSlicesToStructType(
-		[]string{"Code", "DisplayOrder"},
+		[]string{"name", "id"},
 		[]sppb.TypeCode{sppb.TypeCode_STRING, sppb.TypeCode_INT64},
 	)
 	if err != nil {
@@ -165,8 +165,8 @@ func TestMustArrayValueOf_nestedStruct(t *testing.T) {
 
 	arrayParam := gcvctor.MustArrayValueOf(structType,
 		gcvctor.MustStructValueOf(
-			[]string{"Code", "DisplayOrder"},
-			[]spanner.GenericColumnValue{gcvctor.StringValue("10"), gcvctor.Int64Value(1)},
+			[]string{"name", "id"},
+			[]spanner.GenericColumnValue{gcvctor.StringValue("alice"), gcvctor.Int64Value(1)},
 		),
 		gcvctor.NullOf(structType),
 	)
