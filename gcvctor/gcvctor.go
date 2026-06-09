@@ -396,21 +396,22 @@ func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spa
 
 // StructField pairs one STRUCT field name with its GCV.
 // An empty Name is valid for unnamed STRUCT fields; see [StructValueOfFields].
-// Prefer [StructFieldKV] at call sites for brevity; composite literals remain valid when
-// field names or values need extra clarity.
+// Prefer [StructFieldKVOf] at call sites; positional composite literals
+// (StructField{name, value}) are also valid when field names or values need extra clarity.
 type StructField struct {
 	Name  string
 	Value spanner.GenericColumnValue
 }
 
-// StructFieldKV returns a [StructField] with the given name and value.
-// Empty name is valid for unnamed STRUCT fields.
-func StructFieldKV(name string, value spanner.GenericColumnValue) StructField {
+// StructFieldKVOf returns a [StructField] with the given name and value in Key/Value order.
+// The struct has no other members. Empty name is valid for unnamed STRUCT fields.
+func StructFieldKVOf(name string, value spanner.GenericColumnValue) StructField {
 	return StructField{Name: name, Value: value}
 }
 
 // StructValueOfFields is like [StructValueOf] but takes paired fields.
-// Prefer [StructFieldKV] at call sites; composite [StructField] literals are also valid.
+// Prefer [StructFieldKVOf] at call sites; positional composite literals
+// (StructField{name, value}) are also valid.
 // Empty field names are valid for unnamed STRUCT fields.
 func StructValueOfFields(fields ...StructField) (spanner.GenericColumnValue, error) {
 	names := make([]string, len(fields))
