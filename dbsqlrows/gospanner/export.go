@@ -26,7 +26,7 @@ func DefaultExecOptions() spannerdriver.ExecOptions {
 }
 
 // QueryExport runs db.QueryContext with [DefaultExecOptions] and exports the
-// result via [dbsqlrows.ExportRows]. It closes rows before returning.
+// result via [dbsqlrows.WriteRows]. It closes rows before returning.
 func QueryExport(
 	ctx context.Context,
 	db *sql.DB,
@@ -34,7 +34,7 @@ func QueryExport(
 	args []any,
 	w dbsqlrows.GCVStreamWriter,
 	cfg dbsqlrows.ExportConfig,
-) (*dbsqlrows.ExportResult, error) {
+) (*dbsqlrows.SQLRowsResult, error) {
 	return QueryExportWithOptions(ctx, db, query, args, w, cfg, DefaultExecOptions())
 }
 
@@ -47,7 +47,7 @@ func QueryExportWithOptions(
 	w dbsqlrows.GCVStreamWriter,
 	cfg dbsqlrows.ExportConfig,
 	opts spannerdriver.ExecOptions,
-) (*dbsqlrows.ExportResult, error) {
+) (*dbsqlrows.SQLRowsResult, error) {
 	if db == nil {
 		return nil, errNilDB
 	}
@@ -59,5 +59,5 @@ func QueryExportWithOptions(
 		return nil, err
 	}
 	defer rows.Close()
-	return dbsqlrows.ExportRows(rows, w, cfg)
+	return dbsqlrows.WriteRows(rows, w, cfg)
 }

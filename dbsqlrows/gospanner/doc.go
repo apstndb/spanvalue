@@ -2,7 +2,7 @@
 // to [github.com/apstndb/spanvalue/dbsqlrows] export helpers.
 //
 // Import this nested module only when the application already depends on
-// go-sql-spanner and wants a one-shot QueryContext + [dbsqlrows.ExportRows] helper.
+// go-sql-spanner and wants a one-shot QueryContext + [dbsqlrows.WriteRows] helper.
 // The root github.com/apstndb/spanvalue module does not require go-sql-spanner.
 //
 // # When to use gospanner

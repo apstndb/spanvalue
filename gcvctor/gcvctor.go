@@ -394,22 +394,16 @@ func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spa
 	}, nil
 }
 
-// StructFieldValue pairs one STRUCT field name with its GCV.
+// StructField pairs one STRUCT field name with its GCV.
 // An empty Name is valid for unnamed STRUCT fields; see [StructValueOfFields].
-type StructFieldValue struct {
+type StructField struct {
 	Name  string
 	Value spanner.GenericColumnValue
 }
 
-// StructField returns a [StructFieldValue] with the given name and value.
-// Empty name is valid for unnamed STRUCT fields.
-func StructField(name string, value spanner.GenericColumnValue) StructFieldValue {
-	return StructFieldValue{Name: name, Value: value}
-}
-
 // StructValueOfFields is like [StructValueOf] but takes paired fields.
 // Empty field names are valid for unnamed STRUCT fields.
-func StructValueOfFields(fields ...StructFieldValue) (spanner.GenericColumnValue, error) {
+func StructValueOfFields(fields ...StructField) (spanner.GenericColumnValue, error) {
 	names := make([]string, len(fields))
 	gcvs := make([]spanner.GenericColumnValue, len(fields))
 	for i, f := range fields {

@@ -131,34 +131,34 @@ func metadataWithNames(names ...string) *sppb.ResultSetMetadata {
 	}
 }
 
-func TestExportRows_nilRows(t *testing.T) {
+func TestWriteRows_nilRows(t *testing.T) {
 	t.Parallel()
 
-	_, err := ExportRows(nil, &stubGCVWriter{}, ExportConfig{})
+	_, err := WriteRows(nil, &stubGCVWriter{}, ExportConfig{})
 	if !errors.Is(err, ErrNilRows) {
 		t.Fatalf("error = %v, want ErrNilRows", err)
 	}
 }
 
-func TestExportRows_nilWriter(t *testing.T) {
+func TestWriteRows_nilWriter(t *testing.T) {
 	t.Parallel()
 
-	_, err := ExportRows(&sql.Rows{}, nil, ExportConfig{})
+	_, err := WriteRows(&sql.Rows{}, nil, ExportConfig{})
 	if !errors.Is(err, ErrNilWriter) {
 		t.Fatalf("error = %v, want ErrNilWriter", err)
 	}
 }
 
-func TestExportRowsAtData_nilMetadata(t *testing.T) {
+func TestWriteRowsAtData_nilMetadata(t *testing.T) {
 	t.Parallel()
 
-	_, err := ExportRowsAtData(&sql.Rows{}, nil, &stubGCVWriter{}, ExportConfig{})
+	_, err := WriteRowsAtData(&sql.Rows{}, nil, &stubGCVWriter{}, ExportConfig{})
 	if !errors.Is(err, ErrNilMetadata) {
 		t.Fatalf("error = %v, want ErrNilMetadata", err)
 	}
 }
 
-func TestExportRows_metadataAndDataRows(t *testing.T) {
+func TestWriteRows_metadataAndDataRows(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithNames("id", "name")
@@ -201,7 +201,7 @@ func TestExportRows_metadataAndDataRows(t *testing.T) {
 	}
 }
 
-func TestExportRows_zeroDataRowsFlushHeader(t *testing.T) {
+func TestWriteRows_zeroDataRowsFlushHeader(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithNames("id")
@@ -235,7 +235,7 @@ func TestExportRows_zeroDataRowsFlushHeader(t *testing.T) {
 	}
 }
 
-func TestExportRowsAtData_zeroDataRowsFlushMultiColumnHeader(t *testing.T) {
+func TestWriteRowsAtData_zeroDataRowsFlushMultiColumnHeader(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithNames("id", "name", "score")
@@ -267,7 +267,7 @@ func TestExportRowsAtData_zeroDataRowsFlushMultiColumnHeader(t *testing.T) {
 	}
 }
 
-func TestExportRows_statsPseudoRow(t *testing.T) {
+func TestWriteRows_statsPseudoRow(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithNames("id")
@@ -299,7 +299,7 @@ func TestExportRows_statsPseudoRow(t *testing.T) {
 	}
 }
 
-func TestExportRows_skipsStatsByDefault(t *testing.T) {
+func TestWriteRows_skipsStatsByDefault(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithNames("id")
@@ -325,7 +325,7 @@ func TestExportRows_skipsStatsByDefault(t *testing.T) {
 	}
 }
 
-func TestExportRows_writeErrorPartialResult(t *testing.T) {
+func TestWriteRows_writeErrorPartialResult(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithNames("id")
@@ -356,7 +356,7 @@ func TestExportRows_writeErrorPartialResult(t *testing.T) {
 	}
 }
 
-func TestExportRows_nextResultSetErrorAfterMetadataPartialResult(t *testing.T) {
+func TestWriteRows_nextResultSetErrorAfterMetadataPartialResult(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithNames("id")
@@ -399,7 +399,7 @@ func TestReadMetadataAndAdvanceToData_missingDataResultSet(t *testing.T) {
 	}
 }
 
-func TestExportRows_missingStatsRow(t *testing.T) {
+func TestWriteRows_missingStatsRow(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithNames("id")
@@ -421,7 +421,7 @@ func TestExportRows_missingStatsRow(t *testing.T) {
 	}
 }
 
-func TestExportRows_prepareErrorPartialResult(t *testing.T) {
+func TestWriteRows_prepareErrorPartialResult(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithNames("id")
@@ -476,7 +476,7 @@ func TestReadMetadataAndAdvanceToData(t *testing.T) {
 	}
 }
 
-func TestExportRowsAtData_oneRowDelimitedGCVExportOptions(t *testing.T) {
+func TestWriteRowsAtData_oneRowDelimitedGCVExportOptions(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithNames("id")
@@ -512,7 +512,7 @@ func TestExportRowsAtData_oneRowDelimitedGCVExportOptions(t *testing.T) {
 	}
 }
 
-func TestExportRowsAtData_readsStatsWhenRequested(t *testing.T) {
+func TestWriteRowsAtData_readsStatsWhenRequested(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithNames("id")
@@ -539,7 +539,7 @@ func TestExportRowsAtData_readsStatsWhenRequested(t *testing.T) {
 	}
 }
 
-func TestExportRows_statsThenReadMetadataMultiStatement(t *testing.T) {
+func TestWriteRows_statsThenReadMetadataMultiStatement(t *testing.T) {
 	t.Parallel()
 
 	md1 := metadataWithNames("id")
@@ -632,7 +632,7 @@ func TestRunRowsAtData_zeroRowsPrepareAndFinish(t *testing.T) {
 			writeCalls++
 			return nil
 		}).
-		WithFinish(func(*ExportResult) error {
+		WithFinish(func(*SQLRowsResult) error {
 			finished = true
 			return nil
 		})
@@ -744,7 +744,7 @@ func TestRunRowsAtData_tableShapedHooks(t *testing.T) {
 			rows = append(rows, row)
 			return nil
 		}).
-		WithFinish(func(res *ExportResult) error {
+		WithFinish(func(res *SQLRowsResult) error {
 			if res.RowsRead != len(rows) {
 				return errors.New("finish: row count mismatch")
 			}
@@ -801,7 +801,7 @@ func TestRunRowsAtData_emptyHooksDrainWithStats(t *testing.T) {
 	}
 }
 
-func TestSQLRowsHooksFromGCVWriter_matchesExportRowsAtData(t *testing.T) {
+func TestSQLRowsHooksFromGCVWriter_matchesWriteRowsAtData(t *testing.T) {
 	t.Parallel()
 
 	md := metadataWithNames("id")
