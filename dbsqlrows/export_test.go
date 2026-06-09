@@ -446,7 +446,7 @@ func TestWriteRows_missingDataResultSet(t *testing.T) {
 		},
 	}
 
-	got, err := exportRows(stub, &stubGCVWriter{}, exportRunConfig{readMetadataPseudoRow: true})
+	got, err := runRowsWithGCVWriter(stub, &stubGCVWriter{}, sqlRowsRunConfig{readMetadataPseudoRow: true})
 	if !errors.Is(err, ErrMissingDataResultSet) {
 		t.Fatalf("error = %v, want ErrMissingDataResultSet", err)
 	}
@@ -497,7 +497,7 @@ func TestWriteRows_statsNextError(t *testing.T) {
 		},
 	}
 
-	got, err := exportRows(stub, &stubGCVWriter{}, exportRunConfig{
+	got, err := runRowsWithGCVWriter(stub, &stubGCVWriter{}, sqlRowsRunConfig{
 		readMetadataPseudoRow: true,
 		readResultSetStats:    true,
 	})
@@ -526,7 +526,7 @@ func TestWriteRows_statsNextResultSetError(t *testing.T) {
 		},
 	}
 
-	got, err := exportRows(stub, &stubGCVWriter{}, exportRunConfig{
+	got, err := runRowsWithGCVWriter(stub, &stubGCVWriter{}, sqlRowsRunConfig{
 		readMetadataPseudoRow: true,
 		readResultSetStats:    true,
 	})
