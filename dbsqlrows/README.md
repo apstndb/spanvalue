@@ -164,6 +164,11 @@ result, err := dbsqlrows.RunRowsAtData(rows, md, dbsqlrows.NewSQLRowsHooks().
 w, err := writer.NewCSVWriter(out, writer.DelimitedGCVExportOptions(md, fc, namer)...)
 result, err := dbsqlrows.ExportRowsAtData(rows, md, w, dbsqlrows.ExportConfig{})
 _ = result.RowsRead
+
+// EXPLAIN / drain-only: empty hooks scan rows without rendering; read stats in ExportConfig:
+result, err := dbsqlrows.RunRowsAtData(rows, md, dbsqlrows.NewSQLRowsHooks(),
+    dbsqlrows.ExportConfig{ReadResultSetStats: true})
+_ = result.Stats
 ```
 
 ## Related

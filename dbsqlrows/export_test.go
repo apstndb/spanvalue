@@ -768,6 +768,39 @@ func TestRunRowsAtData_tableShapedHooks(t *testing.T) {
 	}
 }
 
+func TestRunRowsAtData_emptyHooksDrainWithStats(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	stats := &sppb.ResultSetStats{
+		RowCount: &sppb.ResultSetStats_RowCountExact{RowCountExact: 2},
+	}
+	stub := &stubSQLRows{
+		columns: []string{"id"},
+		resultSets: [][]stubRow{
+			{
+				{values: []any{gcvctor.Int64Value(1)}},
+				{values: []any{gcvctor.Int64Value(2)}},
+			},
+			{{values: []any{stats}}},
+		},
+	}
+
+	got, err := runRows(stub, NewSQLRowsHooks(), exportRunConfig{
+		metadata:           md,
+		readResultSetStats: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RowsRead != 2 {
+		t.Fatalf("RowsRead = %d, want 2", got.RowsRead)
+	}
+	if diff := cmp.Diff(stats, got.Stats, protocmp.Transform()); diff != "" {
+		t.Fatalf("Stats mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestSQLRowsHooksFromGCVWriter_matchesExportRowsAtData(t *testing.T) {
 	t.Parallel()
 

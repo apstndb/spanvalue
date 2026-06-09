@@ -9,6 +9,10 @@ import (
 
 // SQLRowsHooks drives [RunRows] and [RunRowsAtData]. Nil function fields are skipped.
 //
+// An empty hooks value (from [NewSQLRowsHooks]) still scans data rows and increments
+// [ExportResult.RowsRead] while WriteDataRow is nil. Use that to drain rows before
+// reading stats (for example EXPLAIN with [ExportConfig.ReadResultSetStats]).
+//
 // PrepareMetadata runs once after metadata is known and before data rows are scanned.
 // WriteDataRow runs per data row when set. Finish runs only after all rows and
 // optional stats consumption succeed; it is not called when PrepareMetadata or
