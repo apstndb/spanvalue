@@ -16,7 +16,7 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 | `gcvctor/` | Build `GenericColumnValue` from Go types (strict; no format) |
 | `writer/` | CSV/TSV/JSONL/SQL INSERT; `WriteGCVs`, `WriteRowIterator` ([writer/README.md](writer/README.md)) |
 | `dbsqlrows/` | **Experimental.** `*sql.Rows` loop; `SQLRowsHooks` / `ExportRows` → `writer.WriteGCVs`; driver-agnostic (package godoc) |
-| `dbsqlrows/gospanner/` | Optional nested module: go-sql-spanner `QueryExport` ([dbsqlrows/gospanner/README.md](dbsqlrows/gospanner/README.md)) |
+| `dbsqlrows/gospanner/` | Optional nested module: one-shot `QueryExport` + `DefaultExecOptions` (reference integration; REPLs use core `dbsqlrows` + app `ExecOptions`) |
 | `internal/` | Escape/literal/iterator helpers |
 
 ## Formatting
@@ -46,7 +46,7 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 
 ## Adoption boundaries (do not expand spanvalue into)
 
-- **`dbsqlrows/`** owns the shared `*sql.Rows` loop (`RunRows`/`RunRowsAtData` + `SQLRowsHooks`, parallel to `writer.RunRowIterator`); csv/jsonl use `SQLRowsHooksFromGCVWriter`. No go-sql-spanner in root `go.mod`. Optional **`dbsqlrows/gospanner/`** (`QueryExport`, `DefaultExecOptions`). Table layout and batch orchestration stay in apps (e.g. spannersh). See [#109](https://github.com/apstndb/spanvalue/issues/109) / [#110](https://github.com/apstndb/spanvalue/issues/110).
+- **`dbsqlrows/`** owns the shared `*sql.Rows` loop (`RunRows`/`RunRowsAtData` + `SQLRowsHooks`, parallel to `writer.RunRowIterator`); csv/jsonl use `SQLRowsHooksFromGCVWriter`. No go-sql-spanner in root `go.mod`. **`dbsqlrows/gospanner/`** is optional one-shot export + ExecOptions reference (not for REPLs — spannersh uses core only). Table layout and batch orchestration stay in apps. See [#109](https://github.com/apstndb/spanvalue/issues/109) / [#110](https://github.com/apstndb/spanvalue/issues/110).
 - **No string→GCV parsing** in `FormatConfig` (`gcvctor` / app). PG table cells: **spanpg**, not spanvalue.
 
 ## gcvctor & errors (short)

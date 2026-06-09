@@ -87,8 +87,20 @@
 //	result, err := dbsqlrows.ExportRows(rows, w, dbsqlrows.ExportConfig{})
 //
 // Option B: nested module github.com/apstndb/spanvalue/dbsqlrows/gospanner provides
-// DefaultExecOptions and QueryExport when the app already depends on go-sql-spanner.
-// Root go.mod still has no go-sql-spanner.
+// DefaultExecOptions and QueryExport for one-shot query → csv/jsonl export when
+// the app already depends on go-sql-spanner. It is a thin reference integration
+// (ExecOptions + QueryContext + [ExportRows]); root go.mod still has no go-sql-spanner.
+// Interactive shells, metadata-first batches, EXPLAIN, and per-query driver options
+// (QueryMode, DirectExecuteQuery) should use Option A with app-owned ExecOptions
+// instead — validated by [spannersh](https://github.com/apstndb/spannersh).
+//
+// # Stats: driver vs export
+//
+// A common REPL pattern: set ReturnResultSetStats true on the driver at
+// QueryContext, keep [ExportConfig.ReadResultSetStats] false during csv/jsonl/table
+// export, then read the stats pseudo-row in application code after render. dbsqlrows
+// leaves the cursor on the data result set until export completes or
+// ReadResultSetStats is enabled.
 //
 // # Application patterns
 //

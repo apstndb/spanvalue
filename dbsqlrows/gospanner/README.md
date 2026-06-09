@@ -1,17 +1,27 @@
 # gospanner
 
-Optional nested Go module for apps that already use
-[go-sql-spanner](https://github.com/googleapis/go-sql-spanner). It wires driver
-`ExecOptions` and `QueryContext` to the driver-agnostic
-[`dbsqlrows`](https://pkg.go.dev/github.com/apstndb/spanvalue/dbsqlrows) export loop.
+Optional nested Go module — **reference integration** for
+[go-sql-spanner](https://github.com/googleapis/go-sql-spanner) + core
+[`dbsqlrows`](https://pkg.go.dev/github.com/apstndb/spanvalue/dbsqlrows).
 
 ```text
 import "github.com/apstndb/spanvalue/dbsqlrows/gospanner"
 ```
 
 The root [`github.com/apstndb/spanvalue`](../../) module still has **no**
-go-sql-spanner dependency. Add this module only when you need one-shot query +
-export helpers.
+go-sql-spanner dependency.
+
+## Why this module exists
+
+| Audience | Use |
+|----------|-----|
+| One-shot CLIs / scripts | `QueryExport` → csv/jsonl without boilerplate |
+| New adopters | `DefaultExecOptions` documents proto decode + metadata pseudo-row |
+| Interactive shells (e.g. [spannersh](https://github.com/apstndb/spannersh)) | **Do not use** — app-owned `ExecOptions` + core `dbsqlrows` primitives |
+
+spannersh validated that metadata-first REPLs need QueryMode, multi-statement batches,
+and stats-after-render; those stay in the application with Option A (core cookbook).
+`gospanner` is intentionally narrow — not a gap when shells skip it.
 
 ## Module
 
@@ -57,9 +67,11 @@ if err != nil {
 _ = result.Metadata
 ```
 
-For metadata-first or multi-statement flows, use [`dbsqlrows`](https://pkg.go.dev/github.com/apstndb/spanvalue/dbsqlrows)
-primitives directly and configure `ExecOptions` in app code (see package
-documentation).
+For metadata-first, table, EXPLAIN, or multi-statement flows, use
+[`dbsqlrows`](https://pkg.go.dev/github.com/apstndb/spanvalue/dbsqlrows) directly
+and configure `ExecOptions` in app code (see package documentation). Typical REPL
+pattern: driver `ReturnResultSetStats: true`, export `ReadResultSetStats: false`,
+read stats pseudo-row after render.
 
 ## Development
 
