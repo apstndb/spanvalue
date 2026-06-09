@@ -125,12 +125,12 @@ func ExampleNullOf_structContainer() {
 
 func ExampleStructValueOfFields() {
 	row := gcvctor.MustStructValueOfFields(
-		gcvctor.StructField{Name: "Code", Value: gcvctor.StringValue("10")},
-		gcvctor.StructField{Name: "DisplayOrder", Value: gcvctor.Int64Value(1)},
+		gcvctor.StructFieldKV("Code", gcvctor.StringValue("10")),
+		gcvctor.StructFieldKV("DisplayOrder", gcvctor.Int64Value(1)),
 	)
 	unnamed := gcvctor.MustStructValueOfFields(
-		gcvctor.StructField{Name: "", Value: gcvctor.StringValue("value")},
-		gcvctor.StructField{Name: "", Value: gcvctor.Int64Value(42)},
+		gcvctor.StructFieldKV("", gcvctor.StringValue("value")),
+		gcvctor.StructFieldKV("", gcvctor.Int64Value(42)),
 	)
 
 	fmt.Println(row.Type.StructType.Fields[0].Name, row.Value.GetListValue().Values[0].GetStringValue())
