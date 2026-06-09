@@ -10,6 +10,7 @@ Helpers for working with Cloud Spanner’s [`spanner.GenericColumnValue`](https:
 | [`github.com/apstndb/spanvalue/gcvctor`](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor) | Build `spanner.GenericColumnValue` (scalars, `ARRAY`, `STRUCT`, typed nulls). Types are often composed with [`github.com/apstndb/spantype/typector`](https://pkg.go.dev/github.com/apstndb/spantype/typector). |
 | [`github.com/apstndb/spanvalue/protofmt`](https://pkg.go.dev/github.com/apstndb/spanvalue/protofmt) | Opt-in descriptor-aware PROTO and ENUM display plugins for [`FormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig). |
 | [`github.com/apstndb/spanvalue/writer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer) | Stream Spanner rows to CSV, TSV, JSONL, or SQL INSERT ([writer/README.md](writer/README.md)). |
+| [`github.com/apstndb/spanvalue/dbsqlrows`](https://pkg.go.dev/github.com/apstndb/spanvalue/dbsqlrows) | **Experimental.** Driver-agnostic `database/sql` export — see [package documentation](https://pkg.go.dev/github.com/apstndb/spanvalue/dbsqlrows). |
 
 ## Identifier quoting helpers
 
@@ -140,9 +141,8 @@ Writer package details (GCV export options, `RowIterator` vs `WriteGCVs`): [writ
 
 [go-sql-spanner](https://github.com/googleapis/go-sql-spanner) apps often decode query
 rows into `[]spanner.GenericColumnValue` (for example via proto decode options) and
-export with `spanvalue` writers. `spanvalue` does **not** wrap `database/sql` or
-`*sql.Rows`; keep a thin application loop (scan → GCV slice →
-[`writer.WriteGCVs`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#DelimitedWriter.WriteGCVs)).
+export with `spanvalue` writers: scan → GCV slice →
+[`writer.WriteGCVs`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#DelimitedWriter.WriteGCVs).
 
 **Column names:** `database/sql` does not surface Spanner
 `*spannerpb.ResultSetMetadata`; register columns with
