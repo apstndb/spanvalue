@@ -27,6 +27,9 @@ func readMetadataAndAdvanceToData(fac rowsFacade) (*sppb.ResultSetMetadata, bool
 		return nil, false, err
 	}
 	if !fac.nextResultSet() {
+		if err := fac.err(); err != nil {
+			return nil, false, err
+		}
 		return nil, false, ErrMissingDataResultSet
 	}
 	return md, true, nil

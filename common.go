@@ -229,7 +229,7 @@ type Formatter interface {
 //     [ErrFormatNullableRequired] without Decode. NULL scalars use [*FormatConfig.GetNullString]
 //     before the slow path runs (FormatNullable is not called for NULL).
 //
-// Use [*FormatConfig.Clone] or [*FormatConfig.WithComplexPlugin] to customize a preset
+// Use [*FormatConfig.Clone] or [*FormatConfig.WithComplexPlugin] (prepends plugins) to customize a preset
 // without mutating shared instances.
 // Call [*FormatConfig.Validate] after hand-assembling a config to fail fast on nil callbacks
 // or an empty [FormatConfig.NullString].
