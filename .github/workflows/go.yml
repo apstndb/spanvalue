@@ -105,10 +105,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # golang.org/x/vuln v1.2.0+ requires Go 1.25 to install. Other jobs stay on
+      # go.mod's 1.23 toolchain; govulncheck only needs a toolchain new enough to
+      # build this module (>= go 1.23) and run the scanner binary.
+      # Stdlib findings are relative to this job's Go toolchain (1.25), not go.mod's
+      # 1.23 target; dependency reachability is the main signal for a library module.
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          go-version: '1.25'
           cache: false
 
       - name: Run govulncheck
