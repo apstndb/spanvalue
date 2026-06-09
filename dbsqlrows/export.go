@@ -139,10 +139,7 @@ func runRows(fac rowsFacade, hooks SQLRowsHooks, run sqlRowsRunConfig) (*SQLRows
 			if err := fac.err(); err != nil {
 				return abort(err)
 			}
-			if err := callPrepareMetadata(hooks, md); err != nil {
-				return abort(err)
-			}
-			return finishRun(result, hooks)
+			return abort(ErrMissingDataResultSet)
 		}
 	} else if run.metadata == nil {
 		return nil, ErrNilMetadata
@@ -216,13 +213,20 @@ func readResultSetStats(fac rowsFacade) (*sppb.ResultSetStats, error) {
 		return nil, nil
 	}
 	if !fac.next() {
+		if err := fac.err(); err != nil {
+			return nil, err
+		}
 		return nil, ErrMissingStatsRow
 	}
 	var stats *sppb.ResultSetStats
 	if err := fac.scan(&stats); err != nil {
 		return nil, err
 	}
-	_ = fac.nextResultSet()
+	if !fac.nextResultSet() {
+		if err := fac.err(); err != nil {
+			return nil, err
+		}
+	}
 	return stats, nil
 }
 

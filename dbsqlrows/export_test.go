@@ -19,14 +19,19 @@ import (
 var _ rowsFacade = (*stubSQLRows)(nil)
 
 type stubSQLRows struct {
-	resultSets [][]stubRow
-	set        int
-	row        int
-	scanErr    error
-	nextRSErr  error
-	lastErr    error
-	nextRSOK   bool
-	columns    []string
+	resultSets  [][]stubRow
+	set         int
+	row         int
+	scanErr     error
+	nextErr     error
+	nextErrOn   int
+	nextCalls   int
+	nextRSErr   error
+	nextRSErrOn int
+	nextRSCalls int
+	lastErr     error
+	nextRSOK    bool
+	columns     []string
 }
 
 type stubRow struct {
@@ -43,12 +48,23 @@ func (s *stubSQLRows) next() bool {
 	if s.row >= len(s.resultSets[s.set]) {
 		return false
 	}
+	s.nextCalls++
+	errOn := s.nextErrOn
+	if s.nextErr != nil && errOn != 0 && s.nextCalls == errOn {
+		s.lastErr = s.nextErr
+		return false
+	}
 	s.row++
 	return true
 }
 
 func (s *stubSQLRows) nextResultSet() bool {
-	if s.nextRSErr != nil {
+	s.nextRSCalls++
+	errOn := s.nextRSErrOn
+	if errOn == 0 {
+		errOn = 1
+	}
+	if s.nextRSErr != nil && s.nextRSCalls == errOn {
 		s.lastErr = s.nextRSErr
 		return false
 	}
@@ -399,6 +415,49 @@ func TestReadMetadataAndAdvanceToData_missingDataResultSet(t *testing.T) {
 	}
 }
 
+func TestReadMetadataAndAdvanceToData_nextResultSetError(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	wantErr := errors.New("next result set failed")
+	stub := &stubSQLRows{
+		nextRSErr: wantErr,
+		resultSets: [][]stubRow{
+			{{values: []any{md}}},
+		},
+	}
+
+	_, ok, err := readMetadataAndAdvanceToData(stub)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error = %v, want %v", err, wantErr)
+	}
+	if ok {
+		t.Fatal("ok = true, want false")
+	}
+}
+
+func TestWriteRows_missingDataResultSet(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	stub := &stubSQLRows{
+		resultSets: [][]stubRow{
+			{{values: []any{md}}},
+		},
+	}
+
+	got, err := exportRows(stub, &stubGCVWriter{}, exportRunConfig{readMetadataPseudoRow: true})
+	if !errors.Is(err, ErrMissingDataResultSet) {
+		t.Fatalf("error = %v, want ErrMissingDataResultSet", err)
+	}
+	if got.Metadata == nil {
+		t.Fatal("Metadata is nil on missing data result set")
+	}
+	if diff := cmp.Diff(md, got.Metadata, protocmp.Transform()); diff != "" {
+		t.Fatalf("Metadata mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestWriteRows_missingStatsRow(t *testing.T) {
 	t.Parallel()
 
@@ -418,6 +477,67 @@ func TestWriteRows_missingStatsRow(t *testing.T) {
 	})
 	if !errors.Is(err, ErrMissingStatsRow) {
 		t.Fatalf("error = %v, want ErrMissingStatsRow", err)
+	}
+}
+
+func TestWriteRows_statsNextError(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	wantErr := errors.New("stats next failed")
+	stats := &sppb.ResultSetStats{RowCount: &sppb.ResultSetStats_RowCountExact{RowCountExact: 1}}
+	stub := &stubSQLRows{
+		columns:   []string{"id"},
+		nextErr:   wantErr,
+		nextErrOn: 2,
+		resultSets: [][]stubRow{
+			{{values: []any{md}}},
+			nil,
+			{{values: []any{stats}}},
+		},
+	}
+
+	got, err := exportRows(stub, &stubGCVWriter{}, exportRunConfig{
+		readMetadataPseudoRow: true,
+		readResultSetStats:    true,
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error = %v, want %v", err, wantErr)
+	}
+	if got.Metadata == nil {
+		t.Fatal("Metadata is nil on stats next error")
+	}
+}
+
+func TestWriteRows_statsNextResultSetError(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	stats := &sppb.ResultSetStats{RowCount: &sppb.ResultSetStats_RowCountExact{RowCountExact: 1}}
+	wantErr := errors.New("stats next result set failed")
+	stub := &stubSQLRows{
+		columns:     []string{"id"},
+		nextRSErr:   wantErr,
+		nextRSErrOn: 3,
+		resultSets: [][]stubRow{
+			{{values: []any{md}}},
+			nil,
+			{{values: []any{stats}}},
+		},
+	}
+
+	got, err := exportRows(stub, &stubGCVWriter{}, exportRunConfig{
+		readMetadataPseudoRow: true,
+		readResultSetStats:    true,
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("error = %v, want %v", err, wantErr)
+	}
+	if got.Metadata == nil {
+		t.Fatal("Metadata is nil on stats nextResultSet error")
+	}
+	if got.Stats != nil {
+		t.Fatalf("Stats = %v, want nil on error", got.Stats)
 	}
 }
 

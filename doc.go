@@ -26,8 +26,8 @@
 // (set FormatNullable on the clone; nil returns [ErrFormatNullableRequired]).
 // Scalar plugins fall through to that path when [FormatConfig.FormatNullable] is set.
 // Constructors return a new [FormatConfig]; call [*FormatConfig.Clone] or
-// [*FormatConfig.WithComplexPlugin] before mutating a config you may reuse
-// ([*FormatConfig.Clone] copies [FormatConfig.FormatComplexPlugins]).
+// [*FormatConfig.WithComplexPlugin] (prepends plugins) before mutating a config
+// you may reuse ([*FormatConfig.Clone] copies [FormatConfig.FormatComplexPlugins]).
 // For tuple STRUCT with Spanner CLI scalars, clone [SpannerCLICompatibleFormatConfig]
 // and set [FormatTupleStruct] (see README).
 // [FormatConfig.FormatColumn] runs [FormatComplexFunc] plugins first, then built-in
