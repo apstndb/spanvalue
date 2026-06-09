@@ -31,7 +31,7 @@ go get github.com/apstndb/spanvalue/dbsqlrows/gospanner@v0.6.0
 
 Local development in this repository uses `replace github.com/apstndb/spanvalue => ../..` in [`go.mod`](go.mod). That directive is dev-only (ignored by downstream `go get`); consumers need a published `github.com/apstndb/spanvalue` v0.6.0 or newer—the first release that includes `dbsqlrows`.
 
-This nested module targets **Go 1.25** (required by go-sql-spanner v1.25.1). The root `spanvalue` module remains on Go 1.23 per [AGENTS.md](../../AGENTS.md).
+This nested module targets **Go 1.25** (required by go-sql-spanner v1.25.1). The root `spanvalue` module requires **Go 1.24+** per [README.md](../../README.md) and [`go.mod`](../../go.mod).
 
 ## API
 
