@@ -7,9 +7,9 @@
 // [github.com/apstndb/spantype/typector.ElemTypeToArrayType] or [github.com/apstndb/spantype/typector.ElemCodeToArrayType] instead of relying
 // on variadic nil. [NormalizeArrayElements] rewrites SQL NULL elements to [NullOf] with elemType before
 // a strict [ArrayValueOf] call when callers already know the final array element type. [StructValueOf] pairs field
-// names with values; counts must match. [StructValueOfFields] accepts [StructField] pairs;
-// [StructFieldOf] is the usual constructor; positional composite literals
-// (StructField{name, value}) are also valid. Empty field names denote unnamed STRUCT fields.
+// names with values; counts must match. [StructValueOfFields] accepts [StructFieldKV] pairs;
+// [StructFieldKVOf] is the usual constructor; positional composite literals
+// (StructFieldKV{name, value}) are also valid. Empty field names denote unnamed STRUCT fields.
 //
 // ARRAY-typed [cloud.google.com/go/spanner/apiv1/spannerpb.Type] values require array_element_type
 // (protobuf: array_element_type; Go field name ArrayElementType); omitting it yields an invalid ARRAY
