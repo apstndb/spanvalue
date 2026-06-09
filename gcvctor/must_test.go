@@ -29,8 +29,8 @@ func TestMustStructValueOfFields_matchesStructValueOfFields(t *testing.T) {
 	t.Parallel()
 
 	fields := []gcvctor.StructField{
-		gcvctor.StructFieldKVOf("id", gcvctor.Int64Value(1)),
-		gcvctor.StructFieldKVOf("name", gcvctor.StringValue("foo")),
+		gcvctor.StructFieldOf("id", gcvctor.Int64Value(1)),
+		gcvctor.StructFieldOf("name", gcvctor.StringValue("foo")),
 	}
 	want, err := gcvctor.StructValueOfFields(fields...)
 	if err != nil {
@@ -46,7 +46,7 @@ func TestMustStructValueOfFields_panicsOnNilFieldType(t *testing.T) {
 	t.Parallel()
 
 	expectPanic(t, func() {
-		gcvctor.MustStructValueOfFields(gcvctor.StructFieldKVOf("broken", spanner.GenericColumnValue{}))
+		gcvctor.MustStructValueOfFields(gcvctor.StructFieldOf("broken", spanner.GenericColumnValue{}))
 	})
 }
 
@@ -63,8 +63,8 @@ func TestMustStructValueOfFields_nestedStruct(t *testing.T) {
 
 	arrayParam := gcvctor.MustArrayValueOf(structType,
 		gcvctor.MustStructValueOfFields(
-			gcvctor.StructFieldKVOf("Code", gcvctor.StringValue("10")),
-			gcvctor.StructFieldKVOf("DisplayOrder", gcvctor.Int64Value(1)),
+			gcvctor.StructFieldOf("Code", gcvctor.StringValue("10")),
+			gcvctor.StructFieldOf("DisplayOrder", gcvctor.Int64Value(1)),
 		),
 		gcvctor.NullOf(structType),
 	)

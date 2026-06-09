@@ -984,8 +984,8 @@ func TestStructValueOfFields(t *testing.T) {
 		{
 			desc: "named fields",
 			fields: []gcvctor.StructField{
-				gcvctor.StructFieldKVOf("Code", gcvctor.StringValue("10")),
-				gcvctor.StructFieldKVOf("DisplayOrder", gcvctor.Int64Value(1)),
+				gcvctor.StructFieldOf("Code", gcvctor.StringValue("10")),
+				gcvctor.StructFieldOf("DisplayOrder", gcvctor.Int64Value(1)),
 			},
 			want: spanner.GenericColumnValue{
 				Type: must(typector.NameCodeSlicesToStructType(
@@ -1003,8 +1003,8 @@ func TestStructValueOfFields(t *testing.T) {
 		{
 			desc: "unnamed fields",
 			fields: []gcvctor.StructField{
-				gcvctor.StructFieldKVOf("", gcvctor.StringValue("value")),
-				gcvctor.StructFieldKVOf("", gcvctor.Int64Value(42)),
+				gcvctor.StructFieldOf("", gcvctor.StringValue("value")),
+				gcvctor.StructFieldOf("", gcvctor.Int64Value(42)),
 			},
 			want: spanner.GenericColumnValue{
 				Type: must(typector.NameCodeSlicesToStructType(
@@ -1022,7 +1022,7 @@ func TestStructValueOfFields(t *testing.T) {
 		{
 			desc: "nil field type named",
 			fields: []gcvctor.StructField{
-				gcvctor.StructFieldKVOf("broken", spanner.GenericColumnValue{}),
+				gcvctor.StructFieldOf("broken", spanner.GenericColumnValue{}),
 			},
 			expectErr: true,
 			errIs:     gcvctor.ErrNilFieldType,
@@ -1031,7 +1031,7 @@ func TestStructValueOfFields(t *testing.T) {
 		{
 			desc: "nil field type unnamed",
 			fields: []gcvctor.StructField{
-				gcvctor.StructFieldKVOf("", spanner.GenericColumnValue{}),
+				gcvctor.StructFieldOf("", spanner.GenericColumnValue{}),
 			},
 			expectErr: true,
 			errIs:     gcvctor.ErrNilFieldType,
@@ -1076,8 +1076,8 @@ func TestStructValueOfFields_matchesStructValueOf(t *testing.T) {
 	names := []string{"id", "name"}
 	gcvs := []spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.StringValue("foo")}
 	fields := []gcvctor.StructField{
-		gcvctor.StructFieldKVOf("id", gcvctor.Int64Value(1)),
-		gcvctor.StructFieldKVOf("name", gcvctor.StringValue("foo")),
+		gcvctor.StructFieldOf("id", gcvctor.Int64Value(1)),
+		gcvctor.StructFieldOf("name", gcvctor.StringValue("foo")),
 	}
 
 	want, err := gcvctor.StructValueOf(names, gcvs)
