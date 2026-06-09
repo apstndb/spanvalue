@@ -410,6 +410,7 @@ func StructFieldKV(name string, value spanner.GenericColumnValue) StructField {
 }
 
 // StructValueOfFields is like [StructValueOf] but takes paired fields.
+// Prefer [StructFieldKV] at call sites; composite [StructField] literals are also valid.
 // Empty field names are valid for unnamed STRUCT fields.
 func StructValueOfFields(fields ...StructField) (spanner.GenericColumnValue, error) {
 	names := make([]string, len(fields))
