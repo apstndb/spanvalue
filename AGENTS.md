@@ -15,7 +15,7 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 | Root | `FormatConfig`, presets, `ColumnNames`, `FormatRowColumns`, identifier quoting |
 | `gcvctor/` | Build `GenericColumnValue` from Go types (strict; no format) |
 | `writer/` | CSV/TSV/JSONL/SQL INSERT; `WriteGCVs`, `WriteRowIterator` ([writer/README.md](writer/README.md)) |
-| `dbsqlrows/` | `*sql.Rows` loop; `SQLRowsHooks` / `ExportRows` → `writer.WriteGCVs`; driver-agnostic ([dbsqlrows/README.md](dbsqlrows/README.md)) |
+| `dbsqlrows/` | **Experimental.** `*sql.Rows` loop; `SQLRowsHooks` / `ExportRows` → `writer.WriteGCVs`; driver-agnostic (package godoc) |
 | `dbsqlrows/gospanner/` | Optional nested module: go-sql-spanner `QueryExport` ([dbsqlrows/gospanner/README.md](dbsqlrows/gospanner/README.md)) |
 | `internal/` | Escape/literal/iterator helpers |
 

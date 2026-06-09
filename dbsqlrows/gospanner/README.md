@@ -3,7 +3,7 @@
 Optional nested Go module for apps that already use
 [go-sql-spanner](https://github.com/googleapis/go-sql-spanner). It wires driver
 `ExecOptions` and `QueryContext` to the driver-agnostic
-[`dbsqlrows`](../README.md) export loop.
+[`dbsqlrows`](https://pkg.go.dev/github.com/apstndb/spanvalue/dbsqlrows) export loop.
 
 ```text
 import "github.com/apstndb/spanvalue/dbsqlrows/gospanner"
@@ -57,9 +57,9 @@ if err != nil {
 _ = result.Metadata
 ```
 
-For metadata-first or multi-statement flows, use [`dbsqlrows`](../README.md)
-primitives directly and configure `ExecOptions` in app code (see core README
-cookbook).
+For metadata-first or multi-statement flows, use [`dbsqlrows`](https://pkg.go.dev/github.com/apstndb/spanvalue/dbsqlrows)
+primitives directly and configure `ExecOptions` in app code (see package
+documentation).
 
 ## Development
 
