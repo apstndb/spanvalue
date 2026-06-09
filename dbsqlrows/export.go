@@ -34,8 +34,8 @@ type GCVStreamWriter interface {
 	Flush() error
 }
 
-// ExportConfig configures an export run.
-type ExportConfig struct {
+// SQLRowsConfig configures a SQL rows streaming run.
+type SQLRowsConfig struct {
 	// ReadResultSetStats, when true, advances past data rows to read the stats
 	// pseudo-row into [SQLRowsResult.Stats]. For [WriteRowsAtData] this field is
 	// consulted directly (default false). For [WriteRows] the same field applies.
@@ -43,7 +43,7 @@ type ExportConfig struct {
 }
 
 // WithReadResultSetStats returns a copy of cfg with ReadResultSetStats set.
-func (cfg ExportConfig) WithReadResultSetStats(read bool) ExportConfig {
+func (cfg SQLRowsConfig) WithReadResultSetStats(read bool) SQLRowsConfig {
 	cfg.ReadResultSetStats = read
 	return cfg
 }
@@ -73,7 +73,7 @@ type SQLRowsResult struct {
 //
 // For custom sinks (for example ASCII table rendering), use [RunRows] with
 // [SQLRowsHooks] instead.
-func WriteRows(rows *sql.Rows, w GCVStreamWriter, cfg ExportConfig) (*SQLRowsResult, error) {
+func WriteRows(rows *sql.Rows, w GCVStreamWriter, cfg SQLRowsConfig) (*SQLRowsResult, error) {
 	if rows == nil {
 		return nil, ErrNilRows
 	}
@@ -96,7 +96,7 @@ func WriteRowsAtData(
 	rows *sql.Rows,
 	metadata *sppb.ResultSetMetadata,
 	w GCVStreamWriter,
-	cfg ExportConfig,
+	cfg SQLRowsConfig,
 ) (*SQLRowsResult, error) {
 	if rows == nil {
 		return nil, ErrNilRows
@@ -110,13 +110,13 @@ func WriteRowsAtData(
 	return RunRowsAtData(rows, metadata, SQLRowsHooksFromGCVWriter(w), cfg)
 }
 
-type exportRunConfig struct {
+type sqlRowsRunConfig struct {
 	metadata              *sppb.ResultSetMetadata
 	readMetadataPseudoRow bool
 	readResultSetStats    bool
 }
 
-func runRows(fac rowsFacade, hooks SQLRowsHooks, run exportRunConfig) (*SQLRowsResult, error) {
+func runRows(fac rowsFacade, hooks SQLRowsHooks, run sqlRowsRunConfig) (*SQLRowsResult, error) {
 	result := &SQLRowsResult{Metadata: run.metadata}
 	abort := func(err error) (*SQLRowsResult, error) {
 		return result, err
@@ -170,8 +170,8 @@ func runRows(fac rowsFacade, hooks SQLRowsHooks, run exportRunConfig) (*SQLRowsR
 	return finishRun(result, hooks)
 }
 
-// exportRows is the test seam for runRows with a GCV writer.
-func exportRows(fac rowsFacade, w GCVStreamWriter, run exportRunConfig) (*SQLRowsResult, error) {
+// runRowsWithGCVWriter is the test seam for runRows with a GCV writer.
+func runRowsWithGCVWriter(fac rowsFacade, w GCVStreamWriter, run sqlRowsRunConfig) (*SQLRowsResult, error) {
 	return runRows(fac, SQLRowsHooksFromGCVWriter(w), run)
 }
 

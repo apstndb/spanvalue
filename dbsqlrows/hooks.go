@@ -12,7 +12,7 @@ import (
 // An empty hooks value (from [NewSQLRowsHooks]) still advances past data rows and
 // increments [SQLRowsResult.RowsRead] while WriteDataRow is nil (no per-row decode).
 // Use that to drain rows before reading stats (for example EXPLAIN with
-// [ExportConfig.ReadResultSetStats]).
+// [SQLRowsConfig.ReadResultSetStats]).
 //
 // PrepareMetadata runs once after metadata is known and before data rows are scanned.
 // WriteDataRow runs per data row when set. The []spanner.GenericColumnValue argument
@@ -74,11 +74,11 @@ func SQLRowsHooksFromGCVWriter(w GCVStreamWriter) SQLRowsHooks {
 
 // RunRows streams an open *sql.Rows positioned at the metadata pseudo-row using
 // hooks. See [WriteRows] for driver conventions, ownership, and stats behavior.
-func RunRows(rows *sql.Rows, hooks SQLRowsHooks, cfg ExportConfig) (*SQLRowsResult, error) {
+func RunRows(rows *sql.Rows, hooks SQLRowsHooks, cfg SQLRowsConfig) (*SQLRowsResult, error) {
 	if rows == nil {
 		return nil, ErrNilRows
 	}
-	return runRows(sqlRowsFacade{rows}, hooks, exportRunConfig{
+	return runRows(sqlRowsFacade{rows}, hooks, sqlRowsRunConfig{
 		readMetadataPseudoRow: true,
 		readResultSetStats:    cfg.ReadResultSetStats,
 	})
@@ -91,7 +91,7 @@ func RunRowsAtData(
 	rows *sql.Rows,
 	metadata *sppb.ResultSetMetadata,
 	hooks SQLRowsHooks,
-	cfg ExportConfig,
+	cfg SQLRowsConfig,
 ) (*SQLRowsResult, error) {
 	if rows == nil {
 		return nil, ErrNilRows
@@ -99,7 +99,7 @@ func RunRowsAtData(
 	if metadata == nil {
 		return nil, ErrNilMetadata
 	}
-	return runRows(sqlRowsFacade{rows}, hooks, exportRunConfig{
+	return runRows(sqlRowsFacade{rows}, hooks, sqlRowsRunConfig{
 		metadata:              metadata,
 		readMetadataPseudoRow: false,
 		readResultSetStats:    cfg.ReadResultSetStats,

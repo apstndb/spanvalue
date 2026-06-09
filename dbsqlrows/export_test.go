@@ -134,7 +134,7 @@ func metadataWithNames(names ...string) *sppb.ResultSetMetadata {
 func TestWriteRows_nilRows(t *testing.T) {
 	t.Parallel()
 
-	_, err := WriteRows(nil, &stubGCVWriter{}, ExportConfig{})
+	_, err := WriteRows(nil, &stubGCVWriter{}, SQLRowsConfig{})
 	if !errors.Is(err, ErrNilRows) {
 		t.Fatalf("error = %v, want ErrNilRows", err)
 	}
@@ -143,7 +143,7 @@ func TestWriteRows_nilRows(t *testing.T) {
 func TestWriteRows_nilWriter(t *testing.T) {
 	t.Parallel()
 
-	_, err := WriteRows(&sql.Rows{}, nil, ExportConfig{})
+	_, err := WriteRows(&sql.Rows{}, nil, SQLRowsConfig{})
 	if !errors.Is(err, ErrNilWriter) {
 		t.Fatalf("error = %v, want ErrNilWriter", err)
 	}
@@ -152,7 +152,7 @@ func TestWriteRows_nilWriter(t *testing.T) {
 func TestWriteRowsAtData_nilMetadata(t *testing.T) {
 	t.Parallel()
 
-	_, err := WriteRowsAtData(&sql.Rows{}, nil, &stubGCVWriter{}, ExportConfig{})
+	_, err := WriteRowsAtData(&sql.Rows{}, nil, &stubGCVWriter{}, SQLRowsConfig{})
 	if !errors.Is(err, ErrNilMetadata) {
 		t.Fatalf("error = %v, want ErrNilMetadata", err)
 	}
@@ -185,7 +185,7 @@ func TestWriteRows_metadataAndDataRows(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := exportRows(stub, w, exportRunConfig{readMetadataPseudoRow: true})
+	got, err := runRowsWithGCVWriter(stub, w, sqlRowsRunConfig{readMetadataPseudoRow: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func TestWriteRows_zeroDataRowsFlushHeader(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := exportRows(stub, w, exportRunConfig{readMetadataPseudoRow: true})
+	got, err := runRowsWithGCVWriter(stub, w, sqlRowsRunConfig{readMetadataPseudoRow: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestWriteRowsAtData_zeroDataRowsFlushMultiColumnHeader(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := exportRows(stub, w, exportRunConfig{metadata: md})
+	got, err := runRowsWithGCVWriter(stub, w, sqlRowsRunConfig{metadata: md})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +287,7 @@ func TestWriteRows_statsPseudoRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := exportRows(stub, w, exportRunConfig{
+	got, err := runRowsWithGCVWriter(stub, w, sqlRowsRunConfig{
 		readMetadataPseudoRow: true,
 		readResultSetStats:    true,
 	})
@@ -313,7 +313,7 @@ func TestWriteRows_skipsStatsByDefault(t *testing.T) {
 		},
 	}
 
-	got, err := exportRows(stub, &stubGCVWriter{}, exportRunConfig{readMetadataPseudoRow: true})
+	got, err := runRowsWithGCVWriter(stub, &stubGCVWriter{}, sqlRowsRunConfig{readMetadataPseudoRow: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,7 +341,7 @@ func TestWriteRows_writeErrorPartialResult(t *testing.T) {
 	wantErr := errors.New("write failed")
 	sw := &stubGCVWriter{writeErr: wantErr}
 
-	got, err := exportRows(stub, sw, exportRunConfig{
+	got, err := runRowsWithGCVWriter(stub, sw, sqlRowsRunConfig{
 		metadata:              md,
 		readMetadataPseudoRow: false,
 	})
@@ -368,7 +368,7 @@ func TestWriteRows_nextResultSetErrorAfterMetadataPartialResult(t *testing.T) {
 		},
 	}
 
-	got, err := exportRows(stub, &stubGCVWriter{}, exportRunConfig{readMetadataPseudoRow: true})
+	got, err := runRowsWithGCVWriter(stub, &stubGCVWriter{}, sqlRowsRunConfig{readMetadataPseudoRow: true})
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("error = %v, want %v", err, wantErr)
 	}
@@ -412,7 +412,7 @@ func TestWriteRows_missingStatsRow(t *testing.T) {
 		},
 	}
 
-	_, err := exportRows(stub, &stubGCVWriter{}, exportRunConfig{
+	_, err := runRowsWithGCVWriter(stub, &stubGCVWriter{}, sqlRowsRunConfig{
 		readMetadataPseudoRow: true,
 		readResultSetStats:    true,
 	})
@@ -434,7 +434,7 @@ func TestWriteRows_prepareErrorPartialResult(t *testing.T) {
 	wantErr := errors.New("prepare failed")
 	sw := &stubGCVWriter{prepareErr: wantErr}
 
-	got, err := exportRows(stub, sw, exportRunConfig{
+	got, err := runRowsWithGCVWriter(stub, sw, sqlRowsRunConfig{
 		metadata:              md,
 		readMetadataPseudoRow: false,
 	})
@@ -497,7 +497,7 @@ func TestWriteRowsAtData_oneRowDelimitedGCVExportOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := exportRows(stub, w, exportRunConfig{metadata: md})
+	got, err := runRowsWithGCVWriter(stub, w, sqlRowsRunConfig{metadata: md})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -527,7 +527,7 @@ func TestWriteRowsAtData_readsStatsWhenRequested(t *testing.T) {
 		},
 	}
 
-	got, err := exportRows(stub, &stubGCVWriter{}, exportRunConfig{
+	got, err := runRowsWithGCVWriter(stub, &stubGCVWriter{}, sqlRowsRunConfig{
 		metadata:           md,
 		readResultSetStats: true,
 	})
@@ -558,7 +558,7 @@ func TestWriteRows_statsThenReadMetadataMultiStatement(t *testing.T) {
 		},
 	}
 
-	got, err := exportRows(stub, &stubGCVWriter{}, exportRunConfig{
+	got, err := runRowsWithGCVWriter(stub, &stubGCVWriter{}, sqlRowsRunConfig{
 		readMetadataPseudoRow: true,
 		readResultSetStats:    true,
 	})
@@ -637,7 +637,7 @@ func TestRunRowsAtData_zeroRowsPrepareAndFinish(t *testing.T) {
 			return nil
 		})
 
-	got, err := runRows(stub, hooks, exportRunConfig{metadata: md})
+	got, err := runRows(stub, hooks, sqlRowsRunConfig{metadata: md})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -670,7 +670,7 @@ func TestRunRowsAtData_writeErrorPartialResult(t *testing.T) {
 	got, err := runRows(stub, NewSQLRowsHooks().
 		WithPrepareMetadata(func(*sppb.ResultSetMetadata) error { return nil }).
 		WithWriteDataRow(func([]spanner.GenericColumnValue) error { return wantErr }),
-		exportRunConfig{metadata: md})
+		sqlRowsRunConfig{metadata: md})
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("error = %v, want %v", err, wantErr)
 	}
@@ -696,7 +696,7 @@ func TestRunRowsAtData_prepareErrorPartialResult(t *testing.T) {
 
 	got, err := runRows(stub, NewSQLRowsHooks().
 		WithPrepareMetadata(func(*sppb.ResultSetMetadata) error { return wantErr }),
-		exportRunConfig{metadata: md})
+		sqlRowsRunConfig{metadata: md})
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("error = %v, want %v", err, wantErr)
 	}
@@ -751,7 +751,7 @@ func TestRunRowsAtData_tableShapedHooks(t *testing.T) {
 			return nil
 		})
 
-	got, err := runRows(stub, hooks, exportRunConfig{metadata: md})
+	got, err := runRows(stub, hooks, sqlRowsRunConfig{metadata: md})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -786,7 +786,7 @@ func TestRunRowsAtData_emptyHooksDrainWithStats(t *testing.T) {
 		},
 	}
 
-	got, err := runRows(stub, NewSQLRowsHooks(), exportRunConfig{
+	got, err := runRows(stub, NewSQLRowsHooks(), sqlRowsRunConfig{
 		metadata:           md,
 		readResultSetStats: true,
 	})
@@ -822,7 +822,7 @@ func TestSQLRowsHooksFromGCVWriter_matchesWriteRowsAtData(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := runRows(stub, SQLRowsHooksFromGCVWriter(w), exportRunConfig{metadata: md})
+	got, err := runRows(stub, SQLRowsHooksFromGCVWriter(w), sqlRowsRunConfig{metadata: md})
 	if err != nil {
 		t.Fatal(err)
 	}

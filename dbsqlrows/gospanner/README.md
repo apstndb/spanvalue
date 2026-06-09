@@ -59,7 +59,7 @@ if err != nil {
     return err
 }
 result, err := gospanner.QueryExport(
-    ctx, db, "SELECT id, name FROM Users", nil, w, dbsqlrows.ExportConfig{},
+    ctx, db, "SELECT id, name FROM Users", nil, w, dbsqlrows.SQLRowsConfig{},
 )
 if err != nil {
     return err

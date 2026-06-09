@@ -66,7 +66,7 @@
 //
 // [SQLRowsResult] carries Metadata when known on error paths (partial-result contract
 // matching [writer.RowIteratorResult]). Stats are not consumed unless
-// [ExportConfig.ReadResultSetStats] is true; the iterator then advances with
+// [SQLRowsConfig.ReadResultSetStats] is true; the iterator then advances with
 // NextResultSet for multi-statement batches.
 //
 // An empty [SQLRowsHooks] value advances past data rows without per-row decode when
@@ -86,7 +86,7 @@
 //	}
 //	rows, err := db.QueryContext(ctx, q, opts)
 //	// ...
-//	result, err := dbsqlrows.WriteRows(rows, w, dbsqlrows.ExportConfig{})
+//	result, err := dbsqlrows.WriteRows(rows, w, dbsqlrows.SQLRowsConfig{})
 //
 // Option B: nested module github.com/apstndb/spanvalue/dbsqlrows/gospanner provides
 // DefaultExecOptions and QueryExport for one-shot query → csv/jsonl export when
@@ -99,7 +99,7 @@
 // # Stats: driver vs export
 //
 // A common REPL pattern: set ReturnResultSetStats true on the driver at
-// QueryContext, keep [ExportConfig.ReadResultSetStats] false during csv/jsonl/table
+// QueryContext, keep [SQLRowsConfig.ReadResultSetStats] false during csv/jsonl/table
 // export, then read the stats pseudo-row in application code after render. dbsqlrows
 // leaves the cursor on the data result set until export completes or
 // ReadResultSetStats is enabled.
@@ -117,5 +117,5 @@
 // [writer.JSONLGCVExportOptions] at writer construction.
 //
 // EXPLAIN / drain: [RunRowsAtData] with [NewSQLRowsHooks] and
-// ExportConfig.WithReadResultSetStats(true).
+// SQLRowsConfig.WithReadResultSetStats(true).
 package dbsqlrows

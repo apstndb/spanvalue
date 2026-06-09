@@ -16,7 +16,7 @@ var errNilDB = errors.New("nil *sql.DB")
 // proto-decoded GCV export with a leading metadata pseudo result set
 // ([spannerdriver.ExecOptions.ReturnResultSetMetadata]). ReturnResultSetStats
 // is false so callers can read stats after export (for example spannersh
-// execution summaries) or set [dbsqlrows.ExportConfig.ReadResultSetStats].
+// execution summaries) or set [dbsqlrows.SQLRowsConfig.ReadResultSetStats].
 func DefaultExecOptions() spannerdriver.ExecOptions {
 	return spannerdriver.ExecOptions{
 		DecodeOption:            spannerdriver.DecodeOptionProto,
@@ -33,7 +33,7 @@ func QueryExport(
 	query string,
 	args []any,
 	w dbsqlrows.GCVStreamWriter,
-	cfg dbsqlrows.ExportConfig,
+	cfg dbsqlrows.SQLRowsConfig,
 ) (*dbsqlrows.SQLRowsResult, error) {
 	return QueryExportWithOptions(ctx, db, query, args, w, cfg, DefaultExecOptions())
 }
@@ -45,7 +45,7 @@ func QueryExportWithOptions(
 	query string,
 	args []any,
 	w dbsqlrows.GCVStreamWriter,
-	cfg dbsqlrows.ExportConfig,
+	cfg dbsqlrows.SQLRowsConfig,
 	opts spannerdriver.ExecOptions,
 ) (*dbsqlrows.SQLRowsResult, error) {
 	if db == nil {
