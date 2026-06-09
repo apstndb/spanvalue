@@ -124,20 +124,37 @@ func ExampleNullOf_structContainer() {
 }
 
 func ExampleStructValueOfFields() {
-	row := gcvctor.MustStructValueOfFields(
-		gcvctor.StructField{Name: "Code", Value: gcvctor.StringValue("10")},
-		gcvctor.StructField{Name: "DisplayOrder", Value: gcvctor.Int64Value(1)},
+	row, err := gcvctor.StructValueOfFields(
+		gcvctor.StructFieldKVOf("Code", gcvctor.StringValue("10")),
+		gcvctor.StructFieldKVOf("DisplayOrder", gcvctor.Int64Value(1)),
 	)
-	unnamed := gcvctor.MustStructValueOfFields(
-		gcvctor.StructField{Name: "", Value: gcvctor.StringValue("value")},
-		gcvctor.StructField{Name: "", Value: gcvctor.Int64Value(42)},
+	if err != nil {
+		panic(err)
+	}
+	unnamed, err := gcvctor.StructValueOfFields(
+		gcvctor.StructFieldKVOf("", gcvctor.StringValue("value")),
+		gcvctor.StructFieldKVOf("", gcvctor.Int64Value(42)),
 	)
+	if err != nil {
+		panic(err)
+	}
 
 	fmt.Println(row.Type.StructType.Fields[0].Name, row.Value.GetListValue().Values[0].GetStringValue())
 	fmt.Println(len(unnamed.Type.StructType.Fields), unnamed.Type.StructType.Fields[0].Name == "")
 	// Output:
 	// Code 10
 	// 2 true
+}
+
+func ExampleMustStructValueOfFields() {
+	row := gcvctor.MustStructValueOfFields(
+		gcvctor.StructFieldKVOf("Code", gcvctor.StringValue("10")),
+		gcvctor.StructFieldKVOf("DisplayOrder", gcvctor.Int64Value(1)),
+	)
+
+	fmt.Println(row.Type.StructType.Fields[1].Name, row.Value.GetListValue().Values[1].GetStringValue())
+	// Output:
+	// DisplayOrder 1
 }
 
 func ExampleInt64FromPtr_fromNullable() {

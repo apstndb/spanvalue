@@ -26,8 +26,9 @@ func MustStructValueOf(names []string, gcvs []spanner.GenericColumnValue) spanne
 }
 
 // MustStructValueOfFields is like [StructValueOfFields] but panics on error.
+// It accepts the same [StructFieldKV] pairs as [StructValueOfFields], including from [StructFieldKVOf].
 // Use only in tests and table-driven fixtures where schema and inputs are known good.
-func MustStructValueOfFields(fields ...StructField) spanner.GenericColumnValue {
+func MustStructValueOfFields(fields ...StructFieldKV) spanner.GenericColumnValue {
 	gcv, err := StructValueOfFields(fields...)
 	if err != nil {
 		panic(err)
