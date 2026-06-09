@@ -1,6 +1,6 @@
 module github.com/apstndb/spanvalue/dbsqlrows/gospanner
 
-// go 1.25 is required by go-sql-spanner v1.25.1; root spanvalue stays on go 1.23.
+// go 1.25 is required by go-sql-spanner v1.25.1; root spanvalue requires go 1.24+.
 go 1.25.0
 
 require (

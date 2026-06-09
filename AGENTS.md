@@ -1,6 +1,6 @@
 # Agent instructions for `spanvalue`
 
-Go library: format `spanner.GenericColumnValue` / `*spanner.Row` to text; build GCVs in `gcvctor/`; stream exports in `writer/`. Target **Go 1.23** (`go.mod`; toolchain `go1.23.2`). Alias **`sppb`** = `cloud.google.com/go/spanner/apiv1/spannerpb`.
+Go library: format `spanner.GenericColumnValue` / `*spanner.Row` to text; build GCVs in `gcvctor/`; stream exports in `writer/`. Target **Go 1.24+** (`go.mod`). Alias **`sppb`** = `cloud.google.com/go/spanner/apiv1/spannerpb`.
 
 ## Commands
 
