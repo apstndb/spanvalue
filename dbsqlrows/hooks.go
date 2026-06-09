@@ -9,12 +9,15 @@ import (
 
 // SQLRowsHooks drives [RunRows] and [RunRowsAtData]. Nil function fields are skipped.
 //
-// An empty hooks value (from [NewSQLRowsHooks]) still scans data rows and increments
-// [ExportResult.RowsRead] while WriteDataRow is nil. Use that to drain rows before
-// reading stats (for example EXPLAIN with [ExportConfig.ReadResultSetStats]).
+// An empty hooks value (from [NewSQLRowsHooks]) still advances past data rows and
+// increments [ExportResult.RowsRead] while WriteDataRow is nil (no per-row decode).
+// Use that to drain rows before reading stats (for example EXPLAIN with
+// [ExportConfig.ReadResultSetStats]).
 //
 // PrepareMetadata runs once after metadata is known and before data rows are scanned.
-// WriteDataRow runs per data row when set. Finish runs only after all rows and
+// WriteDataRow runs per data row when set. The []spanner.GenericColumnValue argument
+// is reused across calls: valid only for the duration of WriteDataRow; copy or
+// format synchronously before returning if the sink retains row data. Finish runs only after all rows and
 // optional stats consumption succeed; it is not called when PrepareMetadata or
 // WriteDataRow returns an error. The returned [ExportResult] still carries
 // Metadata and RowsRead at the abort point (same partial-result contract as
@@ -37,7 +40,8 @@ func (h SQLRowsHooks) WithPrepareMetadata(fn func(*sppb.ResultSetMetadata) error
 	return h
 }
 
-// WithWriteDataRow sets WriteDataRow and returns h.
+// WithWriteDataRow sets WriteDataRow and returns h. The slice passed to fn is reused
+// on each row; do not retain it after fn returns.
 func (h SQLRowsHooks) WithWriteDataRow(fn func([]spanner.GenericColumnValue) error) SQLRowsHooks {
 	h.WriteDataRow = fn
 	return h

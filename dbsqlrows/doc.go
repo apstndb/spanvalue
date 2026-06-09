@@ -69,8 +69,10 @@
 // [ExportConfig.ReadResultSetStats] is true; the iterator then advances with
 // NextResultSet for multi-statement batches.
 //
-// An empty [SQLRowsHooks] value still scans data rows and increments RowsRead when
-// WriteDataRow is nil (EXPLAIN / drain before stats).
+// An empty [SQLRowsHooks] value advances past data rows without per-row decode when
+// WriteDataRow is nil (EXPLAIN / drain before stats). When WriteDataRow is set, the
+// GCV slice passed to it is reused each row — copy or format before returning if
+// the sink retains row data.
 //
 // # go-sql-spanner integration
 //

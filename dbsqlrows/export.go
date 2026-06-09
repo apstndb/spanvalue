@@ -183,19 +183,25 @@ func callPrepareMetadata(hooks SQLRowsHooks, md *sppb.ResultSetMetadata) error {
 }
 
 func processDataRows(fac rowsFacade, hooks SQLRowsHooks, result *ExportResult) error {
+	if hooks.WriteDataRow == nil {
+		for fac.next() {
+			result.RowsRead++
+		}
+		return nil
+	}
 	n, err := fac.columnCount()
 	if err != nil {
 		return err
 	}
+	// gcvs and dest are allocated once per result set; scan overwrites gcvs in place
+	// before each WriteDataRow call. Hooks must not retain the slice after returning.
 	gcvs, dest := gcvScanTargets(n)
 	for fac.next() {
 		if err := fac.scan(dest...); err != nil {
 			return err
 		}
-		if hooks.WriteDataRow != nil {
-			if err := hooks.WriteDataRow(gcvs); err != nil {
-				return err
-			}
+		if err := hooks.WriteDataRow(gcvs); err != nil {
+			return err
 		}
 		result.RowsRead++
 	}
