@@ -1189,7 +1189,7 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 	if w.table == "" {
 		return ErrEmptyTableName
 	}
-	if w.schema.registered && len(w.schema.names) == 0 {
+	if len(w.schema.names) == 0 {
 		return ErrMissingColumnNames
 	}
 	formattedValues, err := spanvalue.FormatRowColumns(w.insertFormatter(), w.schema.names, values)
