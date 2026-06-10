@@ -4,8 +4,8 @@ module github.com/apstndb/spanvalue/dbsqlrows/gospanner
 go 1.25.0
 
 require (
-	// Downstream go get needs spanvalue v0.6.0+ (first release with dbsqlrows).
-	github.com/apstndb/spanvalue v0.6.0
+	// Downstream go get needs spanvalue v0.7.0+ (first stable release with dbsqlrows).
+	github.com/apstndb/spanvalue v0.7.0
 	github.com/googleapis/go-sql-spanner v1.25.1
 )
 
@@ -21,7 +21,6 @@ require (
 	cloud.google.com/go/spanner v1.91.0 // indirect
 	github.com/GoogleCloudPlatform/grpc-gcp-go/grpcgcp v1.6.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.31.0 // indirect
-	github.com/apstndb/spantype v0.3.11 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20251210132809-ee656c7534f5 // indirect
 	github.com/envoyproxy/go-control-plane/envoy v1.36.0 // indirect
@@ -36,7 +35,6 @@ require (
 	github.com/googleapis/gax-go/v2 v2.22.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
-	github.com/samber/lo v1.53.0 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
@@ -63,5 +61,5 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-// Dev-only: ignored by downstream consumers. Remove or bump after v0.6.0 is tagged.
+// Dev-only: ignored by downstream consumers. Remove when tagging this nested module.
 replace github.com/apstndb/spanvalue => ../..
