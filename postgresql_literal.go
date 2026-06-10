@@ -14,9 +14,9 @@ package spanvalue
 // Open design questions:
 //   - Should PG literals live entirely in spanvalue, or delegate probing to spanpg?
 //   - How should PROTO/ENUM and descriptor-backed types render under PostgreSQL?
-//   - Should [writer.SQLInsertWriter] auto-select this preset when
-//     [writer.WithSQLDialect](databasepb.DatabaseDialect_POSTGRESQL) is set and no
-//     explicit [writer.WithFormatter] was provided?
+//   - Should [github.com/apstndb/spanvalue/writer.SQLInsertWriter] auto-select this preset when
+//     [github.com/apstndb/spanvalue/writer.WithSQLDialect] is called with databasepb.DatabaseDialect_POSTGRESQL and no
+//     explicit [github.com/apstndb/spanvalue/writer.WithFormatter] was provided?
 //   - ARRAY/STRUCT nesting: PG array literal syntax vs typed GoogleSQL ARRAY<…>[…]?
 //
 // Track progress at https://github.com/apstndb/spanvalue/issues/126 .
