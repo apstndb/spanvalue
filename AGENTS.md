@@ -48,6 +48,7 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 
 - **`dbsqlrows/`** owns the shared `*sql.Rows` loop (`RunRows`/`RunRowsAtData` + `SQLRowsHooks`, parallel to `writer.RunRowIterator`); csv/jsonl use `SQLRowsHooksFromGCVWriter`. No go-sql-spanner in root `go.mod`. **`dbsqlrows/gospanner/`** is optional one-shot export + ExecOptions reference (not for REPLs — spannersh uses core only). Table layout and batch orchestration stay in apps. See [#109](https://github.com/apstndb/spanvalue/issues/109) / [#110](https://github.com/apstndb/spanvalue/issues/110).
 - **No string→GCV parsing** in `FormatConfig` (`gcvctor` / app). PG table cells: **spanpg**, not spanvalue.
+- **Reflection / client-tag Go value → GCV** (struct tags, `Null*` wrappers, `spanner.Encoder`, typed-NULL inference mirroring the official client's `encodeValue`) lives in [**spanenc**](https://github.com/apstndb/spanenc) with [**structfields**](https://github.com/apstndb/structfields); `gcvctor` stays explicit, strict constructors with caller-supplied types.
 
 ## gcvctor & errors (short)
 

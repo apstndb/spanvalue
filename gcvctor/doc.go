@@ -55,7 +55,9 @@
 // formatters treat NUMERIC string payloads as authoritative and do not parse them again.
 //
 // Formatting these values as strings is provided by the sibling package
-// [github.com/apstndb/spanvalue].
+// [github.com/apstndb/spanvalue]. For converting arbitrary Go values with the official
+// Cloud Spanner Go client's encoding semantics (struct tags, null wrappers, Encoder), see
+// [github.com/apstndb/spanenc].
 //
 // # Test fixtures
 //
