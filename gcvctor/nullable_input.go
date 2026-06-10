@@ -194,10 +194,15 @@ func PGNumericFromNullable(n spanner.PGNumeric) spanner.GenericColumnValue {
 }
 
 // PGJSONBFromNullable returns a PostgreSQL-dialect JSON GenericColumnValue from a
-// [cloud.google.com/go/spanner.PGJsonB] wrapper.
+// [cloud.google.com/go/spanner.PGJsonB] wrapper. When Valid and n.Value is a string, the
+// wire JSON is stored as-is (not re-marshaled); other Value types are marshaled like
+// [PGJSONBValue].
 func PGJSONBFromNullable(n spanner.PGJsonB) (spanner.GenericColumnValue, error) {
 	if !n.Valid {
 		return NullOf(typector.PGJSONB()), nil
+	}
+	if s, ok := n.Value.(string); ok {
+		return StringBasedValueOf(typector.PGJSONB(), s), nil
 	}
 	return PGJSONBValue(n.Value)
 }

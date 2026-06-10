@@ -255,13 +255,20 @@ func TestExtendedFromNullableScalars(t *testing.T) {
 		t.Fatalf("JSONFromNullable null mismatch (-want +got):\n%s", diff)
 	}
 
-	gotPGJSON, err := gcvctor.PGJSONBFromNullable(spanner.PGJsonB{Value: map[string]string{"k": "v"}, Valid: true})
+	gotPGJSON, err := gcvctor.PGJSONBFromNullable(spanner.PGJsonB{Value: `{"k":"v"}`, Valid: true})
 	if err != nil {
-		t.Fatalf("PGJSONBFromNullable value: %v", err)
+		t.Fatalf("PGJSONBFromNullable wire string: %v", err)
 	}
 	wantPGJSON := wantPGJSONBWire(`{"k":"v"}`)
 	if diff := cmp.Diff(wantPGJSON, gotPGJSON, protocmp.Transform()); diff != "" {
-		t.Fatalf("PGJSONBFromNullable value mismatch (-want +got):\n%s", diff)
+		t.Fatalf("PGJSONBFromNullable wire string mismatch (-want +got):\n%s", diff)
+	}
+	gotPGJSONMap, err := gcvctor.PGJSONBFromNullable(spanner.PGJsonB{Value: map[string]string{"k": "v"}, Valid: true})
+	if err != nil {
+		t.Fatalf("PGJSONBFromNullable map value: %v", err)
+	}
+	if diff := cmp.Diff(wantPGJSON, gotPGJSONMap, protocmp.Transform()); diff != "" {
+		t.Fatalf("PGJSONBFromNullable map value mismatch (-want +got):\n%s", diff)
 	}
 	gotNullPGJSON, err := gcvctor.PGJSONBFromNullable(spanner.PGJsonB{})
 	if err != nil {
