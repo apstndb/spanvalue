@@ -357,7 +357,7 @@ func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 // [github.com/apstndb/spantype/typector.ElemCodeToArrayType] (or [github.com/apstndb/spantype/typector.ElemTypeToArrayType]).
 //
 // For other element types or explicit typing policy, use [ArrayValueOf] or [EmptyArrayOf].
-// At a spread call site (ArrayValue(elems...) where elems is a slice), a nil or empty slice
+// At a spread call site ([ArrayValue](elems...) where elems is a slice), a nil or empty slice
 // still yields ARRAY<INT64>, not an element type inferred from the slice variable. Prefer
 // [ArrayValueOf] or [EmptyArrayOf] when the slice may be empty.
 //
