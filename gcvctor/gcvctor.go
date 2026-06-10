@@ -1,6 +1,7 @@
 package gcvctor
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -201,7 +202,7 @@ func DateStringValue(v string) (spanner.GenericColumnValue, error) {
 
 // TimestampValue returns a non-null TIMESTAMP GenericColumnValue (RFC3339Nano string wire format).
 func TimestampValue(v time.Time) spanner.GenericColumnValue {
-	return StringBasedValueFromCode(sppb.TypeCode_TIMESTAMP, v.Format(time.RFC3339Nano))
+	return StringBasedValueFromCode(sppb.TypeCode_TIMESTAMP, v.UTC().Format(time.RFC3339Nano))
 }
 
 // TimestampStringValue validates an RFC3339Nano timestamp string and returns a non-null
@@ -256,11 +257,11 @@ func UUIDValue(v uuid.UUID) spanner.GenericColumnValue {
 
 // JSONValue marshals v to JSON and returns a non-null JSON GenericColumnValue.
 func JSONValue(v any) (spanner.GenericColumnValue, error) {
-	b, err := json.Marshal(v)
+	s, err := jsonWireString(v)
 	if err != nil {
 		return spanner.GenericColumnValue{}, err
 	}
-	return StringBasedValueFromCode(sppb.TypeCode_JSON, string(b)), nil
+	return StringBasedValueFromCode(sppb.TypeCode_JSON, s), nil
 }
 
 // PGNumericValue returns a PostgreSQL-dialect NUMERIC GenericColumnValue
@@ -291,14 +292,30 @@ func PGNumericValueChecked(v *big.Rat) (spanner.GenericColumnValue, error) {
 // PGJSONBValue marshals v to JSON and returns a non-null PostgreSQL-dialect JSON GenericColumnValue
 // ([sppb.TypeAnnotationCode_PG_JSONB]).
 func PGJSONBValue(v any) (spanner.GenericColumnValue, error) {
-	b, err := json.Marshal(v)
+	s, err := jsonWireString(v)
 	if err != nil {
 		return spanner.GenericColumnValue{}, err
 	}
 	return spanner.GenericColumnValue{
 		Type:  typector.PGJSONB(),
-		Value: structpb.NewStringValue(string(b)),
+		Value: structpb.NewStringValue(s),
 	}, nil
+}
+
+// jsonWireString marshals v to compact JSON without HTML character escaping,
+// matching Spanner-emitted JSON wire strings for comparison fixtures.
+func jsonWireString(v any) (string, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return "", err
+	}
+	b := buf.Bytes()
+	if n := len(b); n > 0 && b[n-1] == '\n' {
+		b = b[:n-1]
+	}
+	return string(b), nil
 }
 
 // ProtoValue returns a non-null PROTO GenericColumnValue for the fully qualified message name fqn.
