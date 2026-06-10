@@ -26,7 +26,7 @@ import (
 //
 // INT64 and ENUM emit unquoted JSON numbers. Values beyond 2^53 lose precision in
 // float64-based consumers (JavaScript, encoding/json into any). For lossless export,
-// customize FormatComplexPlugins to quote INT64/ENUM wire strings.
+// customize [FormatConfig.FormatComplexPlugins] to quote INT64/ENUM wire strings.
 //   - STRING, BYTES, TIMESTAMP, DATE, NUMERIC, PROTO, INTERVAL, UUID → "quoted string"
 //   - JSON column → raw JSON value (passed through)
 //   - ARRAY → [elem1,elem2,...]
