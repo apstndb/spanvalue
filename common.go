@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
@@ -194,11 +195,15 @@ func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, top
 		return "", err
 	}
 
+	s := value.Value.GetStringValue()
+	if _, err := strconv.ParseInt(s, 10, 64); err != nil {
+		return "", err
+	}
 	typeFQN, err := requireTypeFQN(value.Type)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("CAST(%v AS `%v`)", value.Value.GetStringValue(), typeFQN), nil
+	return fmt.Sprintf("CAST(%v AS `%v`)", s, typeFQN), nil
 }
 
 type Formatter interface {

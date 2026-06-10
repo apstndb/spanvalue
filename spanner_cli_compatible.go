@@ -61,9 +61,9 @@ func FormatNullableSpannerCLICompatible(value NullableValue) (string, error) {
 	case NullBytes:
 		return base64.StdEncoding.EncodeToString(v), nil
 	case spanner.NullFloat32:
-		return fmt.Sprintf("%f", v.Float32), nil
+		return formatSpannerCLIFloat(float64(v.Float32), 32), nil
 	case spanner.NullFloat64:
-		return fmt.Sprintf("%f", v.Float64), nil
+		return formatSpannerCLIFloat(v.Float64, 64), nil
 	case spanner.NullNumeric:
 		return trimSpannerCLINumericFraction(v.String()), nil
 	case spanner.PGNumeric:

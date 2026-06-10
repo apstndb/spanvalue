@@ -112,6 +112,11 @@ func TestDecodeColumnLiteral(t *testing.T) {
 			want:  "1.23",
 		},
 		{
+			desc:  "float64 integral",
+			value: float64(1),
+			want:  "1.0",
+		},
+		{
 			desc:  "math.MaxFloat64",
 			value: math.MaxFloat64,
 			want:  "1.7976931348623157e+308",
@@ -478,6 +483,7 @@ func TestDecodeColumnLiteral(t *testing.T) {
 
 func TestDecodeColumn_roundtripFloat64(t *testing.T) {
 	for _, tt := range []float64{
+		1,
 		math.MaxFloat64,
 		-math.MaxFloat64,
 		math.SmallestNonzeroFloat64,

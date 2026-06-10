@@ -277,13 +277,29 @@ func formatFloatSpannerCLI(gcv spanner.GenericColumnValue, bits int) (string, er
 		if err != nil {
 			return "", err
 		}
-		return strconv.FormatFloat(float64(f), 'f', 6, 32), nil
+		return formatSpannerCLIFloat(float64(f), 32), nil
 	}
 	f, err := gcvFloat64(gcv.Value)
 	if err != nil {
 		return "", err
 	}
-	return strconv.FormatFloat(f, 'f', 6, 64), nil
+	return formatSpannerCLIFloat(f, 64), nil
+}
+
+// formatSpannerCLIFloat matches spanner-cli: integral finite values omit the
+// fractional part; non-integral values use six digits after the decimal.
+func formatSpannerCLIFloat(f float64, bits int) string {
+	if isFiniteIntegralFloat(f) {
+		return strconv.FormatFloat(f, 'f', 0, bits)
+	}
+	return strconv.FormatFloat(f, 'f', 6, bits)
+}
+
+func isFiniteIntegralFloat(f float64) bool {
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return false
+	}
+	return f == math.Trunc(f)
 }
 
 // gcvFloat64 reads a FLOAT64 wire value (NumberValue or NaN/±Inf strings).
