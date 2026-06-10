@@ -1126,3 +1126,57 @@ func TestStructValueOfNilFieldTypeReturnsStructFieldError(t *testing.T) {
 		})
 	}
 }
+
+func TestTimestampValue_normalizesNonUTCToZuluWire(t *testing.T) {
+	t.Parallel()
+
+	jst := time.FixedZone("JST", 9*60*60)
+	ts := time.Date(2024, 1, 15, 21, 34, 56, 789000000, jst)
+	got := gcvctor.TimestampValue(ts)
+	want := spanner.GenericColumnValue{
+		Type:  typector.CodeToSimpleType(sppb.TypeCode_TIMESTAMP),
+		Value: structpb.NewStringValue("2024-01-15T12:34:56.789Z"),
+	}
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Fatalf("mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestJSONValue_doesNotHTMLEscapeWireString(t *testing.T) {
+	t.Parallel()
+
+	payload := map[string]string{"a": "<b>&c"}
+	for _, ctor := range []struct {
+		name string
+		fn   func(any) (spanner.GenericColumnValue, error)
+		typ  *sppb.Type
+	}{
+		{
+			name: "JSON",
+			fn:   gcvctor.JSONValue,
+			typ:  typector.CodeToSimpleType(sppb.TypeCode_JSON),
+		},
+		{
+			name: "PG_JSONB",
+			fn:   gcvctor.PGJSONBValue,
+			typ:  typector.PGJSONB(),
+		},
+	} {
+		t.Run(ctor.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := ctor.fn(payload)
+			if err != nil {
+				t.Fatalf("constructor error: %v", err)
+			}
+			wantWire := `{"a":"<b>&c"}`
+			want := spanner.GenericColumnValue{
+				Type:  ctor.typ,
+				Value: structpb.NewStringValue(wantWire),
+			}
+			if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+				t.Fatalf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
