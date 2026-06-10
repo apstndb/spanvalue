@@ -6,6 +6,7 @@ import (
 	"cloud.google.com/go/civil"
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"github.com/apstndb/spantype/typector"
 	"github.com/google/uuid"
 )
 
@@ -67,6 +68,9 @@ func DateFromPtr(p *civil.Date) spanner.GenericColumnValue {
 }
 
 // TimestampFromPtr returns a TIMESTAMP GenericColumnValue. A nil pointer yields typed SQL NULL.
+//
+// Callers mirroring the official client's encodeValue must handle [cloud.google.com/go/spanner.CommitTimestamp]
+// separately; the client checks that sentinel before formatting timestamps.
 func TimestampFromPtr(p *time.Time) spanner.GenericColumnValue {
 	if p == nil {
 		return NullFromCode(sppb.TypeCode_TIMESTAMP)
@@ -131,6 +135,9 @@ func DateFromNullable(n spanner.NullDate) spanner.GenericColumnValue {
 }
 
 // TimestampFromNullable returns a TIMESTAMP GenericColumnValue from a Spanner null wrapper.
+//
+// Callers mirroring the official client's encodeValue must handle [cloud.google.com/go/spanner.CommitTimestamp]
+// separately; the client checks that sentinel before formatting timestamps.
 func TimestampFromNullable(n spanner.NullTime) spanner.GenericColumnValue {
 	if !n.Valid {
 		return NullFromCode(sppb.TypeCode_TIMESTAMP)
@@ -144,4 +151,64 @@ func UUIDFromNullable(n spanner.NullUUID) spanner.GenericColumnValue {
 		return NullFromCode(sppb.TypeCode_UUID)
 	}
 	return UUIDValue(n.UUID)
+}
+
+// IntervalFromPtr returns an INTERVAL GenericColumnValue. A nil pointer yields typed SQL NULL.
+func IntervalFromPtr(p *spanner.Interval) spanner.GenericColumnValue {
+	if p == nil {
+		return NullFromCode(sppb.TypeCode_INTERVAL)
+	}
+	return IntervalValue(*p)
+}
+
+// NumericFromNullable returns a NUMERIC GenericColumnValue from a Spanner null wrapper.
+func NumericFromNullable(n spanner.NullNumeric) spanner.GenericColumnValue {
+	if !n.Valid {
+		return NullFromCode(sppb.TypeCode_NUMERIC)
+	}
+	return NumericValue(&n.Numeric)
+}
+
+// JSONFromNullable returns a JSON GenericColumnValue from a Spanner null wrapper.
+// When Valid and n.Value is a string, the wire JSON is stored as-is; other Value types
+// are marshaled like [JSONValue].
+func JSONFromNullable(n spanner.NullJSON) (spanner.GenericColumnValue, error) {
+	if !n.Valid {
+		return NullFromCode(sppb.TypeCode_JSON), nil
+	}
+	if s, ok := n.Value.(string); ok {
+		return StringBasedValueFromCode(sppb.TypeCode_JSON, s), nil
+	}
+	return JSONValue(n.Value)
+}
+
+// IntervalFromNullable returns an INTERVAL GenericColumnValue from a Spanner null wrapper.
+func IntervalFromNullable(n spanner.NullInterval) spanner.GenericColumnValue {
+	if !n.Valid {
+		return NullFromCode(sppb.TypeCode_INTERVAL)
+	}
+	return IntervalValue(n.Interval)
+}
+
+// PGNumericFromNullable returns a PostgreSQL-dialect NUMERIC GenericColumnValue from a
+// [cloud.google.com/go/spanner.PGNumeric] wrapper. The wire string is stored as-is when Valid.
+func PGNumericFromNullable(n spanner.PGNumeric) spanner.GenericColumnValue {
+	if !n.Valid {
+		return NullOf(typector.PGNumeric())
+	}
+	return StringBasedValueOf(typector.PGNumeric(), n.Numeric)
+}
+
+// PGJSONBFromNullable returns a PostgreSQL-dialect JSON GenericColumnValue from a
+// [cloud.google.com/go/spanner.PGJsonB] wrapper. When Valid and n.Value is a string, the
+// wire JSON is stored as-is (not re-marshaled); other Value types are marshaled like
+// [PGJSONBValue].
+func PGJSONBFromNullable(n spanner.PGJsonB) (spanner.GenericColumnValue, error) {
+	if !n.Valid {
+		return NullOf(typector.PGJSONB()), nil
+	}
+	if s, ok := n.Value.(string); ok {
+		return StringBasedValueOf(typector.PGJSONB(), s), nil
+	}
+	return PGJSONBValue(n.Value)
 }

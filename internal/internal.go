@@ -133,11 +133,6 @@ func AssembleJSONObjectWithMarshaledKeys(keys [][]byte, values []string) (string
 	return b.String(), nil
 }
 
-// ByteToEscapeSequenceReadable formats a byte as a string without quote processing
-func ByteToEscapeSequenceReadable(b byte) string {
-	return EscapeRune(rune(b), false, -1)
-}
-
 func EscapeRune(r rune, isString bool, quote rune) string {
 	switch {
 	case r == quote || r == '\\':
@@ -162,10 +157,6 @@ func EscapeRune(r rune, isString bool, quote rune) string {
 	}
 }
 
-func Float64ToLiteral(v float64) string {
-	return Float64ToLiteralPolicy(v, QuotePolicy{})
-}
-
 func Float64ToLiteralPolicy(v float64, policy QuotePolicy) string {
 	switch {
 	case math.IsNaN(v):
@@ -181,10 +172,6 @@ func Float64ToLiteralPolicy(v float64, policy QuotePolicy) string {
 		}
 		return s
 	}
-}
-
-func Float32ToLiteral(v float32) string {
-	return Float32ToLiteralPolicy(v, QuotePolicy{})
 }
 
 func Float32ToLiteralPolicy(v float32, policy QuotePolicy) string {
@@ -227,12 +214,9 @@ func Pointers[T any, E ~[]T](e E) iter.Seq[*T] {
 	}
 }
 
+// suitableQuote is retained as the historical test oracle for legacyQuote behavior.
 func suitableQuote(b []byte) rune {
 	return legacyQuote(b, PreferredQuoteDouble)
-}
-
-func ToReadableBytesLiteral(v []byte) string {
-	return ToReadableBytesLiteralPolicy(v, QuotePolicy{})
 }
 
 func ToReadableBytesLiteralPolicy(v []byte, policy QuotePolicy) string {
@@ -250,10 +234,6 @@ func ToReadableBytesLiteralPolicy(v []byte, policy QuotePolicy) string {
 	encoded.WriteRune(quote)
 
 	return encoded.String()
-}
-
-func ToStringLiteral(s string) string {
-	return ToStringLiteralPolicy(s, QuotePolicy{})
 }
 
 func ToStringLiteralPolicy(s string, policy QuotePolicy) string {

@@ -33,9 +33,11 @@
 //
 //   - [BoolFromPtr], [Int64FromPtr], and related *FromPtr helpers take *T; nil means SQL NULL.
 //   - [BytesFromSlice] takes []byte; nil means SQL NULL (slices are already reference types).
-//   - [BoolFromNullable], [Int64FromNullable], and related *FromNullable helpers take
-//     [cloud.google.com/go/spanner.NullBool], [cloud.google.com/go/spanner.NullInt64], and
-//     other client null wrappers; Valid == false means SQL NULL.
+//   - [BoolFromNullable], [Int64FromNullable], [NumericFromNullable], [JSONFromNullable],
+//     [IntervalFromNullable], [PGNumericFromNullable], [PGJSONBFromNullable], and related
+//     *FromNullable helpers take [cloud.google.com/go/spanner.NullBool],
+//     [cloud.google.com/go/spanner.NullInt64], and other client null wrappers; Valid == false
+//     means SQL NULL.
 //
 // Use *FromPtr for optional fields modeled as Go pointers. Use *FromNullable when the value
 // already comes from the Spanner client library. For explicit typed NULL without an input
@@ -55,7 +57,9 @@
 // formatters treat NUMERIC string payloads as authoritative and do not parse them again.
 //
 // Formatting these values as strings is provided by the sibling package
-// [github.com/apstndb/spanvalue].
+// [github.com/apstndb/spanvalue]. For converting arbitrary Go values with the official
+// Cloud Spanner Go client's encoding semantics (struct tags, null wrappers, Encoder), see
+// [github.com/apstndb/spanenc].
 //
 // # Test fixtures
 //
@@ -63,8 +67,10 @@
 // [MustStructValueOfFields], and [MustNormalizeArrayElements] over local panic-on-error helpers.
 // They wrap the error-returning constructors and are intended for schema-known fixture data, not production paths.
 //
-// String payloads: [StringBasedValueFromCode] stores the wire string as-is with no validation
-// (no extra imports beyond typector). When the test cares about canonical wire form, use validated
+// String payloads: [StringBasedValueOf] and [StringBasedValueFromCode] store the wire string as-is
+// with no validation (no extra imports beyond typector). Use [StringBasedValueOf] when the Type
+// carries annotations (for example PG-dialect NUMERIC). When the test cares about canonical wire
+// form, use validated
 // helpers such as [DateStringValue] or the corresponding [MustDateStringValue], [MustTimestampStringValue],
 // [MustIntervalStringValue], and [MustJSONValue] for inline nesting. Typed Go inputs ([DateValue] with
 // [cloud.google.com/go/civil.Date], [TimestampValue] with [time.Time], and so on) avoid parse errors
