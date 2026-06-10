@@ -2,6 +2,7 @@ package gcvctor_test
 
 import (
 	"encoding/base64"
+	"math/big"
 	"strconv"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/apstndb/spanvalue/gcvctor"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -170,5 +172,129 @@ func TestFromNullableScalars(t *testing.T) {
 				t.Fatalf("mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func wantNumericWire(wire string) spanner.GenericColumnValue {
+	return spanner.GenericColumnValue{
+		Type:  typector.CodeToSimpleType(sppb.TypeCode_NUMERIC),
+		Value: structpb.NewStringValue(wire),
+	}
+}
+
+func wantPGNumericWire(wire string) spanner.GenericColumnValue {
+	return spanner.GenericColumnValue{
+		Type:  typector.PGNumeric(),
+		Value: structpb.NewStringValue(wire),
+	}
+}
+
+func wantJSONWire(wire string) spanner.GenericColumnValue {
+	return spanner.GenericColumnValue{
+		Type:  typector.CodeToSimpleType(sppb.TypeCode_JSON),
+		Value: structpb.NewStringValue(wire),
+	}
+}
+
+func wantPGJSONBWire(wire string) spanner.GenericColumnValue {
+	return spanner.GenericColumnValue{
+		Type:  typector.PGJSONB(),
+		Value: structpb.NewStringValue(wire),
+	}
+}
+
+func wantInterval(iv spanner.Interval) spanner.GenericColumnValue {
+	return spanner.GenericColumnValue{
+		Type:  typector.CodeToSimpleType(sppb.TypeCode_INTERVAL),
+		Value: structpb.NewStringValue(iv.String()),
+	}
+}
+
+func TestExtendedFromNullableScalars(t *testing.T) {
+	t.Parallel()
+
+	iv := lo.Must(spanner.ParseInterval("P1Y2M"))
+	rat := big.NewRat(314, 100)
+
+	tests := []struct {
+		name string
+		got  spanner.GenericColumnValue
+		want spanner.GenericColumnValue
+	}{
+		{"IntervalFromPtr value", gcvctor.IntervalFromPtr(&iv), wantInterval(iv)},
+		{"IntervalFromPtr null", gcvctor.IntervalFromPtr(nil), wantNull(sppb.TypeCode_INTERVAL)},
+		{"NumericFromNullable value", gcvctor.NumericFromNullable(spanner.NullNumeric{Numeric: *rat, Valid: true}), wantNumericWire(spanner.NumericString(rat))},
+		{"NumericFromNullable null", gcvctor.NumericFromNullable(spanner.NullNumeric{}), wantNull(sppb.TypeCode_NUMERIC)},
+		{"IntervalFromNullable value", gcvctor.IntervalFromNullable(spanner.NullInterval{Interval: iv, Valid: true}), wantInterval(iv)},
+		{"IntervalFromNullable null", gcvctor.IntervalFromNullable(spanner.NullInterval{}), wantNull(sppb.TypeCode_INTERVAL)},
+		{"PGNumericFromNullable value", gcvctor.PGNumericFromNullable(spanner.PGNumeric{Numeric: "3.14", Valid: true}), wantPGNumericWire("3.14")},
+		{"PGNumericFromNullable null", gcvctor.PGNumericFromNullable(spanner.PGNumeric{}), spanner.GenericColumnValue{Type: typector.PGNumeric(), Value: structpb.NewNullValue()}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if diff := cmp.Diff(tt.want, tt.got, protocmp.Transform()); diff != "" {
+				t.Fatalf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+
+	gotJSONStr, err := gcvctor.JSONFromNullable(spanner.NullJSON{Value: `{"k":"v"}`, Valid: true})
+	if err != nil {
+		t.Fatalf("JSONFromNullable string value: %v", err)
+	}
+	wantJSON := wantJSONWire(`{"k":"v"}`)
+	if diff := cmp.Diff(wantJSON, gotJSONStr, protocmp.Transform()); diff != "" {
+		t.Fatalf("JSONFromNullable string value mismatch (-want +got):\n%s", diff)
+	}
+	gotJSONMap, err := gcvctor.JSONFromNullable(spanner.NullJSON{Value: map[string]string{"k": "v"}, Valid: true})
+	if err != nil {
+		t.Fatalf("JSONFromNullable map value: %v", err)
+	}
+	if diff := cmp.Diff(wantJSON, gotJSONMap, protocmp.Transform()); diff != "" {
+		t.Fatalf("JSONFromNullable map value mismatch (-want +got):\n%s", diff)
+	}
+	gotNullJSON, err := gcvctor.JSONFromNullable(spanner.NullJSON{})
+	if err != nil {
+		t.Fatalf("JSONFromNullable null: %v", err)
+	}
+	if diff := cmp.Diff(wantNull(sppb.TypeCode_JSON), gotNullJSON, protocmp.Transform()); diff != "" {
+		t.Fatalf("JSONFromNullable null mismatch (-want +got):\n%s", diff)
+	}
+
+	gotPGJSON, err := gcvctor.PGJSONBFromNullable(spanner.PGJsonB{Value: `{"k":"v"}`, Valid: true})
+	if err != nil {
+		t.Fatalf("PGJSONBFromNullable wire string: %v", err)
+	}
+	wantPGJSON := wantPGJSONBWire(`{"k":"v"}`)
+	if diff := cmp.Diff(wantPGJSON, gotPGJSON, protocmp.Transform()); diff != "" {
+		t.Fatalf("PGJSONBFromNullable wire string mismatch (-want +got):\n%s", diff)
+	}
+	gotPGJSONMap, err := gcvctor.PGJSONBFromNullable(spanner.PGJsonB{Value: map[string]string{"k": "v"}, Valid: true})
+	if err != nil {
+		t.Fatalf("PGJSONBFromNullable map value: %v", err)
+	}
+	if diff := cmp.Diff(wantPGJSON, gotPGJSONMap, protocmp.Transform()); diff != "" {
+		t.Fatalf("PGJSONBFromNullable map value mismatch (-want +got):\n%s", diff)
+	}
+	gotNullPGJSON, err := gcvctor.PGJSONBFromNullable(spanner.PGJsonB{})
+	if err != nil {
+		t.Fatalf("PGJSONBFromNullable null: %v", err)
+	}
+	if diff := cmp.Diff(spanner.GenericColumnValue{Type: typector.PGJSONB(), Value: structpb.NewNullValue()}, gotNullPGJSON, protocmp.Transform()); diff != "" {
+		t.Fatalf("PGJSONBFromNullable null mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestStringBasedValueOf(t *testing.T) {
+	t.Parallel()
+
+	got := gcvctor.StringBasedValueOf(typector.PGNumeric(), "99.5")
+	want := spanner.GenericColumnValue{
+		Type:  typector.PGNumeric(),
+		Value: structpb.NewStringValue("99.5"),
+	}
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Fatalf("mismatch (-want +got):\n%s", diff)
 	}
 }

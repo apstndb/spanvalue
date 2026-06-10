@@ -169,6 +169,18 @@ func BytesBasedValueOf(typ *sppb.Type, v []byte) spanner.GenericColumnValue {
 	}
 }
 
+// StringBasedValueOf constructs a GenericColumnValue with an arbitrary string-compatible
+// [cloud.google.com/go/spanner/apiv1/spannerpb.Type] and wire string stored as-is (no validation).
+// Prefer typed helpers such as [NumericValue] or [PGNumericFromNullable] when you hold native Go
+// values; use this when the Type carries annotations (for example PG-dialect NUMERIC) or other
+// metadata beyond a bare type code.
+func StringBasedValueOf(typ *sppb.Type, v string) spanner.GenericColumnValue {
+	return spanner.GenericColumnValue{
+		Type:  typ,
+		Value: structpb.NewStringValue(v),
+	}
+}
+
 // StringBasedValueFromCode constructs a GenericColumnValue for a simple scalar type code
 // with a string wire payload.
 //
@@ -178,11 +190,12 @@ func BytesBasedValueOf(typ *sppb.Type, v []byte) spanner.GenericColumnValue {
 // wire string as-is and do not re-normalize. Prefer [NumericValue], [PGNumericValue], or values
 // from the Spanner client (including the emulator and Spanner Omni) over passing arbitrary
 // decimals here.
+//
+// Accepts simple scalar type codes only. ARRAY and STRUCT codes produce a malformed Type
+// (missing array_element_type or struct_type); use [StringBasedValueOf] with typector for
+// annotated or composite shapes.
 func StringBasedValueFromCode(code sppb.TypeCode, v string) spanner.GenericColumnValue {
-	return spanner.GenericColumnValue{
-		Type:  typector.CodeToSimpleType(code),
-		Value: structpb.NewStringValue(v),
-	}
+	return StringBasedValueOf(typector.CodeToSimpleType(code), v)
 }
 
 // DateValue returns a non-null DATE GenericColumnValue.
@@ -273,10 +286,7 @@ func PGNumericValue(v *big.Rat) spanner.GenericColumnValue {
 	if v == nil {
 		return NullOf(typector.PGNumeric())
 	}
-	return spanner.GenericColumnValue{
-		Type:  typector.PGNumeric(),
-		Value: structpb.NewStringValue(spanner.NumericString(v)),
-	}
+	return StringBasedValueOf(typector.PGNumeric(), spanner.NumericString(v))
 }
 
 // PGNumericValueChecked returns a non-null PostgreSQL-dialect NUMERIC GenericColumnValue
@@ -296,10 +306,7 @@ func PGJSONBValue(v any) (spanner.GenericColumnValue, error) {
 	if err != nil {
 		return spanner.GenericColumnValue{}, err
 	}
-	return spanner.GenericColumnValue{
-		Type:  typector.PGJSONB(),
-		Value: structpb.NewStringValue(s),
-	}, nil
+	return StringBasedValueOf(typector.PGJSONB(), s), nil
 }
 
 // jsonWireString marshals v to compact JSON without HTML character escaping,
