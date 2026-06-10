@@ -239,13 +239,20 @@ func TestExtendedFromNullableScalars(t *testing.T) {
 		})
 	}
 
-	gotJSON, err := gcvctor.JSONFromNullable(spanner.NullJSON{Value: map[string]string{"k": "v"}, Valid: true})
+	gotJSONStr, err := gcvctor.JSONFromNullable(spanner.NullJSON{Value: `{"k":"v"}`, Valid: true})
 	if err != nil {
-		t.Fatalf("JSONFromNullable value: %v", err)
+		t.Fatalf("JSONFromNullable string value: %v", err)
 	}
 	wantJSON := wantJSONWire(`{"k":"v"}`)
-	if diff := cmp.Diff(wantJSON, gotJSON, protocmp.Transform()); diff != "" {
-		t.Fatalf("JSONFromNullable value mismatch (-want +got):\n%s", diff)
+	if diff := cmp.Diff(wantJSON, gotJSONStr, protocmp.Transform()); diff != "" {
+		t.Fatalf("JSONFromNullable string value mismatch (-want +got):\n%s", diff)
+	}
+	gotJSONMap, err := gcvctor.JSONFromNullable(spanner.NullJSON{Value: map[string]string{"k": "v"}, Valid: true})
+	if err != nil {
+		t.Fatalf("JSONFromNullable map value: %v", err)
+	}
+	if diff := cmp.Diff(wantJSON, gotJSONMap, protocmp.Transform()); diff != "" {
+		t.Fatalf("JSONFromNullable map value mismatch (-want +got):\n%s", diff)
 	}
 	gotNullJSON, err := gcvctor.JSONFromNullable(spanner.NullJSON{})
 	if err != nil {

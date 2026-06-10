@@ -169,9 +169,14 @@ func NumericFromNullable(n spanner.NullNumeric) spanner.GenericColumnValue {
 }
 
 // JSONFromNullable returns a JSON GenericColumnValue from a Spanner null wrapper.
+// When Valid and n.Value is a string, the wire JSON is stored as-is; other Value types
+// are marshaled like [JSONValue].
 func JSONFromNullable(n spanner.NullJSON) (spanner.GenericColumnValue, error) {
 	if !n.Valid {
 		return NullFromCode(sppb.TypeCode_JSON), nil
+	}
+	if s, ok := n.Value.(string); ok {
+		return StringBasedValueFromCode(sppb.TypeCode_JSON, s), nil
 	}
 	return JSONValue(n.Value)
 }
