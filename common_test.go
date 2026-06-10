@@ -375,3 +375,17 @@ func TestFormatProtoEnumCastRejectsNonStringWire(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatEnumAsCastRejectsInvalidWirePayload(t *testing.T) {
+	t.Parallel()
+
+	const enumFQN = "package.EnumType"
+	gcv := spanner.GenericColumnValue{
+		Type:  &sppb.Type{Code: sppb.TypeCode_ENUM, ProtoTypeFqn: enumFQN},
+		Value: structpb.NewStringValue("notanumber"),
+	}
+	_, err := LiteralFormatConfig().FormatToplevelColumn(gcv)
+	if err == nil {
+		t.Fatal("expected error for non-integer ENUM wire payload")
+	}
+}

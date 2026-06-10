@@ -175,7 +175,11 @@ func Float64ToLiteralPolicy(v float64, policy QuotePolicy) string {
 	case math.IsInf(v, -1):
 		return sqlCastQuotedString("-inf", "FLOAT64", quoteForPayload(policy, "-inf"))
 	default:
-		return strconv.FormatFloat(v, 'g', -1, 64)
+		s := strconv.FormatFloat(v, 'g', -1, 64)
+		if !strings.ContainsAny(s, ".eE") {
+			s += ".0"
+		}
+		return s
 	}
 }
 
