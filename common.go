@@ -197,7 +197,7 @@ func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, top
 
 	s := value.Value.GetStringValue()
 	if _, err := strconv.ParseInt(s, 10, 64); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to parse enum wire payload %q: %w", s, err)
 	}
 	typeFQN, err := requireTypeFQN(value.Type)
 	if err != nil {
