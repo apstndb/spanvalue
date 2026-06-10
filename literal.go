@@ -16,10 +16,12 @@ import (
 // Do not mutate: it is shared across all callers.
 var literalFormatConfig = LiteralFormatConfig()
 
+// FormatRowLiteral formats each column of row using [LiteralFormatConfig].
 func FormatRowLiteral(value *spanner.Row) ([]string, error) {
 	return literalFormatConfig.FormatRow(value)
 }
 
+// FormatColumnLiteral formats value using [LiteralFormatConfig] at top level.
 func FormatColumnLiteral(value spanner.GenericColumnValue) (string, error) {
 	return literalFormatConfig.FormatToplevelColumn(value)
 }

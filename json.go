@@ -23,6 +23,10 @@ import (
 //   - INT64 → 42 (unquoted number)
 //   - FLOAT32/FLOAT64 → 3.14 (NaN/Inf as quoted strings)
 //   - ENUM → 42 (unquoted number, Spanner stores proto enum values as INT64)
+//
+// INT64 and ENUM emit unquoted JSON numbers. Values beyond 2^53 lose precision in
+// float64-based consumers (JavaScript, encoding/json into any). For lossless export,
+// customize the [FormatConfig] FormatComplexPlugins field to quote INT64/ENUM wire strings.
 //   - STRING, BYTES, TIMESTAMP, DATE, NUMERIC, PROTO, INTERVAL, UUID → "quoted string"
 //   - JSON column → raw JSON value (passed through)
 //   - ARRAY → [elem1,elem2,...]
@@ -98,6 +102,8 @@ func IndexedUnnamedFieldNamer(index int) string {
 // JSONObjectStructFormat returns a FormatStructParenFunc that formats struct fields
 // as a JSON object. When namer is nil, unnamed struct fields produce empty-string keys,
 // matching Spanner's own representation.
+//
+// Deprecated: use [NewJSONObjectStructFormatter] instead.
 func JSONObjectStructFormat(namer UnnamedFieldNamer) FormatStructParenFunc {
 	return NewJSONObjectStructFormatter(namer)
 }

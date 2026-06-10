@@ -114,7 +114,9 @@ func Int64Value(v int64) spanner.GenericColumnValue {
 }
 
 // Float64Value returns a non-null FLOAT64 GenericColumnValue. NaN and ±Inf use string wire values
-// matching Spanner's encoding.
+// ("NaN", "Infinity", "-Infinity") matching what Spanner returns on the wire. The official client's
+// encodeValue sends finite and non-finite floats as protobuf NumberValue when building params;
+// Spanner accepts both forms.
 func Float64Value(v float64) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT64),
@@ -123,7 +125,9 @@ func Float64Value(v float64) spanner.GenericColumnValue {
 }
 
 // Float32Value returns a non-null FLOAT32 GenericColumnValue. NaN and ±Inf use string wire values
-// matching Spanner's encoding.
+// ("NaN", "Infinity", "-Infinity") matching what Spanner returns on the wire. The official client's
+// encodeValue sends finite and non-finite floats as protobuf NumberValue when building params;
+// Spanner accepts both forms.
 func Float32Value(v float32) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT32),
@@ -156,6 +160,8 @@ func StringValue(v string) spanner.GenericColumnValue {
 }
 
 // BytesValue returns a non-null BYTES GenericColumnValue (base64 wire encoding).
+// A nil slice is non-null empty BYTES (wire base64 ""), not typed SQL NULL; for typed NULL
+// use [BytesFromSlice] with nil.
 func BytesValue(v []byte) spanner.GenericColumnValue {
 	return BytesBasedValueOf(typector.CodeToSimpleType(sppb.TypeCode_BYTES), v)
 }
@@ -351,6 +357,9 @@ func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 // [github.com/apstndb/spantype/typector.ElemCodeToArrayType] (or [github.com/apstndb/spantype/typector.ElemTypeToArrayType]).
 //
 // For other element types or explicit typing policy, use [ArrayValueOf] or [EmptyArrayOf].
+// At a spread call site ([ArrayValue] (elems...) where elems is a slice), a nil or empty slice
+// still yields ARRAY<INT64>, not an element type inferred from the slice variable. Prefer
+// [ArrayValueOf] or [EmptyArrayOf] when the slice may be empty.
 //
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
 // If the inferred element type from vs[0] is invalid, the error is wrapped in [ArrayElementError]
@@ -494,6 +503,8 @@ func NullFromCode(code sppb.TypeCode) spanner.GenericColumnValue {
 // It does not represent a non-null STRUCT whose fields are all null—use [StructValueOf] with
 // per-field nulls (using [NullOf] or [NullFromCode] for each field) when you need that shape.
 // A nil typ is normalized to TYPE_CODE_UNSPECIFIED to avoid a malformed nil Type pointer.
+// Spanner rejects TYPE_CODE_UNSPECIFIED at the server, so a nil-Type bug surfaces there
+// rather than at construction time.
 func NullOf(typ *sppb.Type) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  normalizeNilType(typ),

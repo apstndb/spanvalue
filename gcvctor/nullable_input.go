@@ -51,6 +51,7 @@ func StringFromPtr(p *string) spanner.GenericColumnValue {
 }
 
 // BytesFromSlice returns a BYTES GenericColumnValue. A nil slice yields typed SQL NULL.
+// For non-null empty BYTES (wire base64 ""), use [BytesValue] even with a nil slice.
 func BytesFromSlice(v []byte) spanner.GenericColumnValue {
 	if v == nil {
 		return NullFromCode(sppb.TypeCode_BYTES)

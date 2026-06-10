@@ -47,12 +47,14 @@ func SpannerCLICompatibleFormatConfig() *FormatConfig {
 	}
 }
 
+// FormatRowSpannerCLICompatible formats each column of row using [SpannerCLICompatibleFormatConfig].
 func FormatRowSpannerCLICompatible(row *spanner.Row) ([]string, error) {
 	return spannerCLICompatibleFormatConfig.FormatRow(row)
 }
 
 func FormatNullableSpannerCLICompatible(value NullableValue) (string, error) {
-	// Actually, it is redundant to check IsNull() here, but it is for consistency.
+	// NULL is already handled in formatSimpleColumn before FormatNullable is called; this
+	// re-check keeps FormatNullableSpannerCLICompatible safe when used as a standalone callback.
 	if value.IsNull() {
 		return nullStringUpperCase, nil
 	}
@@ -79,6 +81,7 @@ func FormatNullableSpannerCLICompatible(value NullableValue) (string, error) {
 	}
 }
 
+// FormatColumnSpannerCLICompatible formats value using [SpannerCLICompatibleFormatConfig] at top level.
 func FormatColumnSpannerCLICompatible(value spanner.GenericColumnValue) (string, error) {
 	return spannerCLICompatibleFormatConfig.FormatToplevelColumn(value)
 }
