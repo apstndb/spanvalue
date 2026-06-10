@@ -7,7 +7,8 @@ import (
 )
 
 // QuoteIdentifier quotes a single identifier for dialect.
-// It does not validate the identifier; for example, an empty string becomes an empty quoted identifier.
+// It does not validate the identifier; for example, an empty string becomes an empty quoted
+// identifier (“ for GoogleSQL, "" for PostgreSQL), which is invalid SQL in both dialects.
 // DATABASE_DIALECT_UNSPECIFIED follows the Spanner default and uses GoogleSQL quoting.
 func QuoteIdentifier(dialect databasepb.DatabaseDialect, name string) string {
 	switch dialect {

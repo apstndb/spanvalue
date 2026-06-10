@@ -48,6 +48,8 @@ const (
 	nullStringClientLib = "<null>"
 )
 
+// NullableValue is the scalar null wrapper type accepted by [FormatNullableFunc].
+// It includes [cloud.google.com/go/spanner] null types and [NullBytes] for BYTES/PROTO.
 type NullableValue interface {
 	spanner.NullableValue
 	fmt.Stringer
@@ -76,6 +78,7 @@ var _, _ NullableValue = spanner.PGJsonB{}, (*spanner.PGJsonB)(nil)
 // If it returns ErrFallthrough, value will pass through to next step.
 type FormatComplexFunc = func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error)
 
+// ErrFallthrough tells [FormatComplexFunc] plugins to defer to the next plugin or built-in path.
 var ErrFallthrough = errors.New("fallthrough")
 
 func typeValueToGCV(typ *sppb.Type, value *structpb.Value) spanner.GenericColumnValue {
@@ -206,6 +209,7 @@ func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, top
 	return fmt.Sprintf("CAST(%v AS `%v`)", s, typeFQN), nil
 }
 
+// Formatter is the minimal surface [FormatComplexFunc] plugins use to recurse into nested values.
 type Formatter interface {
 	FormatColumn(value spanner.GenericColumnValue, toplevel bool) (string, error)
 	GetNullString() string

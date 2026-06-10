@@ -156,6 +156,8 @@ func StringValue(v string) spanner.GenericColumnValue {
 }
 
 // BytesValue returns a non-null BYTES GenericColumnValue (base64 wire encoding).
+// A nil slice is non-null empty BYTES (wire base64 ""), not typed SQL NULL; for typed NULL
+// use [BytesFromSlice] with nil.
 func BytesValue(v []byte) spanner.GenericColumnValue {
 	return BytesBasedValueOf(typector.CodeToSimpleType(sppb.TypeCode_BYTES), v)
 }
@@ -178,6 +180,9 @@ func BytesBasedValueOf(typ *sppb.Type, v []byte) spanner.GenericColumnValue {
 // wire string as-is and do not re-normalize. Prefer [NumericValue], [PGNumericValue], or values
 // from the Spanner client (including the emulator and Spanner Omni) over passing arbitrary
 // decimals here.
+//
+// Accepts simple scalar type codes only. ARRAY and STRUCT codes produce a malformed Type
+// (missing array_element_type or struct_type); use typector for composite shapes.
 func StringBasedValueFromCode(code sppb.TypeCode, v string) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(code),
@@ -344,6 +349,9 @@ func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 // [github.com/apstndb/spantype/typector.ElemCodeToArrayType] (or [github.com/apstndb/spantype/typector.ElemTypeToArrayType]).
 //
 // For other element types or explicit typing policy, use [ArrayValueOf] or [EmptyArrayOf].
+// At a spread call site (ArrayValue(elems...) where elems is a slice), a nil or empty slice
+// still yields ARRAY<INT64>, not an element type inferred from the slice variable. Prefer
+// [ArrayValueOf] or [EmptyArrayOf] when the slice may be empty.
 //
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
 // If the inferred element type from vs[0] is invalid, the error is wrapped in [ArrayElementError]
@@ -487,6 +495,8 @@ func NullFromCode(code sppb.TypeCode) spanner.GenericColumnValue {
 // It does not represent a non-null STRUCT whose fields are all null—use [StructValueOf] with
 // per-field nulls (using [NullOf] or [NullFromCode] for each field) when you need that shape.
 // A nil typ is normalized to TYPE_CODE_UNSPECIFIED to avoid a malformed nil Type pointer.
+// Spanner rejects TYPE_CODE_UNSPECIFIED at the server, so a nil-Type bug surfaces there
+// rather than at construction time.
 func NullOf(typ *sppb.Type) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  normalizeNilType(typ),
