@@ -23,11 +23,13 @@ import (
 )
 
 var (
-	// ErrTypeMismatch is returned by [ArrayValueOf] when an element's type does not match elemType.
+	// ErrTypeMismatch is returned by [ArrayValueOf], [ArrayValue], and [NormalizeArrayElements]
+	// when an element's type does not match the expected element type.
 	ErrTypeMismatch = errors.New("gcvctor: type mismatch")
 	// ErrMismatchedCounts is returned by [StructValueOf] when len(names) != len(gcvs).
 	ErrMismatchedCounts = errors.New("gcvctor: mismatched name/value count")
-	// ErrNilElementType is returned by [ArrayValueOf] when elemType is nil.
+	// ErrNilElementType is returned by [ArrayValueOf], [ArrayValue], and [NormalizeArrayElements]
+	// when elemType is nil.
 	ErrNilElementType = errors.New("gcvctor: nil array element type")
 	// ErrNilFieldType is returned by [StructValueOf] when a field's Type is nil.
 	ErrNilFieldType = errors.New("gcvctor: nil struct field type")
@@ -301,14 +303,14 @@ func PGJSONBValue(v any) (spanner.GenericColumnValue, error) {
 
 // ProtoValue returns a non-null PROTO GenericColumnValue for the fully qualified message name fqn.
 // The message bytes are stored in the GCV as a base64-encoded string. Delimited export decodes that
-// wire payload for SimpleFormatConfig when possible (see writer.TestDelimitedWriterWriteGCVsEnumProto).
+// wire payload for SimpleFormatConfig when possible.
 func ProtoValue(fqn string, b []byte) spanner.GenericColumnValue {
 	return BytesBasedValueOf(typector.FQNToProtoType(fqn), b)
 }
 
 // EnumValue returns a non-null ENUM GenericColumnValue for the fully qualified enum name fqn.
 // The structpb value is the enum number as a decimal string; delimited export prints that
-// string (see writer.TestDelimitedWriterWriteGCVsEnumProto).
+// decimal string on the wire.
 func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.FQNToEnumType(fqn),
