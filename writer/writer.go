@@ -37,8 +37,8 @@ var (
 	// ErrMissingColumnNames reports that an operation requires a registered column schema
 	// when none was registered yet, or column names/types are insufficient for the write
 	// (for example values without names). It is not returned for a registered zero-column
-	// schema (see package doc "Registered schema vs missing schema"). [DelimitedWriter.PrepareColumnNames]
-	// and [WithColumnNames] with an empty name list return this error; use [DelimitedWriter.PrepareRowType]
+	// schema (see package doc "Registered schema vs missing schema"). [*DelimitedWriter.PrepareColumnNames]
+	// and [WithColumnNames] with an empty name list return this error; use [*DelimitedWriter.PrepareRowType]
 	// or [WithRowType] for zero-column result sets.
 	ErrMissingColumnNames = errors.New("missing column names")
 	// ErrColumnNamesMismatch reports that provided column names differ from initialized schema.
@@ -972,9 +972,9 @@ func (w *JSONLWriter) marshalResolvedNames(resolvedNames []string) ([][]byte, er
 }
 
 // SQLInsertWriter streams INSERT (or INSERT OR …) statements with dialect-aware identifier
-// quoting for a fixed table. After any error from [SQLInsertWriter.WriteRow],
-// [SQLInsertWriter.WriteGCVs], [SQLInsertWriter.WriteValues], or
-// [SQLInsertWriter.WriteStructValues], discard the writer; partial batched INSERT output
+// quoting for a fixed table. After any error from [*SQLInsertWriter.WriteRow],
+// [*SQLInsertWriter.WriteGCVs], [*SQLInsertWriter.WriteValues], or
+// [*SQLInsertWriter.WriteStructValues], discard the writer; partial batched INSERT output
 // may be unrecoverable on retry.
 type SQLInsertWriter struct {
 	table     string
@@ -1066,8 +1066,8 @@ func (w *SQLInsertWriter) Prepare(metadata *sppb.ResultSetMetadata) error {
 
 // PrepareRowType initializes the SQL INSERT schema from a row type before the first row is written.
 // When the row type comes from a [cloud.google.com/go/spanner.RowIterator], use [RunRowIterator]
-// or [SQLInsertWriter.PrepareRowType] with iter.Metadata.GetRowType() after the first Next. Nil rowType registers an empty schema;
-// [SQLInsertWriter.WriteGCVs] still requires at least one column to emit SQL.
+// or [*SQLInsertWriter.PrepareRowType] with iter.Metadata.GetRowType() after the first Next. Nil rowType registers an empty schema;
+// [*SQLInsertWriter.WriteGCVs] still requires at least one column to emit SQL.
 func (w *SQLInsertWriter) PrepareRowType(rowType *sppb.StructType) error {
 	return w.prepareRowType(rowType)
 }
@@ -1117,7 +1117,7 @@ func (w *SQLInsertWriter) WriteValues(columnNames []string, values []spanner.Gen
 }
 
 // WriteStructValues writes one row from structpb values using the field-type schema
-// registered by [WithRowType], [WithMetadata], or [SQLInsertWriter.PrepareRowType].
+// registered by [WithRowType], [WithMetadata], or [*SQLInsertWriter.PrepareRowType].
 func (w *SQLInsertWriter) WriteStructValues(values []*structpb.Value) error {
 	gcvs, err := gcvsFromStructValues(w.schema.types, values)
 	if err != nil {
