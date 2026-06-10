@@ -114,7 +114,9 @@ func Int64Value(v int64) spanner.GenericColumnValue {
 }
 
 // Float64Value returns a non-null FLOAT64 GenericColumnValue. NaN and ±Inf use string wire values
-// matching Spanner's encoding.
+// ("NaN", "Infinity", "-Infinity") matching what Spanner returns on the wire. The official client's
+// encodeValue sends finite and non-finite floats as protobuf NumberValue when building params;
+// Spanner accepts both forms.
 func Float64Value(v float64) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT64),
@@ -123,7 +125,9 @@ func Float64Value(v float64) spanner.GenericColumnValue {
 }
 
 // Float32Value returns a non-null FLOAT32 GenericColumnValue. NaN and ±Inf use string wire values
-// matching Spanner's encoding.
+// ("NaN", "Infinity", "-Infinity") matching what Spanner returns on the wire. The official client's
+// encodeValue sends finite and non-finite floats as protobuf NumberValue when building params;
+// Spanner accepts both forms.
 func Float32Value(v float32) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT32),
