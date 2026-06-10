@@ -129,7 +129,7 @@ When the app consumes `Next` but skips row bodies, register `PrepareRowType(iter
 | Zero columns (DML without `THEN RETURN`) | `PrepareRowType(nil)` or empty row type—not `PrepareColumnNames([])` |
 | Zero-row `SELECT` | `PrepareRowType` after first `Next`, then `Flush` for header-only CSV |
 
-Without registration and with no row written, `Flush` / `WriteHeader` return `ErrMissingColumnNames`. Registered empty schema (`len(names)==0`) is valid: `Flush` writes nothing.
+Without registration and with no row written, `WriteHeader` returns `ErrMissingColumnNames`; `Flush` returns that error only when `Header` is true (see `DelimitedWriter.Flush` godoc). Registered empty schema (`len(names)==0`) is valid: `Flush` writes nothing.
 
 ## go-sql-spanner and GCV slices
 

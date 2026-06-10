@@ -56,7 +56,8 @@ func (h SQLRowsHooks) WithFinish(fn func(*SQLRowsResult) error) SQLRowsHooks {
 // SQLRowsHooksFromGCVWriter returns hooks that register metadata via
 // [GCVStreamWriter] PrepareRowType or Prepare when implemented, write each row
 // with [GCVStreamWriter.WriteGCVs], and call [GCVStreamWriter.Flush] in Finish.
-// Flush is not called when PrepareMetadata or WriteDataRow returns an error.
+// Finish (and thus Flush) runs only after all rows and optional stats consumption succeed;
+// it is skipped when PrepareMetadata, WriteDataRow, or the stats phase returns an error.
 // A nil writer returns empty hooks.
 func SQLRowsHooksFromGCVWriter(w GCVStreamWriter) SQLRowsHooks {
 	if w == nil {
