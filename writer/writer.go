@@ -58,6 +58,8 @@ var (
 	// ErrTableNameChangedMidBatch reports that the SQL INSERT table name was mutated while
 	// a multi-row INSERT batch was open.
 	ErrTableNameChangedMidBatch = errors.New("table name changed mid-batch")
+	// ErrEmptyTablePlaceholder reports that [WithSQLTablePlaceholder] received an empty token.
+	ErrEmptyTablePlaceholder = errors.New("empty table placeholder token")
 )
 
 // Writer writes Spanner rows to an output stream.
@@ -197,6 +199,31 @@ type sqlBatchSizeOption struct {
 
 func (o sqlBatchSizeOption) applySQLInsertOption(w *SQLInsertWriter) error {
 	w.batchSize = o.batchSize
+	return nil
+}
+
+type sqlTablePlaceholderOption struct {
+	token string
+}
+
+// WithSQLTablePlaceholder sets a verbatim INSERT INTO target token when the real table
+// name is unknown at export time (WIP #146).
+//
+// The token is emitted without dialect identifier quoting. This is intentionally
+// distinct from an accidentally empty table name (see #147). When a placeholder is
+// configured, [NewSQLInsertWriter]'s table argument may be empty.
+//
+// Open design questions: delimiter conventions, text/template support, and whether
+// placeholders belong on [SQLInsertWriter] or on future INSERT fragment helpers (#79).
+func WithSQLTablePlaceholder(token string) SQLInsertOption {
+	return sqlTablePlaceholderOption{token: token}
+}
+
+func (o sqlTablePlaceholderOption) applySQLInsertOption(w *SQLInsertWriter) error {
+	if o.token == "" {
+		return ErrEmptyTablePlaceholder
+	}
+	w.tablePlaceholder = o.token
 	return nil
 }
 
@@ -986,6 +1013,7 @@ type SQLInsertWriter struct {
 	sqlDialect        databasepb.DatabaseDialect
 	batchSize         int
 	batchPending      int
+	tablePlaceholder  string
 	schema            columnSchema
 	quotedColumnNames string
 	quotedTable       string
@@ -1186,7 +1214,7 @@ func (w *SQLInsertWriter) writeGCVs(values []spanner.GenericColumnValue, quotedC
 	if w.out == nil {
 		return ErrNilOutputWriter
 	}
-	if w.table == "" {
+	if w.table == "" && w.tablePlaceholder == "" {
 		return ErrEmptyTableName
 	}
 	formattedValues, err := spanvalue.FormatRowColumns(w.insertFormatter(), w.schema.names, values)
@@ -1307,6 +1335,9 @@ func (w *SQLInsertWriter) initOrValidateQuotedColumns(columnNames []string) (str
 }
 
 func (w *SQLInsertWriter) quotedQualifiedTable() (string, error) {
+	if w.tablePlaceholder != "" {
+		return w.tablePlaceholder, nil
+	}
 	if w.quotedTable != "" && w.quotedTableInput == w.table {
 		return w.quotedTable, nil
 	}
