@@ -9,11 +9,15 @@ import (
 )
 
 var (
-	// ErrNilRows reports that WriteRows was called with a nil *sql.Rows.
+	// ErrNilRows reports that a dbsqlrows entry point was called with a nil *sql.Rows
+	// (for example [WriteRows], [RunRows], [RunRowsAtData], [WriteRowsAtData], or
+	// [ReadMetadataAndAdvanceToData]).
 	ErrNilRows = errors.New("nil sql.Rows")
-	// ErrNilWriter reports that WriteRows was called with a nil GCVStreamWriter.
+	// ErrNilWriter reports that an export entry point was called with a nil [GCVStreamWriter]
+	// (for example [WriteRows] or [WriteRowsAtData]).
 	ErrNilWriter = errors.New("nil GCV stream writer")
-	// ErrNilMetadata reports that WriteRowsAtData was called with nil metadata.
+	// ErrNilMetadata reports that a data-phase entry point was called with nil metadata
+	// (for example [WriteRowsAtData] or [RunRowsAtData]).
 	ErrNilMetadata = errors.New("nil result set metadata")
 	// ErrMissingMetadataRow reports that the iterator produced no metadata
 	// pseudo-row when WriteRows expected one.

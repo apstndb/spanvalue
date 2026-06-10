@@ -1641,6 +1641,22 @@ func TestSQLInsertWriterPrepareEmptyRowTypeFlushNoOp(t *testing.T) {
 	}
 }
 
+func TestSQLInsertWriterWriteValuesZeroColumnSchema(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := mustNewSQLInsertWriter(t, &out, "users")
+	if err := w.PrepareRowType(emptyRowType()); err != nil {
+		t.Fatalf("PrepareRowType() error = %v", err)
+	}
+	if err := w.WriteValues(nil, nil); !errors.Is(err, ErrMissingColumnNames) {
+		t.Fatalf("WriteValues(nil, nil) error = %v, want ErrMissingColumnNames", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("output = %q, want empty", out.String())
+	}
+}
+
 func TestWriterRejectsNonEmptyColumnNamesAfterRegisteredZeroColumnSchema(t *testing.T) {
 	t.Parallel()
 
