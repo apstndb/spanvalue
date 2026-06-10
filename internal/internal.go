@@ -169,11 +169,11 @@ func Float64ToLiteral(v float64) string {
 func Float64ToLiteralPolicy(v float64, policy QuotePolicy) string {
 	switch {
 	case math.IsNaN(v):
-		return sqlCastQuotedString("nan", "FLOAT64", nonFiniteCastDelimiter(policy))
+		return sqlCastQuotedString("nan", "FLOAT64", quoteForPayload(policy, "nan"))
 	case math.IsInf(v, 1):
-		return sqlCastQuotedString("inf", "FLOAT64", nonFiniteCastDelimiter(policy))
+		return sqlCastQuotedString("inf", "FLOAT64", quoteForPayload(policy, "inf"))
 	case math.IsInf(v, -1):
-		return sqlCastQuotedString("-inf", "FLOAT64", nonFiniteCastDelimiter(policy))
+		return sqlCastQuotedString("-inf", "FLOAT64", quoteForPayload(policy, "-inf"))
 	default:
 		return strconv.FormatFloat(v, 'g', -1, 64)
 	}
@@ -186,28 +186,13 @@ func Float32ToLiteral(v float32) string {
 func Float32ToLiteralPolicy(v float32, policy QuotePolicy) string {
 	switch {
 	case math.IsNaN(float64(v)):
-		return sqlCastQuotedString("nan", "FLOAT32", nonFiniteCastDelimiter(policy))
+		return sqlCastQuotedString("nan", "FLOAT32", quoteForPayload(policy, "nan"))
 	case math.IsInf(float64(v), 1):
-		return sqlCastQuotedString("inf", "FLOAT32", nonFiniteCastDelimiter(policy))
+		return sqlCastQuotedString("inf", "FLOAT32", quoteForPayload(policy, "inf"))
 	case math.IsInf(float64(v), -1):
-		return sqlCastQuotedString("-inf", "FLOAT32", nonFiniteCastDelimiter(policy))
+		return sqlCastQuotedString("-inf", "FLOAT32", quoteForPayload(policy, "-inf"))
 	default:
 		return fmt.Sprintf("CAST(%v AS FLOAT32)", strconv.FormatFloat(float64(v), 'g', -1, 32))
-	}
-}
-
-// nonFiniteCastDelimiter selects the outer delimiter for NaN/±Inf CAST payloads.
-// v0.5 compat: QuoteStrategyLegacy keeps historical single quotes; Always and
-// MinEscape use PreferredQuote. Planned v0.6: align with quoteForPayload.
-func nonFiniteCastDelimiter(policy QuotePolicy) rune {
-	switch policy.Strategy {
-	case QuoteStrategyAlways, QuoteStrategyMinEscape:
-		if policy.Preferred == PreferredQuoteDouble {
-			return '"'
-		}
-		return '\''
-	default:
-		return '\''
 	}
 }
 

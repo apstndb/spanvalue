@@ -5,7 +5,7 @@
 // [FlushWriter] interfaces. Register column schema with [WithColumnNames], [WithRowType],
 // or [WithMetadata] (or [DelimitedWriter.PrepareRowType] / [DelimitedWriter.PrepareColumnNames]
 // after construction). [DelimitedWriter] buffers through encoding/csv—call [Flusher.Flush]
-// after the final row.
+// after the final row, or pass [WithFlushEachRow] for per-row flush during streaming.
 //
 // Extended documentation, RowIterator recipes, and module-split notes:
 // https://github.com/apstndb/spanvalue/blob/main/writer/README.md
@@ -35,7 +35,8 @@
 // example [database/sql] scans—see the root README go-sql-spanner section).
 //
 // [DelimitedGCVExportOptions] and [JSONLGCVExportOptions] group metadata, formatter,
-// and unnamed-field namer options for GCV slice export.
+// and unnamed-field namer options for GCV slice export. [WithFormatter] does not call
+// [*spanvalue.FormatConfig.Validate]; validate hand-built formatters before construction.
 //
 // # Quoted delimited text vs raw tab-separated
 //
@@ -55,6 +56,7 @@
 // # SQL INSERT
 //
 // [NewSQLInsertWriter] accepts [WithSQLInsertKind], [WithSQLDialect], and [WithSQLBatchSize].
+// It rejects an empty table name (after strings.TrimSpace) at construction with [ErrEmptyTableName]. Qualified names with empty segments are rejected on the first write with [ErrEmptyTableName].
 // After any write error from [SQLInsertWriter], discard the writer. [*SQLInsertWriter.Flush]
 // closes a partial batch when batching.
 package writer

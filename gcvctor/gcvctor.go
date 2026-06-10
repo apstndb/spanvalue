@@ -1,6 +1,7 @@
 package gcvctor
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -23,11 +24,13 @@ import (
 )
 
 var (
-	// ErrTypeMismatch is returned by [ArrayValueOf] when an element's type does not match elemType.
+	// ErrTypeMismatch is returned by [ArrayValueOf], [ArrayValue], and [NormalizeArrayElements]
+	// when an element's type does not match the expected element type.
 	ErrTypeMismatch = errors.New("gcvctor: type mismatch")
 	// ErrMismatchedCounts is returned by [StructValueOf] when len(names) != len(gcvs).
 	ErrMismatchedCounts = errors.New("gcvctor: mismatched name/value count")
-	// ErrNilElementType is returned by [ArrayValueOf] when elemType is nil.
+	// ErrNilElementType is returned by [ArrayValueOf], [ArrayValue], and [NormalizeArrayElements]
+	// when elemType is nil.
 	ErrNilElementType = errors.New("gcvctor: nil array element type")
 	// ErrNilFieldType is returned by [StructValueOf] when a field's Type is nil.
 	ErrNilFieldType = errors.New("gcvctor: nil struct field type")
@@ -199,7 +202,7 @@ func DateStringValue(v string) (spanner.GenericColumnValue, error) {
 
 // TimestampValue returns a non-null TIMESTAMP GenericColumnValue (RFC3339Nano string wire format).
 func TimestampValue(v time.Time) spanner.GenericColumnValue {
-	return StringBasedValueFromCode(sppb.TypeCode_TIMESTAMP, v.Format(time.RFC3339Nano))
+	return StringBasedValueFromCode(sppb.TypeCode_TIMESTAMP, v.UTC().Format(time.RFC3339Nano))
 }
 
 // TimestampStringValue validates an RFC3339Nano timestamp string and returns a non-null
@@ -254,11 +257,11 @@ func UUIDValue(v uuid.UUID) spanner.GenericColumnValue {
 
 // JSONValue marshals v to JSON and returns a non-null JSON GenericColumnValue.
 func JSONValue(v any) (spanner.GenericColumnValue, error) {
-	b, err := json.Marshal(v)
+	s, err := jsonWireString(v)
 	if err != nil {
 		return spanner.GenericColumnValue{}, err
 	}
-	return StringBasedValueFromCode(sppb.TypeCode_JSON, string(b)), nil
+	return StringBasedValueFromCode(sppb.TypeCode_JSON, s), nil
 }
 
 // PGNumericValue returns a PostgreSQL-dialect NUMERIC GenericColumnValue
@@ -289,26 +292,42 @@ func PGNumericValueChecked(v *big.Rat) (spanner.GenericColumnValue, error) {
 // PGJSONBValue marshals v to JSON and returns a non-null PostgreSQL-dialect JSON GenericColumnValue
 // ([sppb.TypeAnnotationCode_PG_JSONB]).
 func PGJSONBValue(v any) (spanner.GenericColumnValue, error) {
-	b, err := json.Marshal(v)
+	s, err := jsonWireString(v)
 	if err != nil {
 		return spanner.GenericColumnValue{}, err
 	}
 	return spanner.GenericColumnValue{
 		Type:  typector.PGJSONB(),
-		Value: structpb.NewStringValue(string(b)),
+		Value: structpb.NewStringValue(s),
 	}, nil
+}
+
+// jsonWireString marshals v to compact JSON without HTML character escaping,
+// matching Spanner-emitted JSON wire strings for comparison fixtures.
+func jsonWireString(v any) (string, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return "", err
+	}
+	b := buf.Bytes()
+	if n := len(b); n > 0 && b[n-1] == '\n' {
+		b = b[:n-1]
+	}
+	return string(b), nil
 }
 
 // ProtoValue returns a non-null PROTO GenericColumnValue for the fully qualified message name fqn.
 // The message bytes are stored in the GCV as a base64-encoded string. Delimited export decodes that
-// wire payload for SimpleFormatConfig when possible (see writer.TestDelimitedWriterWriteGCVsEnumProto).
+// wire payload for SimpleFormatConfig when possible.
 func ProtoValue(fqn string, b []byte) spanner.GenericColumnValue {
 	return BytesBasedValueOf(typector.FQNToProtoType(fqn), b)
 }
 
 // EnumValue returns a non-null ENUM GenericColumnValue for the fully qualified enum name fqn.
 // The structpb value is the enum number as a decimal string; delimited export prints that
-// string (see writer.TestDelimitedWriterWriteGCVsEnumProto).
+// decimal string on the wire.
 func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.FQNToEnumType(fqn),
@@ -392,6 +411,35 @@ func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spa
 		Type:  typector.ElemTypeToArrayType(elemType),
 		Value: structpb.NewListValue(&structpb.ListValue{Values: values}),
 	}, nil
+}
+
+// StructFieldKV pairs one STRUCT field name with its GCV.
+// An empty Name is valid for unnamed STRUCT fields; see [StructValueOfFields].
+// Prefer [StructFieldKVOf] at call sites; keyed composite literals
+// (StructFieldKV{Name: name, Value: value}) are also valid.
+type StructFieldKV struct {
+	Name  string
+	Value spanner.GenericColumnValue
+}
+
+// StructFieldKVOf returns a [StructFieldKV] with the given name and value.
+// Empty name is valid for unnamed STRUCT fields.
+func StructFieldKVOf(name string, value spanner.GenericColumnValue) StructFieldKV {
+	return StructFieldKV{Name: name, Value: value}
+}
+
+// StructValueOfFields is like [StructValueOf] but takes paired fields.
+// Prefer [StructFieldKVOf] at call sites; keyed composite literals
+// (StructFieldKV{Name: name, Value: value}) are also valid.
+// Empty field names are valid for unnamed STRUCT fields.
+func StructValueOfFields(fields ...StructFieldKV) (spanner.GenericColumnValue, error) {
+	names := make([]string, len(fields))
+	gcvs := make([]spanner.GenericColumnValue, len(fields))
+	for i, f := range fields {
+		names[i] = f.Name
+		gcvs[i] = f.Value
+	}
+	return StructValueOf(names, gcvs)
 }
 
 // StructValueOf constructs STRUCT GenericColumnValue.

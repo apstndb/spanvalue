@@ -139,6 +139,53 @@ func TestDelimitedWriterWriteValuesWithCustomDelimiter(t *testing.T) {
 	}
 }
 
+func TestDelimitedWriterWithFlushEachRowIncrementalOutput(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := mustNewDelimitedWriter(t, &out, Comma,
+		WithMetadata(metadataWithColumnNames("name")),
+		WithFlushEachRow(),
+	)
+
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")}); err != nil {
+		t.Fatalf("WriteGCVs() first row error = %v", err)
+	}
+	want := "name\nAlice\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output after first row mismatch (-want +got):\n%s", diff)
+	}
+
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Bob")}); err != nil {
+		t.Fatalf("WriteGCVs() second row error = %v", err)
+	}
+	want = "name\nAlice\nBob\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output after second row mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestDelimitedWriterWithoutFlushEachRowBuffersUntilFlush(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := mustNewDelimitedWriter(t, &out, Comma, WithMetadata(metadataWithColumnNames("name")))
+
+	if err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.StringValue("Alice")}); err != nil {
+		t.Fatalf("WriteGCVs() error = %v", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("output before Flush = %q, want empty buffer", out.String())
+	}
+
+	flushDelimitedWriter(t, w)
+
+	want := "name\nAlice\n"
+	if diff := cmp.Diff(want, out.String()); diff != "" {
+		t.Fatalf("output after Flush mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestDelimitedWriterWithOptions(t *testing.T) {
 	t.Parallel()
 
@@ -1291,18 +1338,26 @@ func TestSQLInsertWriterWriteValuesTableChangeAfterCache(t *testing.T) {
 	}
 }
 
-func TestSQLInsertWriterWriteValuesEmptyTableName(t *testing.T) {
+func TestNewSQLInsertWriterEmptyTableName(t *testing.T) {
 	t.Parallel()
 
-	var out bytes.Buffer
-	w := mustNewSQLInsertWriter(t, &out, "")
-
-	err := w.WriteValues(
-		[]string{"id"},
-		[]spanner.GenericColumnValue{gcvctor.Int64Value(42)},
-	)
+	_, err := NewSQLInsertWriter(&bytes.Buffer{}, "")
 	if !errors.Is(err, ErrEmptyTableName) {
-		t.Fatalf("WriteValues() error = %v, want ErrEmptyTableName", err)
+		t.Fatalf("NewSQLInsertWriter() error = %v, want ErrEmptyTableName", err)
+	}
+
+	_, err = NewSQLInsertWriter(&bytes.Buffer{}, "", WithMetadata(metadataWithColumnNames("id")))
+	if !errors.Is(err, ErrEmptyTableName) {
+		t.Fatalf("NewSQLInsertWriter() with metadata error = %v, want ErrEmptyTableName", err)
+	}
+}
+
+func TestNewSQLInsertWriterWhitespaceTableName(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewSQLInsertWriter(&bytes.Buffer{}, "   ")
+	if !errors.Is(err, ErrEmptyTableName) {
+		t.Fatalf("NewSQLInsertWriter() error = %v, want ErrEmptyTableName", err)
 	}
 }
 
@@ -1330,18 +1385,6 @@ func TestSQLInsertWriterWriteGCVsWithoutMetadata(t *testing.T) {
 	err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(42)})
 	if !errors.Is(err, ErrMissingColumnNames) {
 		t.Fatalf("WriteGCVs() error = %v, want ErrMissingColumnNames", err)
-	}
-}
-
-func TestSQLInsertWriterWriteGCVsEmptyTableName(t *testing.T) {
-	t.Parallel()
-
-	var out bytes.Buffer
-	w := mustNewSQLInsertWriter(t, &out, "", WithMetadata(metadataWithColumnNames("id")))
-
-	err := w.WriteGCVs([]spanner.GenericColumnValue{gcvctor.Int64Value(42)})
-	if !errors.Is(err, ErrEmptyTableName) {
-		t.Fatalf("WriteGCVs() error = %v, want ErrEmptyTableName", err)
 	}
 }
 
@@ -1598,6 +1641,185 @@ func TestSQLInsertWriterPrepareEmptyRowTypeFlushNoOp(t *testing.T) {
 	}
 }
 
+func TestSQLInsertWriterWriteValuesZeroColumnSchema(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := mustNewSQLInsertWriter(t, &out, "users")
+	if err := w.PrepareRowType(emptyRowType()); err != nil {
+		t.Fatalf("PrepareRowType() error = %v", err)
+	}
+	if err := w.WriteValues(nil, nil); !errors.Is(err, ErrMissingColumnNames) {
+		t.Fatalf("WriteValues(nil, nil) error = %v, want ErrMissingColumnNames", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("output = %q, want empty", out.String())
+	}
+}
+
+func TestWriterRejectsNonEmptyColumnNamesAfterRegisteredZeroColumnSchema(t *testing.T) {
+	t.Parallel()
+
+	columnNames := []string{"id"}
+	values := []spanner.GenericColumnValue{gcvctor.Int64Value(1)}
+
+	tests := []struct {
+		name   string
+		setup  func(t *testing.T) Writer
+		invoke func(t *testing.T, w Writer) error
+	}{
+		{
+			name: "delimited PrepareColumnNames",
+			setup: func(t *testing.T) Writer {
+				t.Helper()
+				w := mustNewDelimitedWriter(t, &bytes.Buffer{}, ',')
+				if err := w.PrepareRowType(nil); err != nil {
+					t.Fatalf("PrepareRowType(nil) error = %v", err)
+				}
+				return w
+			},
+			invoke: func(t *testing.T, w Writer) error {
+				t.Helper()
+				return w.(*DelimitedWriter).PrepareColumnNames(columnNames)
+			},
+		},
+		{
+			name: "delimited WriteValues",
+			setup: func(t *testing.T) Writer {
+				t.Helper()
+				w := mustNewDelimitedWriter(t, &bytes.Buffer{}, ',')
+				if err := w.PrepareRowType(emptyRowType()); err != nil {
+					t.Fatalf("PrepareRowType() error = %v", err)
+				}
+				return w
+			},
+			invoke: func(t *testing.T, w Writer) error {
+				t.Helper()
+				return w.(*DelimitedWriter).WriteValues(columnNames, values)
+			},
+		},
+		{
+			name: "jsonl PrepareColumnNames",
+			setup: func(t *testing.T) Writer {
+				t.Helper()
+				w := mustNewJSONLWriter(t, &bytes.Buffer{})
+				if err := w.PrepareRowType(nil); err != nil {
+					t.Fatalf("PrepareRowType(nil) error = %v", err)
+				}
+				return w
+			},
+			invoke: func(t *testing.T, w Writer) error {
+				t.Helper()
+				return w.(*JSONLWriter).PrepareColumnNames(columnNames)
+			},
+		},
+		{
+			name: "jsonl WriteValues",
+			setup: func(t *testing.T) Writer {
+				t.Helper()
+				w := mustNewJSONLWriter(t, &bytes.Buffer{})
+				if err := w.PrepareRowType(emptyRowType()); err != nil {
+					t.Fatalf("PrepareRowType() error = %v", err)
+				}
+				return w
+			},
+			invoke: func(t *testing.T, w Writer) error {
+				t.Helper()
+				return w.(*JSONLWriter).WriteValues(columnNames, values)
+			},
+		},
+		{
+			name: "sql insert PrepareColumnNames",
+			setup: func(t *testing.T) Writer {
+				t.Helper()
+				w := mustNewSQLInsertWriter(t, &bytes.Buffer{}, "users")
+				if err := w.PrepareRowType(nil); err != nil {
+					t.Fatalf("PrepareRowType(nil) error = %v", err)
+				}
+				return w
+			},
+			invoke: func(t *testing.T, w Writer) error {
+				t.Helper()
+				return w.(*SQLInsertWriter).PrepareColumnNames(columnNames)
+			},
+		},
+		{
+			name: "delimited PrepareRowType",
+			setup: func(t *testing.T) Writer {
+				t.Helper()
+				w := mustNewDelimitedWriter(t, &bytes.Buffer{}, ',')
+				if err := w.PrepareRowType(nil); err != nil {
+					t.Fatalf("PrepareRowType(nil) error = %v", err)
+				}
+				return w
+			},
+			invoke: func(t *testing.T, w Writer) error {
+				t.Helper()
+				return w.(*DelimitedWriter).PrepareRowType(rowTypeWithColumnNames("id"))
+			},
+		},
+		{
+			name: "jsonl PrepareRowType",
+			setup: func(t *testing.T) Writer {
+				t.Helper()
+				w := mustNewJSONLWriter(t, &bytes.Buffer{})
+				if err := w.PrepareRowType(nil); err != nil {
+					t.Fatalf("PrepareRowType(nil) error = %v", err)
+				}
+				return w
+			},
+			invoke: func(t *testing.T, w Writer) error {
+				t.Helper()
+				return w.(*JSONLWriter).PrepareRowType(rowTypeWithColumnNames("id"))
+			},
+		},
+		{
+			name: "sql insert WriteValues",
+			setup: func(t *testing.T) Writer {
+				t.Helper()
+				w := mustNewSQLInsertWriter(t, &bytes.Buffer{}, "users")
+				if err := w.PrepareRowType(emptyRowType()); err != nil {
+					t.Fatalf("PrepareRowType() error = %v", err)
+				}
+				return w
+			},
+			invoke: func(t *testing.T, w Writer) error {
+				t.Helper()
+				return w.(*SQLInsertWriter).WriteValues(columnNames, values)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			w := tt.setup(t)
+			err := tt.invoke(t, w)
+			if !errors.Is(err, ErrColumnNamesMismatch) {
+				t.Fatalf("error = %v, want ErrColumnNamesMismatch", err)
+			}
+		})
+	}
+}
+
+func TestWriterAcceptsEmptyColumnNamesAfterRegisteredZeroColumnSchema(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	w := mustNewDelimitedWriter(t, &out, ',')
+	if err := w.PrepareRowType(emptyRowType()); err != nil {
+		t.Fatalf("PrepareRowType() error = %v", err)
+	}
+	if err := w.WriteValues(nil, nil); err != nil {
+		t.Fatalf("WriteValues(nil, nil) error = %v", err)
+	}
+	if err := w.Flush(); err != nil {
+		t.Fatalf("Flush() error = %v", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("output = %q, want empty", out.String())
+	}
+}
 func TestWithColumnNamesHeaderlessDelimited(t *testing.T) {
 	t.Parallel()
 

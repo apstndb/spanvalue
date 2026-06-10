@@ -7,7 +7,9 @@
 // [github.com/apstndb/spantype/typector.ElemTypeToArrayType] or [github.com/apstndb/spantype/typector.ElemCodeToArrayType] instead of relying
 // on variadic nil. [NormalizeArrayElements] rewrites SQL NULL elements to [NullOf] with elemType before
 // a strict [ArrayValueOf] call when callers already know the final array element type. [StructValueOf] pairs field
-// names with values; counts must match.
+// names with values; counts must match. [StructValueOfFields] accepts [StructFieldKV] pairs;
+// [StructFieldKVOf] is the usual constructor; keyed composite literals
+// (StructFieldKV{Name: name, Value: value}) are also valid. Empty field names denote unnamed STRUCT fields.
 //
 // ARRAY-typed [cloud.google.com/go/spanner/apiv1/spannerpb.Type] values require array_element_type
 // (protobuf: array_element_type; Go field name ArrayElementType); omitting it yields an invalid ARRAY
@@ -54,4 +56,19 @@
 //
 // Formatting these values as strings is provided by the sibling package
 // [github.com/apstndb/spanvalue].
+//
+// # Test fixtures
+//
+// For nested ARRAY and STRUCT trees in tests, prefer [MustArrayValueOf], [MustStructValueOf],
+// [MustStructValueOfFields], and [MustNormalizeArrayElements] over local panic-on-error helpers.
+// They wrap the error-returning constructors and are intended for schema-known fixture data, not production paths.
+//
+// String payloads: [StringBasedValueFromCode] stores the wire string as-is with no validation
+// (no extra imports beyond typector). When the test cares about canonical wire form, use validated
+// helpers such as [DateStringValue] or the corresponding [MustDateStringValue], [MustTimestampStringValue],
+// [MustIntervalStringValue], and [MustJSONValue] for inline nesting. Typed Go inputs ([DateValue] with
+// [cloud.google.com/go/civil.Date], [TimestampValue] with [time.Time], and so on) avoid parse errors
+// when you already hold the native value.
+//
+// See ExampleStringBasedValueFromCode_validatedDate and ExampleNormalizeArrayElements.
 package gcvctor
