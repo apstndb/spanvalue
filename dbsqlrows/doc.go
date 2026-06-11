@@ -67,8 +67,8 @@
 // [SQLRowsResult] carries Metadata when known on error paths (partial-result contract
 // matching [writer.RowIteratorResult]). Stats are not consumed unless
 // [SQLRowsConfig.ReadResultSetStats] is true; the iterator then advances with
-// NextResultSet for multi-statement batches. [SQLRowsResult].RowsRead follows
-// [writer.RowIteratorResult] RowsRead semantics: it counts data rows for which
+// NextResultSet for multi-statement batches. [SQLRowsResult.RowsRead] follows
+// [github.com/apstndb/spanvalue/writer.RowIteratorResult] RowsRead semantics: it counts data rows for which
 // WriteDataRow returned nil and stays zero when WriteDataRow is nil, even though
 // rows are still drained.
 //

@@ -11,7 +11,7 @@ import (
 //
 // An empty hooks value (from [NewSQLRowsHooks]) still advances past data rows
 // while WriteDataRow is nil (no per-row decode), but [SQLRowsResult.RowsRead]
-// stays zero for drained rows, matching [writer.RowIteratorResult] RowsRead
+// stays zero for drained rows, matching [github.com/apstndb/spanvalue/writer.RowIteratorResult] RowsRead
 // semantics. Use that to drain rows before reading stats (for example EXPLAIN
 // with [SQLRowsConfig.ReadResultSetStats]).
 //

@@ -75,7 +75,7 @@ func (cfg SQLRowsConfig) WithReadResultSetStats(read bool) SQLRowsConfig {
 //
 // RowsRead counts data rows for which [SQLRowsHooks].WriteDataRow returned nil.
 // It stays zero when WriteDataRow is nil (rows may still be drained), matching
-// [writer.RowIteratorResult] RowsRead semantics.
+// [github.com/apstndb/spanvalue/writer.RowIteratorResult] RowsRead semantics.
 type SQLRowsResult struct {
 	Metadata *sppb.ResultSetMetadata
 	Stats    *sppb.ResultSetStats
