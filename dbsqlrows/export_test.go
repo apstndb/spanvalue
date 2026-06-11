@@ -536,8 +536,37 @@ func TestWriteRows_statsNextResultSetError(t *testing.T) {
 	if got.Metadata == nil {
 		t.Fatal("Metadata is nil on stats nextResultSet error")
 	}
+	// Stats were already scanned before the trailing NextResultSet advance
+	// failed; the partial result carries them at the abort point.
+	if diff := cmp.Diff(stats, got.Stats, protocmp.Transform()); diff != "" {
+		t.Fatalf("Stats mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestWriteRows_missingStatsResultSet(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	stub := &stubSQLRows{
+		columns: []string{"id"},
+		resultSets: [][]stubRow{
+			{{values: []any{md}}},
+			nil,
+		},
+	}
+
+	got, err := runRowsWithGCVWriter(stub, &stubGCVWriter{}, sqlRowsRunConfig{
+		readMetadataPseudoRow: true,
+		readResultSetStats:    true,
+	})
+	if !errors.Is(err, ErrMissingStatsResultSet) {
+		t.Fatalf("error = %v, want ErrMissingStatsResultSet", err)
+	}
+	if got.Metadata == nil {
+		t.Fatal("Metadata is nil on missing stats result set")
+	}
 	if got.Stats != nil {
-		t.Fatalf("Stats = %v, want nil on error", got.Stats)
+		t.Fatalf("Stats = %v, want nil when no stats result set", got.Stats)
 	}
 }
 
@@ -913,11 +942,48 @@ func TestRunRowsAtData_emptyHooksDrainWithStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.RowsRead != 2 {
-		t.Fatalf("RowsRead = %d, want 2", got.RowsRead)
+	// Drained rows are not counted: RowsRead stays zero when WriteDataRow is
+	// nil, matching writer.RowIteratorResult.RowsRead semantics.
+	if got.RowsRead != 0 {
+		t.Fatalf("RowsRead = %d, want 0 for drained rows", got.RowsRead)
 	}
 	if diff := cmp.Diff(stats, got.Stats, protocmp.Transform()); diff != "" {
 		t.Fatalf("Stats mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestRunRowsAtData_nilWriteDataRowKeepsRowsReadZero(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id")
+	stub := &stubSQLRows{
+		columns: []string{"id"},
+		resultSets: [][]stubRow{
+			{
+				{values: []any{gcvctor.Int64Value(1)}},
+				{values: []any{gcvctor.Int64Value(2)}},
+			},
+		},
+	}
+
+	var finishRowsRead int
+	hooks := NewSQLRowsHooks().WithFinish(func(res *SQLRowsResult) error {
+		finishRowsRead = res.RowsRead
+		return nil
+	})
+
+	got, err := runRows(stub, hooks, sqlRowsRunConfig{metadata: md})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RowsRead != 0 {
+		t.Fatalf("RowsRead = %d, want 0 when WriteDataRow is nil", got.RowsRead)
+	}
+	if finishRowsRead != 0 {
+		t.Fatalf("Finish saw RowsRead = %d, want 0", finishRowsRead)
+	}
+	if stub.row != 2 {
+		t.Fatalf("cursor row = %d, want 2 (rows drained)", stub.row)
 	}
 }
 
