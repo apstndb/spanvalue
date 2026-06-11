@@ -14,7 +14,8 @@ import (
 var ErrNilRowSeq = errors.New("nil row sequence")
 
 // RowSeq adapts already-built rows to the fallible sequence shape consumed by
-// [RunRowSeq] and [WriteRowSeq]. Every pair it yields has a nil error.
+// [RunRowSeq] and [WriteRowSeq]. Every pair it yields has a nil error; a nil
+// row in rows is rejected by the consumer with [ErrNilRow].
 //
 // Row sources that can fail per row (for example lazy encoders) should
 // produce their own [iter.Seq2] instead of pre-building a slice for RowSeq.
@@ -43,7 +44,8 @@ func RowSeq(rows ...*spanner.Row) iter.Seq2[*spanner.Row, error] {
 // there is no Spanner iterator to report stats.
 //
 // A non-nil error yielded by rows aborts the run and is returned; the row
-// paired with it is ignored and the sequence is not consumed further.
+// paired with it is ignored and the sequence is not consumed further. A nil
+// row yielded with a nil error aborts the run with [ErrNilRow].
 func RunRowSeq(md *sppb.ResultSetMetadata, rows iter.Seq2[*spanner.Row, error], hooks RowIteratorHooks) (*RowIteratorResult, error) {
 	if rows == nil {
 		return nil, ErrNilRowSeq
@@ -82,6 +84,9 @@ func (f *seqRowFacade) next() (*spanner.Row, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+	if row == nil {
+		return nil, ErrNilRow
 	}
 	return row, nil
 }

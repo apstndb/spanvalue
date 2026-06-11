@@ -213,3 +213,21 @@ func TestRunRowSeq_emptyNilMetadata(t *testing.T) {
 		t.Fatalf("result = %+v, want nil metadata and 0 rows", got)
 	}
 }
+
+func TestRunRowSeq_nilRowRejected(t *testing.T) {
+	t.Parallel()
+
+	var wrote bool
+	hooks := NewRowIteratorHooks().WithWriteRow(func(*spanner.Row) error {
+		wrote = true
+		return nil
+	})
+
+	_, err := RunRowSeq(metadataWithColumnNames("id"), RowSeq(nil), hooks)
+	if !errors.Is(err, ErrNilRow) {
+		t.Fatalf("error = %v, want ErrNilRow", err)
+	}
+	if wrote {
+		t.Fatal("WriteRow called for nil row; want rejection at the boundary")
+	}
+}
