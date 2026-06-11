@@ -317,10 +317,10 @@ func gcvFloat64(v *structpb.Value) (float64, error) {
 		case "-Infinity":
 			return math.Inf(-1), nil
 		default:
-			return 0, fmt.Errorf("%w: unexpected FLOAT64 string %q", ErrUnknownType, x.StringValue)
+			return 0, fmt.Errorf("%w: FLOAT64 unexpected float string %q", ErrMalformedWire, x.StringValue)
 		}
 	default:
-		return 0, fmt.Errorf("%w: FLOAT64 value kind %T", ErrUnknownType, v.GetKind())
+		return 0, fmt.Errorf("%w: FLOAT64 value kind %T", ErrMalformedWire, v.GetKind())
 	}
 }
 
@@ -338,10 +338,10 @@ func gcvFloat32(v *structpb.Value) (float32, error) {
 		case "-Infinity":
 			return float32(math.Inf(-1)), nil
 		default:
-			return 0, fmt.Errorf("%w: unexpected FLOAT32 string %q", ErrUnknownType, x.StringValue)
+			return 0, fmt.Errorf("%w: FLOAT32 unexpected float string %q", ErrMalformedWire, x.StringValue)
 		}
 	default:
-		return 0, fmt.Errorf("%w: FLOAT32 value kind %T", ErrUnknownType, v.GetKind())
+		return 0, fmt.Errorf("%w: FLOAT32 value kind %T", ErrMalformedWire, v.GetKind())
 	}
 }
 

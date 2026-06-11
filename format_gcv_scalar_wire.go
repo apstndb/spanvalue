@@ -25,11 +25,14 @@ func isScalarFastPathTypeCode(code sppb.TypeCode) bool {
 }
 
 func validateScalarWire(gcv spanner.GenericColumnValue) error {
+	// Callers handle NULL before validation, so NULL or a nil type reaching
+	// here means the GCV is structurally invalid, not an unsupported type:
+	// classify as ErrMalformedWire, not ErrUnknownType.
 	if IsNull(gcv) {
-		return fmt.Errorf("%w: null value", ErrUnknownType)
+		return fmt.Errorf("%w: %v unexpected null value", ErrMalformedWire, gcv.Type.GetCode())
 	}
 	if gcv.Type == nil {
-		return fmt.Errorf("%w: nil type", ErrUnknownType)
+		return fmt.Errorf("%w: nil type with value kind %T", ErrMalformedWire, gcv.Value.GetKind())
 	}
 	code := gcv.Type.GetCode()
 	switch code {
@@ -52,14 +55,14 @@ func validateScalarWire(gcv spanner.GenericColumnValue) error {
 
 func requireBoolWire(v *structpb.Value, code sppb.TypeCode) error {
 	if _, ok := v.GetKind().(*structpb.Value_BoolValue); !ok {
-		return fmt.Errorf("%w: %v value kind %T", ErrUnknownType, code, v.GetKind())
+		return fmt.Errorf("%w: %v value kind %T", ErrMalformedWire, code, v.GetKind())
 	}
 	return nil
 }
 
 func requireStringWire(v *structpb.Value, code sppb.TypeCode) error {
 	if _, ok := v.GetKind().(*structpb.Value_StringValue); !ok {
-		return fmt.Errorf("%w: %v value kind %T", ErrUnknownType, code, v.GetKind())
+		return fmt.Errorf("%w: %v value kind %T", ErrMalformedWire, code, v.GetKind())
 	}
 	return nil
 }
@@ -76,9 +79,9 @@ func validateFloatWire(v *structpb.Value, code sppb.TypeCode) error {
 		case "NaN", "Infinity", "-Infinity":
 			return nil
 		default:
-			return fmt.Errorf("%w: %v unexpected float string %q", ErrUnknownType, code, k.StringValue)
+			return fmt.Errorf("%w: %v unexpected float string %q", ErrMalformedWire, code, k.StringValue)
 		}
 	default:
-		return fmt.Errorf("%w: %v value kind %T", ErrUnknownType, code, v.GetKind())
+		return fmt.Errorf("%w: %v value kind %T", ErrMalformedWire, code, v.GetKind())
 	}
 }
