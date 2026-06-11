@@ -27,6 +27,11 @@ var (
 	ErrMissingDataResultSet = errors.New("missing data rows result set after metadata")
 	// ErrMissingStatsRow reports that the stats result set had no stats pseudo-row.
 	ErrMissingStatsRow = errors.New("missing result set stats row")
+	// ErrMissingStatsResultSet reports that NextResultSet did not advance to the
+	// stats result set when [SQLRowsConfig.ReadResultSetStats] was requested.
+	// This typically means the driver was not opened with ReturnResultSetStats
+	// enabled (see the precondition on [SQLRowsConfig.ReadResultSetStats]).
+	ErrMissingStatsResultSet = errors.New("missing result set stats result set")
 )
 
 // GCVStreamWriter is the subset of [github.com/apstndb/spanvalue/writer] types
@@ -43,6 +48,15 @@ type SQLRowsConfig struct {
 	// ReadResultSetStats, when true, advances past data rows to read the stats
 	// pseudo-row into [SQLRowsResult.Stats]. For [WriteRowsAtData] this field is
 	// consulted directly (default false). For [WriteRows] the same field applies.
+	//
+	// Precondition: the driver must produce a stats pseudo result set (for
+	// go-sql-spanner, open rows with ReturnResultSetStats: true). When no stats
+	// result set follows the data rows, the run fails with
+	// [ErrMissingStatsResultSet]. Note that in a multi-statement batch with
+	// driver stats disabled, NextResultSet can instead land on the next
+	// statement's metadata result set; the resulting scan error is reported only
+	// after that pseudo-row has been consumed, so the batch cursor position is
+	// not recoverable.
 	ReadResultSetStats bool
 }
 
@@ -56,6 +70,12 @@ func (cfg SQLRowsConfig) WithReadResultSetStats(read bool) SQLRowsConfig {
 // analogous to [writer.RowIteratorResult] for native iterators.
 // On error paths after metadata is known, Metadata and RowsRead reflect progress
 // at the abort point (same partial-result contract as writer row-iterator helpers).
+// Stats is also populated on the abort path when the stats pseudo-row was
+// already read but the trailing NextResultSet advance failed.
+//
+// RowsRead counts data rows for which [SQLRowsHooks].WriteDataRow returned nil.
+// It stays zero when WriteDataRow is nil (rows may still be drained), matching
+// [writer.RowIteratorResult] RowsRead semantics.
 type SQLRowsResult struct {
 	Metadata *sppb.ResultSetMetadata
 	Stats    *sppb.ResultSetStats
@@ -162,10 +182,13 @@ func runRows(fac rowsFacade, hooks SQLRowsHooks, run sqlRowsRunConfig) (*SQLRows
 
 	if run.readResultSetStats {
 		stats, err := readResultSetStats(fac)
+		// Populate Stats even on the abort path: when the stats pseudo-row was
+		// read but the trailing NextResultSet advance failed, the caller still
+		// gets the completed statement's stats (partial-result contract).
+		result.Stats = stats
 		if err != nil {
 			return abort(err)
 		}
-		result.Stats = stats
 	}
 
 	return finishRun(result, hooks)
@@ -185,8 +208,10 @@ func callPrepareMetadata(hooks SQLRowsHooks, md *sppb.ResultSetMetadata) error {
 
 func processDataRows(fac rowsFacade, hooks SQLRowsHooks, result *SQLRowsResult) error {
 	if hooks.WriteDataRow == nil {
+		// Drain without decoding. RowsRead stays zero so the count keeps the
+		// same meaning as writer.RowIteratorResult.RowsRead (rows written by
+		// the per-row callback), not rows merely consumed.
 		for fac.next() {
-			result.RowsRead++
 		}
 		return nil
 	}
@@ -209,12 +234,20 @@ func processDataRows(fac rowsFacade, hooks SQLRowsHooks, result *SQLRowsResult) 
 	return nil
 }
 
+// readResultSetStats advances to the stats result set, scans the stats
+// pseudo-row, and advances past it for multi-statement batches. When the scan
+// succeeded but the trailing NextResultSet advance fails, the scanned stats are
+// returned alongside the error so the caller can surface them at the abort
+// point.
 func readResultSetStats(fac rowsFacade) (*sppb.ResultSetStats, error) {
 	if !fac.nextResultSet() {
 		if err := fac.err(); err != nil {
 			return nil, err
 		}
-		return nil, nil
+		// No stats result set after the data rows: the driver was not opened
+		// with stats enabled. Fail loudly instead of silently returning nil
+		// stats (see SQLRowsConfig.ReadResultSetStats).
+		return nil, ErrMissingStatsResultSet
 	}
 	if !fac.next() {
 		if err := fac.err(); err != nil {
@@ -228,7 +261,7 @@ func readResultSetStats(fac rowsFacade) (*sppb.ResultSetStats, error) {
 	}
 	if !fac.nextResultSet() {
 		if err := fac.err(); err != nil {
-			return nil, err
+			return stats, err
 		}
 	}
 	return stats, nil
