@@ -27,12 +27,14 @@ func isScalarFastPathTypeCode(code sppb.TypeCode) bool {
 func validateScalarWire(gcv spanner.GenericColumnValue) error {
 	// Callers handle NULL before validation, so NULL or a nil type reaching
 	// here means the GCV is structurally invalid, not an unsupported type:
-	// classify as ErrMalformedWire, not ErrUnknownType.
-	if IsNull(gcv) {
-		return fmt.Errorf("%w: %v unexpected null value", ErrMalformedWire, gcv.Type.GetCode())
-	}
+	// classify as ErrMalformedWire, not ErrUnknownType. The nil-type check
+	// runs first so a nil Type with a nil Value reports the missing type
+	// rather than a misleading TYPE_CODE_UNSPECIFIED null.
 	if gcv.Type == nil {
 		return fmt.Errorf("%w: nil type with value kind %T", ErrMalformedWire, gcv.Value.GetKind())
+	}
+	if IsNull(gcv) {
+		return fmt.Errorf("%w: %v unexpected null value", ErrMalformedWire, gcv.Type.GetCode())
 	}
 	code := gcv.Type.GetCode()
 	switch code {
