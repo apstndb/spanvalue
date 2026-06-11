@@ -816,7 +816,7 @@ func TestSQLInsertWriterWriteValues(t *testing.T) {
 				gcvctor.Int64Value(42),
 				gcvctor.StringValue("Alice"),
 			},
-			want: "INSERT INTO `user``table` (`id`, `na``me`) VALUES (42, \"Alice\");\n",
+			want: "INSERT INTO `user\\`table` (`id`, `na\\`me`) VALUES (42, \"Alice\");\n",
 		},
 		{
 			name:        "value escaping delegated to literal formatter",
@@ -834,7 +834,7 @@ func TestSQLInsertWriterWriteValues(t *testing.T) {
 			values: []spanner.GenericColumnValue{
 				gcvctor.Int64Value(42),
 			},
-			want: "INSERT INTO `my``db`.`users` (`id`) VALUES (42);\n",
+			want: "INSERT INTO `my\\`db`.`users` (`id`) VALUES (42);\n",
 		},
 	}
 
@@ -1252,7 +1252,7 @@ func TestSQLInsertWriterWriteRow(t *testing.T) {
 		t.Fatalf("WriteRow() error = %v", err)
 	}
 
-	want := "INSERT INTO `db`.`user``table` (`na``me`, `payload`) VALUES (\"Alice\", \"semi;\\nline\");\n"
+	want := "INSERT INTO `db`.`user\\`table` (`na\\`me`, `payload`) VALUES (\"Alice\", \"semi;\\nline\");\n"
 	if diff := cmp.Diff(want, out.String()); diff != "" {
 		t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
 	}
