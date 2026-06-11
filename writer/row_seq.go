@@ -51,7 +51,29 @@ func RunRowSeq(md *sppb.ResultSetMetadata, rows iter.Seq2[*spanner.Row, error], 
 		return nil, ErrNilRowSeq
 	}
 	next, release := iter.Pull2(rows)
-	return runRowIterator(&seqRowFacade{md: md, nextPair: next, release: release}, hooks)
+	return runRowIterator(&seqRowFacade{md: func() *sppb.ResultSetMetadata { return md }, nextPair: next, release: release}, hooks)
+}
+
+// RunRowSeqDeferredMetadata is [RunRowSeq] for producers that learn the row
+// type only after producing begins — merged concurrent sources, lazily
+// decoded streams. metadata is called lazily on the [RunRowIterator]
+// schedule: once immediately before PrepareMetadata, which runs after the
+// first pair has been pulled from rows (or after rows ends when it is
+// empty), and again when assembling [RowIteratorResult]. A producer
+// therefore only has to publish the row type before yielding its first
+// pair, with no need to hold rows back; a nil metadata func is treated as
+// always-nil metadata.
+//
+// All other semantics match [RunRowSeq].
+func RunRowSeqDeferredMetadata(metadata func() *sppb.ResultSetMetadata, rows iter.Seq2[*spanner.Row, error], hooks RowIteratorHooks) (*RowIteratorResult, error) {
+	if rows == nil {
+		return nil, ErrNilRowSeq
+	}
+	if metadata == nil {
+		metadata = func() *sppb.ResultSetMetadata { return nil }
+	}
+	next, release := iter.Pull2(rows)
+	return runRowIterator(&seqRowFacade{md: metadata, nextPair: next, release: release}, hooks)
 }
 
 // WriteRowSeq streams rows into w using [RowIteratorHooksFromWriter], the
@@ -71,8 +93,10 @@ func WriteRowSeq(md *sppb.ResultSetMetadata, rows iter.Seq2[*spanner.Row, error]
 
 // seqRowFacade adapts (metadata, pulled iter.Seq2) to rowIteratorFacade so
 // RunRowSeq shares runRowIterator and its hook ordering with RunRowIterator.
+// md is a func so [RunRowSeqDeferredMetadata] can defer row-type resolution
+// until runRowIterator evaluates it (after the first next call).
 type seqRowFacade struct {
-	md       *sppb.ResultSetMetadata
+	md       func() *sppb.ResultSetMetadata
 	nextPair func() (*spanner.Row, error, bool)
 	release  func()
 }
@@ -96,7 +120,7 @@ func (f *seqRowFacade) stop() {
 }
 
 func (f *seqRowFacade) metadata() *sppb.ResultSetMetadata {
-	return f.md
+	return f.md()
 }
 
 func (f *seqRowFacade) stats() RowIteratorStats {

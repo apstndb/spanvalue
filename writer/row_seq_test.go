@@ -231,3 +231,85 @@ func TestRunRowSeq_nilRowRejected(t *testing.T) {
 		t.Fatal("WriteRow called for nil row; want rejection at the boundary")
 	}
 }
+
+// TestRunRowSeqDeferredMetadata_publishedBeforeFirstYield models a merged
+// concurrent source (e.g. partitioned query fan-in): the row type is unknown
+// at call time and published by the producer just before its first yield.
+// Because metadata is evaluated only after the first pull, PrepareMetadata
+// must still observe it — no first-row holdback needed on the producer side.
+func TestRunRowSeqDeferredMetadata_publishedBeforeFirstYield(t *testing.T) {
+	t.Parallel()
+
+	var published *sppb.ResultSetMetadata
+	row := mustNewSpannerRow(t, []string{"id"}, []any{int64(1)})
+	rows := func(yield func(*spanner.Row, error) bool) {
+		published = metadataWithColumnNames("id")
+		if !yield(row, nil) {
+			return
+		}
+	}
+
+	var out bytes.Buffer
+	w := mustNewDelimitedWriter(t, &out, ',', WithHeader(true))
+	got, err := RunRowSeqDeferredMetadata(func() *sppb.ResultSetMetadata { return published }, rows, RowIteratorHooksFromWriter(w))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Metadata == nil {
+		t.Fatal("result metadata should reflect the published metadata")
+	}
+	if got.RowsRead != 1 {
+		t.Fatalf("RowsRead = %d, want 1", got.RowsRead)
+	}
+	want := "id\n1\n"
+	if out.String() != want {
+		t.Fatalf("output = %q, want %q", out.String(), want)
+	}
+}
+
+// TestRunRowSeqDeferredMetadata_emptySequence verifies that metadata published
+// by an empty producer (all sources finished without rows) still reaches
+// PrepareMetadata, yielding header-only delimited output.
+func TestRunRowSeqDeferredMetadata_emptySequence(t *testing.T) {
+	t.Parallel()
+
+	var published *sppb.ResultSetMetadata
+	rows := func(yield func(*spanner.Row, error) bool) {
+		published = metadataWithColumnNames("id", "name")
+	}
+
+	var out bytes.Buffer
+	w := mustNewDelimitedWriter(t, &out, ',', WithHeader(true))
+	got, err := RunRowSeqDeferredMetadata(func() *sppb.ResultSetMetadata { return published }, rows, RowIteratorHooksFromWriter(w))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RowsRead != 0 {
+		t.Fatalf("RowsRead = %d, want 0", got.RowsRead)
+	}
+	want := "id,name\n"
+	if out.String() != want {
+		t.Fatalf("output = %q, want %q", out.String(), want)
+	}
+}
+
+func TestRunRowSeqDeferredMetadata_nilArguments(t *testing.T) {
+	t.Parallel()
+
+	if _, err := RunRowSeqDeferredMetadata(nil, nil, RowIteratorHooks{}); !errors.Is(err, ErrNilRowSeq) {
+		t.Fatalf("error = %v, want ErrNilRowSeq", err)
+	}
+
+	// nil metadata func behaves as always-nil metadata.
+	var sawNil bool
+	hooks := NewRowIteratorHooks().WithPrepareMetadata(func(md *sppb.ResultSetMetadata) error {
+		sawNil = md == nil
+		return nil
+	})
+	if _, err := RunRowSeqDeferredMetadata(nil, RowSeq(), hooks); err != nil {
+		t.Fatal(err)
+	}
+	if !sawNil {
+		t.Fatal("PrepareMetadata should have been called with nil metadata")
+	}
+}
