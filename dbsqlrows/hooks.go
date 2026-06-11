@@ -9,10 +9,11 @@ import (
 
 // SQLRowsHooks drives [RunRows] and [RunRowsAtData]. Nil function fields are skipped.
 //
-// An empty hooks value (from [NewSQLRowsHooks]) still advances past data rows and
-// increments [SQLRowsResult.RowsRead] while WriteDataRow is nil (no per-row decode).
-// Use that to drain rows before reading stats (for example EXPLAIN with
-// [SQLRowsConfig.ReadResultSetStats]).
+// An empty hooks value (from [NewSQLRowsHooks]) still advances past data rows
+// while WriteDataRow is nil (no per-row decode), but [SQLRowsResult.RowsRead]
+// stays zero for drained rows, matching [github.com/apstndb/spanvalue/writer.RowIteratorResult] RowsRead
+// semantics. Use that to drain rows before reading stats (for example EXPLAIN
+// with [SQLRowsConfig.ReadResultSetStats]).
 //
 // PrepareMetadata runs once after metadata is known and before data rows are scanned.
 // WriteDataRow runs per data row when set. The []spanner.GenericColumnValue argument

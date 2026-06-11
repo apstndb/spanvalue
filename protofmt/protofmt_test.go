@@ -235,6 +235,277 @@ func TestFormatPlugins_fallthroughCases(t *testing.T) {
 	}
 }
 
+func TestFormatPlugins_onUnresolvedInvoked(t *testing.T) {
+	t.Parallel()
+
+	resolver := testResolver(t)
+	nilTypeProtoResolver := fakeResolver{
+		findMessageByName: func(protoreflect.FullName) (protoreflect.MessageType, error) {
+			return nil, nil
+		},
+	}
+	nilTypeEnumResolver := fakeResolver{
+		findEnumByName: func(protoreflect.FullName) (protoreflect.EnumType, error) {
+			return nil, nil
+		},
+	}
+
+	tests := []struct {
+		name     string
+		plugin   func(onUnresolved func(string, sppb.TypeCode) error) spanvalue.FormatComplexFunc
+		gcv      spanner.GenericColumnValue
+		wantFQN  string
+		wantCode sppb.TypeCode
+	}{
+		{
+			name: "proto not found",
+			plugin: func(onUnresolved func(string, sppb.TypeCode) error) spanvalue.FormatComplexFunc {
+				return protofmt.FormatProtoTextValue(protofmt.ProtoTextValueOptions{Resolver: resolver, OnUnresolved: onUnresolved})
+			},
+			gcv:      gcvctor.ProtoValue("example.music.Missing", nil),
+			wantFQN:  "example.music.Missing",
+			wantCode: sppb.TypeCode_PROTO,
+		},
+		{
+			name: "proto nil message type from resolver",
+			plugin: func(onUnresolved func(string, sppb.TypeCode) error) spanvalue.FormatComplexFunc {
+				return protofmt.FormatProtoTextValue(protofmt.ProtoTextValueOptions{Resolver: nilTypeProtoResolver, OnUnresolved: onUnresolved})
+			},
+			gcv:      gcvctor.ProtoValue(singerInfoFQN, nil),
+			wantFQN:  singerInfoFQN,
+			wantCode: sppb.TypeCode_PROTO,
+		},
+		{
+			name: "enum not found",
+			plugin: func(onUnresolved func(string, sppb.TypeCode) error) spanvalue.FormatComplexFunc {
+				return protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{Resolver: resolver, OnUnresolved: onUnresolved})
+			},
+			gcv:      gcvctor.EnumValue("example.music.Missing", 1),
+			wantFQN:  "example.music.Missing",
+			wantCode: sppb.TypeCode_ENUM,
+		},
+		{
+			name: "enum nil enum type from resolver",
+			plugin: func(onUnresolved func(string, sppb.TypeCode) error) spanvalue.FormatComplexFunc {
+				return protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{Resolver: nilTypeEnumResolver, OnUnresolved: onUnresolved})
+			},
+			gcv:      gcvctor.EnumValue(genreFQN, 1),
+			wantFQN:  genreFQN,
+			wantCode: sppb.TypeCode_ENUM,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls int
+			plugin := tt.plugin(func(typeFQN string, code sppb.TypeCode) error {
+				calls++
+				if typeFQN != tt.wantFQN {
+					t.Errorf("typeFQN = %q, want %q", typeFQN, tt.wantFQN)
+				}
+				if code != tt.wantCode {
+					t.Errorf("code = %v, want %v", code, tt.wantCode)
+				}
+				return nil
+			})
+
+			_, err := plugin(spanvalue.SpannerCLICompatibleFormatConfig(), tt.gcv, true)
+			if !errors.Is(err, spanvalue.ErrFallthrough) {
+				t.Fatalf("error = %v, want ErrFallthrough when handler returns nil", err)
+			}
+			if calls != 1 {
+				t.Fatalf("OnUnresolved calls = %d, want 1", calls)
+			}
+		})
+	}
+}
+
+func TestFormatPlugins_onUnresolvedNotInvoked(t *testing.T) {
+	t.Parallel()
+
+	resolver := testResolver(t)
+	singerPayload := marshalProto(t, newSingerInfo(t, resolver, 1, "Alice", 1))
+
+	tests := []struct {
+		name            string
+		plugin          func(onUnresolved func(string, sppb.TypeCode) error) spanvalue.FormatComplexFunc
+		gcv             spanner.GenericColumnValue
+		wantFallthrough bool
+	}{
+		{
+			name: "proto nil resolver",
+			plugin: func(onUnresolved func(string, sppb.TypeCode) error) spanvalue.FormatComplexFunc {
+				return protofmt.FormatProtoTextValue(protofmt.ProtoTextValueOptions{OnUnresolved: onUnresolved})
+			},
+			gcv:             gcvctor.ProtoValue("example.music.Missing", nil),
+			wantFallthrough: true,
+		},
+		{
+			name: "proto typed null",
+			plugin: func(onUnresolved func(string, sppb.TypeCode) error) spanvalue.FormatComplexFunc {
+				return protofmt.FormatProtoTextValue(protofmt.ProtoTextValueOptions{Resolver: resolver, OnUnresolved: onUnresolved})
+			},
+			gcv: gcvctor.NullOf(&sppb.Type{Code: sppb.TypeCode_PROTO, ProtoTypeFqn: "example.music.Missing"}),
+		},
+		{
+			name: "proto empty fqn",
+			plugin: func(onUnresolved func(string, sppb.TypeCode) error) spanvalue.FormatComplexFunc {
+				return protofmt.FormatProtoTextValue(protofmt.ProtoTextValueOptions{Resolver: resolver, OnUnresolved: onUnresolved})
+			},
+			gcv: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_PROTO},
+				Value: structpb.NewStringValue(""),
+			},
+			wantFallthrough: true,
+		},
+		{
+			name: "proto resolution succeeds",
+			plugin: func(onUnresolved func(string, sppb.TypeCode) error) spanvalue.FormatComplexFunc {
+				return protofmt.FormatProtoTextValue(protofmt.ProtoTextValueOptions{Resolver: resolver, OnUnresolved: onUnresolved})
+			},
+			gcv: gcvctor.ProtoValue(singerInfoFQN, singerPayload),
+		},
+		{
+			name: "non-proto column",
+			plugin: func(onUnresolved func(string, sppb.TypeCode) error) spanvalue.FormatComplexFunc {
+				return protofmt.FormatProtoTextValue(protofmt.ProtoTextValueOptions{Resolver: resolver, OnUnresolved: onUnresolved})
+			},
+			gcv:             gcvctor.StringValue("plain"),
+			wantFallthrough: true,
+		},
+		{
+			name: "enum nil resolver",
+			plugin: func(onUnresolved func(string, sppb.TypeCode) error) spanvalue.FormatComplexFunc {
+				return protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{OnUnresolved: onUnresolved})
+			},
+			gcv:             gcvctor.EnumValue("example.music.Missing", 1),
+			wantFallthrough: true,
+		},
+		{
+			name: "enum typed null",
+			plugin: func(onUnresolved func(string, sppb.TypeCode) error) spanvalue.FormatComplexFunc {
+				return protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{Resolver: resolver, OnUnresolved: onUnresolved})
+			},
+			gcv: gcvctor.NullOf(&sppb.Type{Code: sppb.TypeCode_ENUM, ProtoTypeFqn: "example.music.Missing"}),
+		},
+		{
+			name: "enum empty fqn",
+			plugin: func(onUnresolved func(string, sppb.TypeCode) error) spanvalue.FormatComplexFunc {
+				return protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{Resolver: resolver, OnUnresolved: onUnresolved})
+			},
+			gcv: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_ENUM},
+				Value: structpb.NewStringValue("1"),
+			},
+			wantFallthrough: true,
+		},
+		{
+			name: "enum resolution succeeds",
+			plugin: func(onUnresolved func(string, sppb.TypeCode) error) spanvalue.FormatComplexFunc {
+				return protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{Resolver: resolver, OnUnresolved: onUnresolved})
+			},
+			gcv: gcvctor.EnumValue(genreFQN, 1),
+		},
+		{
+			name: "non-enum column",
+			plugin: func(onUnresolved func(string, sppb.TypeCode) error) spanvalue.FormatComplexFunc {
+				return protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{Resolver: resolver, OnUnresolved: onUnresolved})
+			},
+			gcv:             gcvctor.StringValue("plain"),
+			wantFallthrough: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls int
+			plugin := tt.plugin(func(string, sppb.TypeCode) error {
+				calls++
+				return errors.New("OnUnresolved must not be invoked")
+			})
+
+			_, err := plugin(spanvalue.SpannerCLICompatibleFormatConfig(), tt.gcv, true)
+			if tt.wantFallthrough {
+				if !errors.Is(err, spanvalue.ErrFallthrough) {
+					t.Fatalf("error = %v, want ErrFallthrough", err)
+				}
+			} else if err != nil {
+				t.Fatalf("error = %v, want nil", err)
+			}
+			if calls != 0 {
+				t.Fatalf("OnUnresolved calls = %d, want 0", calls)
+			}
+		})
+	}
+}
+
+func TestFormatPlugins_onUnresolvedErrorPropagates(t *testing.T) {
+	t.Parallel()
+
+	resolver := testResolver(t)
+	sentinel := errors.New("strict: unresolved type")
+	onUnresolved := func(string, sppb.TypeCode) error { return sentinel }
+
+	fc := spanvalue.SpannerCLICompatibleFormatConfig().Clone()
+	fc.FormatComplexPlugins = append(
+		[]spanvalue.FormatComplexFunc{
+			protofmt.FormatProtoTextValue(protofmt.ProtoTextValueOptions{Resolver: resolver, OnUnresolved: onUnresolved}),
+			protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{Resolver: resolver, OnUnresolved: onUnresolved}),
+		},
+		fc.FormatComplexPlugins...,
+	)
+
+	tests := []spanner.GenericColumnValue{
+		gcvctor.ProtoValue("example.music.Missing", nil),
+		gcvctor.EnumValue("example.music.Missing", 1),
+	}
+	for _, gcv := range tests {
+		_, err := fc.FormatToplevelColumn(gcv)
+		if !errors.Is(err, sentinel) {
+			t.Fatalf("error = %v, want %v", err, sentinel)
+		}
+	}
+}
+
+func TestFormatPlugins_onUnresolvedNilResultKeepsWireOutput(t *testing.T) {
+	t.Parallel()
+
+	resolver := testResolver(t)
+	lenient := descriptorAwareConfig(resolver)
+
+	observing := spanvalue.SpannerCLICompatibleFormatConfig().Clone()
+	onUnresolved := func(string, sppb.TypeCode) error { return nil }
+	observing.FormatComplexPlugins = append(
+		[]spanvalue.FormatComplexFunc{
+			protofmt.FormatProtoTextValue(protofmt.ProtoTextValueOptions{Resolver: resolver, OnUnresolved: onUnresolved}),
+			protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{Resolver: resolver, OnUnresolved: onUnresolved}),
+		},
+		observing.FormatComplexPlugins...,
+	)
+
+	tests := []spanner.GenericColumnValue{
+		gcvctor.ProtoValue("example.music.Missing", []byte{0x08, 0x01}),
+		gcvctor.EnumValue("example.music.Missing", 1),
+	}
+	for _, gcv := range tests {
+		want, err := lenient.FormatToplevelColumn(gcv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := observing.FormatToplevelColumn(gcv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Fatalf("got %q, want wire-form fallthrough %q", got, want)
+		}
+	}
+}
+
 func TestFormatPlugins_typedNullUsesFormatter(t *testing.T) {
 	t.Parallel()
 

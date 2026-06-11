@@ -1,9 +1,21 @@
 package gcvctor
 
 import (
+	"math/big"
+
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 )
+
+// MustArrayValue is like [ArrayValue] but panics on error.
+// Use only in tests and table-driven fixtures where schema and inputs are known good.
+func MustArrayValue(vs ...spanner.GenericColumnValue) spanner.GenericColumnValue {
+	gcv, err := ArrayValue(vs...)
+	if err != nil {
+		panic(err)
+	}
+	return gcv
+}
 
 // MustArrayValueOf is like [ArrayValueOf] but panics on error.
 // Use only in tests and table-driven fixtures where schema and inputs are known good.
@@ -70,6 +82,46 @@ func MustTimestampStringValue(v string) spanner.GenericColumnValue {
 // Use only in tests and table-driven fixtures where inputs are known good.
 func MustIntervalStringValue(v string) spanner.GenericColumnValue {
 	gcv, err := IntervalStringValue(v)
+	if err != nil {
+		panic(err)
+	}
+	return gcv
+}
+
+// MustUUIDStringValue is like [UUIDStringValue] but panics on error.
+// Use only in tests and table-driven fixtures where inputs are known good.
+func MustUUIDStringValue(v string) spanner.GenericColumnValue {
+	gcv, err := UUIDStringValue(v)
+	if err != nil {
+		panic(err)
+	}
+	return gcv
+}
+
+// MustJSONStringValue is like [JSONStringValue] but panics on error.
+// Use only in tests and table-driven fixtures where inputs are known good.
+func MustJSONStringValue(v string) spanner.GenericColumnValue {
+	gcv, err := JSONStringValue(v)
+	if err != nil {
+		panic(err)
+	}
+	return gcv
+}
+
+// MustNumericValueChecked is like [NumericValueChecked] but panics on error.
+// Use only in tests and table-driven fixtures where inputs are known good.
+func MustNumericValueChecked(v *big.Rat) spanner.GenericColumnValue {
+	gcv, err := NumericValueChecked(v)
+	if err != nil {
+		panic(err)
+	}
+	return gcv
+}
+
+// MustPGNumericValueChecked is like [PGNumericValueChecked] but panics on error.
+// Use only in tests and table-driven fixtures where inputs are known good.
+func MustPGNumericValueChecked(v *big.Rat) spanner.GenericColumnValue {
+	gcv, err := PGNumericValueChecked(v)
 	if err != nil {
 		panic(err)
 	}

@@ -56,11 +56,38 @@ type ProtoTextValueOptions struct {
 	Resolver  ProtoEnumResolver
 	Unmarshal proto.UnmarshalOptions
 	Marshal   prototext.MarshalOptions
+
+	// OnUnresolved, when non-nil, is invoked before falling through when
+	// Resolver is non-nil but cannot resolve the message type of a non-NULL
+	// PROTO value with a non-empty type FQN (lookup returns exact
+	// [protoregistry.NotFound] or a nil type). If OnUnresolved returns a
+	// non-nil error, the plugin returns that error to the formatter caller;
+	// if it returns nil, the plugin falls through to wire-form output as
+	// usual. A nil OnUnresolved keeps the default lenient behavior.
+	//
+	// OnUnresolved is never invoked for nil resolvers, non-PROTO values,
+	// typed NULL values, empty type FQNs, or successful resolution. Returning
+	// an error from OnUnresolved is the strict-mode recipe; see the example.
+	OnUnresolved func(typeFQN string, code sppb.TypeCode) error
 }
 
 // EnumNameValueOptions configures [FormatEnumNameValue].
 type EnumNameValueOptions struct {
 	Resolver EnumResolver
+
+	// OnUnresolved, when non-nil, is invoked before falling through when
+	// Resolver is non-nil but cannot resolve the enum type of a non-NULL
+	// ENUM value with a non-empty type FQN (lookup returns exact
+	// [protoregistry.NotFound] or a nil type). If OnUnresolved returns a
+	// non-nil error, the plugin returns that error to the formatter caller;
+	// if it returns nil, the plugin falls through to wire-form output as
+	// usual. A nil OnUnresolved keeps the default lenient behavior.
+	//
+	// OnUnresolved is never invoked for nil resolvers, non-ENUM values,
+	// typed NULL values, empty type FQNs, or successful resolution. Returning
+	// an error from OnUnresolved is the strict-mode recipe; see
+	// [ProtoTextValueOptions.OnUnresolved] for the parallel PROTO option.
+	OnUnresolved func(typeFQN string, code sppb.TypeCode) error
 }
 
 // FormatProtoTextValue returns a spanvalue plugin that formats Spanner PROTO
@@ -72,6 +99,10 @@ type EnumNameValueOptions struct {
 // PROTO values return [spanvalue.Formatter.GetNullString] without consulting the resolver.
 // Malformed non-NULL wire payloads, base64 decode failures, unmarshal failures,
 // and marshal failures are returned as real errors.
+//
+// [ProtoTextValueOptions.OnUnresolved] optionally observes (and can turn into
+// errors) the missing-message-type fallthrough when a non-nil resolver is
+// configured.
 //
 // Protobuf text output is display-oriented and intentionally not stable. Tests
 // and callers must not depend on byte-for-byte stable output.
@@ -93,6 +124,7 @@ func FormatProtoTextValue(opts ProtoTextValueOptions) spanvalue.FormatComplexFun
 	unmarshal.Resolver = resolver
 	marshal := opts.Marshal
 	marshal.Resolver = resolver
+	onUnresolved := opts.OnUnresolved
 
 	return func(formatter spanvalue.Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
 		if value.Type.GetCode() != sppb.TypeCode_PROTO {
@@ -108,13 +140,13 @@ func FormatProtoTextValue(opts ProtoTextValueOptions) spanvalue.FormatComplexFun
 		}
 		messageType, err := resolver.FindMessageByName(typeName)
 		if isExactNotFound(err) {
-			return "", spanvalue.ErrFallthrough
+			return "", unresolvedFallthrough(onUnresolved, typeName, sppb.TypeCode_PROTO)
 		}
 		if err != nil {
 			return "", err
 		}
 		if messageType == nil {
-			return "", spanvalue.ErrFallthrough
+			return "", unresolvedFallthrough(onUnresolved, typeName, sppb.TypeCode_PROTO)
 		}
 
 		wire, err := stringWire(value, sppb.TypeCode_PROTO)
@@ -148,6 +180,10 @@ func FormatProtoTextValue(opts ProtoTextValueOptions) spanvalue.FormatComplexFun
 // values return [spanvalue.Formatter.GetNullString] without consulting the resolver. Known
 // enum types with unknown or out-of-range numeric values return the original
 // numeric string.
+//
+// [EnumNameValueOptions.OnUnresolved] optionally observes (and can turn into
+// errors) the missing-enum-type fallthrough when a non-nil resolver is
+// configured.
 func FormatEnumNameValue(opts EnumNameValueOptions) spanvalue.FormatComplexFunc {
 	resolver := opts.Resolver
 	if isNilResolver(resolver) {
@@ -162,6 +198,7 @@ func FormatEnumNameValue(opts EnumNameValueOptions) spanvalue.FormatComplexFunc 
 		}
 	}
 
+	onUnresolved := opts.OnUnresolved
 	return func(formatter spanvalue.Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
 		if value.Type.GetCode() != sppb.TypeCode_ENUM {
 			return "", spanvalue.ErrFallthrough
@@ -176,13 +213,13 @@ func FormatEnumNameValue(opts EnumNameValueOptions) spanvalue.FormatComplexFunc 
 		}
 		enumType, err := resolver.FindEnumByName(typeName)
 		if isExactNotFound(err) {
-			return "", spanvalue.ErrFallthrough
+			return "", unresolvedFallthrough(onUnresolved, typeName, sppb.TypeCode_ENUM)
 		}
 		if err != nil {
 			return "", err
 		}
 		if enumType == nil {
-			return "", spanvalue.ErrFallthrough
+			return "", unresolvedFallthrough(onUnresolved, typeName, sppb.TypeCode_ENUM)
 		}
 
 		wire, err := stringWire(value, sppb.TypeCode_ENUM)
@@ -297,9 +334,21 @@ func find[T any](resolvers []ProtoEnumResolver, lookup func(ProtoEnumResolver) (
 
 func stringWire(value spanner.GenericColumnValue, code sppb.TypeCode) (string, error) {
 	if _, ok := value.Value.GetKind().(*structpb.Value_StringValue); !ok {
-		return "", fmt.Errorf("%w: %v value kind %T", spanvalue.ErrUnknownType, code, value.Value.GetKind())
+		return "", fmt.Errorf("%w: %v value kind %T", spanvalue.ErrMalformedWire, code, value.Value.GetKind())
 	}
 	return value.Value.GetStringValue(), nil
+}
+
+// unresolvedFallthrough reports a descriptor resolution failure to
+// onUnresolved when set and returns the error the plugin should surface: the
+// handler's non-nil error, or [spanvalue.ErrFallthrough] otherwise.
+func unresolvedFallthrough(onUnresolved func(typeFQN string, code sppb.TypeCode) error, typeName protoreflect.FullName, code sppb.TypeCode) error {
+	if onUnresolved != nil {
+		if err := onUnresolved(string(typeName), code); err != nil {
+			return err
+		}
+	}
+	return spanvalue.ErrFallthrough
 }
 
 func isExactNotFound(err error) bool {

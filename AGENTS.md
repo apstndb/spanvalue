@@ -54,7 +54,7 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 ## gcvctor & errors (short)
 
 - `IsNull`: nil `Value` or protobuf `NullValue`. `NullOf` for typed NULL; empty `ArrayValue` = length 0, not NULL.
-- Strict `ArrayValue` / `StructValueOf`: `ErrTypeMismatch`, `ErrMismatchedCounts`, `ErrNilElementType`. Format: `ErrUnknownType`, `ErrMismatchedFields`.
+- Strict `ArrayValue` / `StructValueOf`: `ErrTypeMismatch`, `ErrMismatchedCounts`, `ErrNilElementType`. Format: `ErrUnknownType` (unsupported type code; coverage problem), `ErrMalformedWire` (known type, invalid wire payload or unexpected NULL at the wire validator; data problem—the two do not `errors.Is`-match each other), `ErrMismatchedFields`.
 - `Float32Value`/`Float64Value`: `NaN`/`±Inf` as strings (Spanner wire).
 - **Tests:** `t.Parallel()`, `cmp.Diff`, `protocmp.Transform()`. `gcvctor` tests: expected GCV via `typector`+`structpb`, not the helper under test. Keep attribution comments in `literal_test.go`, `spanner_cli_compatible_test.go`.
 

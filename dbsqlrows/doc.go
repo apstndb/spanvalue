@@ -75,10 +75,20 @@
 // [SQLRowsResult] carries Metadata when known on error paths (partial-result contract
 // matching [github.com/apstndb/spanvalue/writer.RowIteratorResult]). Stats are not
 // consumed unless [SQLRowsConfig.ReadResultSetStats] is true; the iterator then
-// advances with NextResultSet for multi-statement batches.
+// advances with NextResultSet for multi-statement batches. [SQLRowsResult.RowsRead]
+// follows [github.com/apstndb/spanvalue/writer.RowIteratorResult] RowsRead
+// semantics: it counts data rows for which WriteDataRow returned nil and stays
+// zero when WriteDataRow is nil, even though rows are still drained.
+//
+// [SQLRowsConfig.ReadResultSetStats] requires the driver to produce a stats
+// pseudo result set (ReturnResultSetStats: true at QueryContext); otherwise the
+// run fails with [ErrMissingStatsResultSet]. With driver stats disabled in a
+// multi-statement batch, NextResultSet would otherwise land on the next
+// statement's metadata result set and consume its pseudo-row before the scan
+// fails, corrupting the batch cursor position.
 //
 // An empty [SQLRowsHooks] value advances past data rows without per-row decode when
-// WriteDataRow is nil (EXPLAIN / drain before stats). When WriteDataRow is set, the
+// WriteDataRow is nil (EXPLAIN / drain before stats; RowsRead stays zero). When WriteDataRow is set, the
 // GCV slice passed to it is reused each row — copy or format before returning if
 // the sink retains row data.
 package dbsqlrows

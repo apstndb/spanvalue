@@ -16,7 +16,10 @@ func TestQuoteIdentifier(t *testing.T) {
 		want    string
 	}{
 		{"GoogleSQL simple", databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, "table", "`table`"},
-		{"GoogleSQL escapes backtick", databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, "a`b", "`a``b`"},
+		{"GoogleSQL plain name unchanged", databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, "Singers", "`Singers`"},
+		{"GoogleSQL escapes backtick", databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, "a`b", "`a\\`b`"},
+		{"GoogleSQL escapes trailing backslash", databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, `a\`, "`a\\\\`"},
+		{"GoogleSQL escapes backslash then backtick", databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, "a\\`b", "`a\\\\\\`b`"},
 		{"PostgreSQL simple", databasepb.DatabaseDialect_POSTGRESQL, "table", `"table"`},
 		{"PostgreSQL escapes quote", databasepb.DatabaseDialect_POSTGRESQL, `a"b`, `"a""b"`},
 		{"Unspecified defaults to GoogleSQL", databasepb.DatabaseDialect_DATABASE_DIALECT_UNSPECIFIED, "table", "`table`"},

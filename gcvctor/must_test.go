@@ -2,6 +2,7 @@ package gcvctor_test
 
 import (
 	"errors"
+	"math/big"
 	"testing"
 
 	"cloud.google.com/go/spanner"
@@ -241,5 +242,151 @@ func TestMustStructValueOf_panicsPreserveErrMismatchedCounts(t *testing.T) {
 	}
 	if !errors.Is(err, gcvctor.ErrMismatchedCounts) {
 		t.Fatalf("panic = %v, want ErrMismatchedCounts", panicked)
+	}
+}
+
+func TestMustArrayValue_matchesArrayValue(t *testing.T) {
+	t.Parallel()
+
+	elems := []spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.Int64Value(2)}
+	want, err := gcvctor.ArrayValue(elems...)
+	if err != nil {
+		t.Fatalf("ArrayValue: %v", err)
+	}
+	got := gcvctor.MustArrayValue(elems...)
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Fatalf("MustArrayValue mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestMustArrayValue_panicsOnTypeMismatch(t *testing.T) {
+	t.Parallel()
+
+	expectPanic(t, func() {
+		gcvctor.MustArrayValue(gcvctor.Int64Value(1), gcvctor.StringValue("x"))
+	})
+}
+
+func TestMustNumericValueChecked_matchesNumericValueChecked(t *testing.T) {
+	t.Parallel()
+
+	v := big.NewRat(199, 2)
+	want, err := gcvctor.NumericValueChecked(v)
+	if err != nil {
+		t.Fatalf("NumericValueChecked: %v", err)
+	}
+	got := gcvctor.MustNumericValueChecked(v)
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Fatalf("MustNumericValueChecked mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestMustNumericValueChecked_panicsPreserveErrNilNumeric(t *testing.T) {
+	t.Parallel()
+
+	var panicked any
+	func() {
+		defer func() { panicked = recover() }()
+		gcvctor.MustNumericValueChecked(nil)
+	}()
+	if panicked == nil {
+		t.Fatal("expected panic")
+	}
+	err, ok := panicked.(error)
+	if !ok {
+		t.Fatalf("panic value type = %T, want error", panicked)
+	}
+	if !errors.Is(err, gcvctor.ErrNilNumeric) {
+		t.Fatalf("panic = %v, want ErrNilNumeric", panicked)
+	}
+}
+
+func TestMustPGNumericValueChecked_matchesPGNumericValueChecked(t *testing.T) {
+	t.Parallel()
+
+	v := big.NewRat(199, 2)
+	want, err := gcvctor.PGNumericValueChecked(v)
+	if err != nil {
+		t.Fatalf("PGNumericValueChecked: %v", err)
+	}
+	got := gcvctor.MustPGNumericValueChecked(v)
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Fatalf("MustPGNumericValueChecked mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestMustPGNumericValueChecked_panicsPreserveErrNilNumeric(t *testing.T) {
+	t.Parallel()
+
+	var panicked any
+	func() {
+		defer func() { panicked = recover() }()
+		gcvctor.MustPGNumericValueChecked(nil)
+	}()
+	if panicked == nil {
+		t.Fatal("expected panic")
+	}
+	err, ok := panicked.(error)
+	if !ok {
+		t.Fatalf("panic value type = %T, want error", panicked)
+	}
+	if !errors.Is(err, gcvctor.ErrNilNumeric) {
+		t.Fatalf("panic = %v, want ErrNilNumeric", panicked)
+	}
+}
+
+func TestMustUUIDStringValue_matchesUUIDStringValue(t *testing.T) {
+	t.Parallel()
+
+	const input = "0E0B9CAA-3F06-4B75-9D97-FADCC9D4B3E1"
+	want, err := gcvctor.UUIDStringValue(input)
+	if err != nil {
+		t.Fatalf("UUIDStringValue: %v", err)
+	}
+	got := gcvctor.MustUUIDStringValue(input)
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Fatalf("MustUUIDStringValue mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestMustUUIDStringValue_panicsOnInvalidInput(t *testing.T) {
+	t.Parallel()
+
+	expectPanic(t, func() {
+		gcvctor.MustUUIDStringValue("not-a-uuid")
+	})
+}
+
+func TestMustJSONStringValue_matchesJSONStringValue(t *testing.T) {
+	t.Parallel()
+
+	const input = `{"b": 1, "a": [true, null]}`
+	want, err := gcvctor.JSONStringValue(input)
+	if err != nil {
+		t.Fatalf("JSONStringValue: %v", err)
+	}
+	got := gcvctor.MustJSONStringValue(input)
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Fatalf("MustJSONStringValue mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestMustJSONStringValue_panicsPreserveErrInvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	var panicked any
+	func() {
+		defer func() { panicked = recover() }()
+		gcvctor.MustJSONStringValue(`{"a":`)
+	}()
+	if panicked == nil {
+		t.Fatal("expected panic")
+	}
+	err, ok := panicked.(error)
+	if !ok {
+		t.Fatalf("panic value type = %T, want error", panicked)
+	}
+	if !errors.Is(err, gcvctor.ErrInvalidJSON) {
+		t.Fatalf("panic = %v, want ErrInvalidJSON", panicked)
 	}
 }

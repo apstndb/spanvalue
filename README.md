@@ -18,8 +18,9 @@ Requires **Go 1.24** or later (see [`go.mod`](go.mod)).
 
 `QuoteIdentifier` and `QuoteQualifiedIdentifier` are conservative quoting
 helpers. They always quote for the selected dialect, escape embedded quote
-characters, and do **not** attempt a minimal "quote only when necessary"
-strategy.
+characters (for GoogleSQL, string-literal escapes: backslash to `\\` and
+backtick to ``\` ``), and do **not** attempt a minimal "quote only when
+necessary" strategy.
 
 - `DATABASE_DIALECT_UNSPECIFIED` follows the Spanner default and uses GoogleSQL
   quoting.
