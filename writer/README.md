@@ -22,6 +22,7 @@ Production code with `*spanner.RowIterator` should treat metadata as **lazy**: `
 | Custom sink (legacy formatter, app-owned type) | [`RunRowIterator`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RunRowIterator) with [`RowIteratorHooks`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowIteratorHooks) |
 | Manual loop (every query has ≥1 row) | `iter.Do` + `WriteRow`, or `PrepareRowType` after first `Next` then `WriteRow` + `return w.Flush()` |
 | Zero-row `SELECT` (columns in metadata) | `WriteRowIterator` / `RunRowIterator`, or `PrepareRowType` after first `Next` then `Flush` |
+| In-memory / virtual rows (no `RowIterator`) | [`WriteRowSeq`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WriteRowSeq) / [`RunRowSeq`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RunRowSeq) with explicit metadata; [`RowSeq`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#RowSeq) adapts pre-built rows |
 
 ### Iterator ownership
 

@@ -27,6 +27,11 @@
 // may be empty, and read metadata or stats only after consuming to [google.golang.org/api/iterator.Done]; propagate
 // [Flusher.Flush] errors (do not defer Flush).
 //
+// Rows that do not come from a RowIterator — client-side (virtual) result sets or locally
+// constructed rows — go through [WriteRowSeq] and [RunRowSeq], which take explicit metadata
+// plus a fallible row sequence ([RowSeq] adapts pre-built rows) and share the
+// [RunRowIterator] hook contract.
+//
 // # Direct writers vs hooks
 //
 // Prefer [WriteRowIterator] when the destination is a package writer. Prefer [RunRowIterator]
