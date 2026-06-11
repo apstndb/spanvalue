@@ -170,14 +170,13 @@ func NumericFromNullable(n spanner.NullNumeric) spanner.GenericColumnValue {
 }
 
 // JSONFromNullable returns a JSON GenericColumnValue from a Spanner null wrapper.
-// When Valid and n.Value is a string, the wire JSON is stored as-is; other Value types
-// are marshaled like [JSONValue].
+// When Valid, n.Value is marshaled like [JSONValue]: a Go string becomes a quoted
+// JSON string on the wire, matching the official client's encodeValue. To store
+// pre-encoded wire JSON as-is (validated and compacted), pass it as an
+// [encoding/json.RawMessage], the same convention the client follows.
 func JSONFromNullable(n spanner.NullJSON) (spanner.GenericColumnValue, error) {
 	if !n.Valid {
 		return NullFromCode(sppb.TypeCode_JSON), nil
-	}
-	if s, ok := n.Value.(string); ok {
-		return StringBasedValueFromCode(sppb.TypeCode_JSON, s), nil
 	}
 	return JSONValue(n.Value)
 }
@@ -200,15 +199,13 @@ func PGNumericFromNullable(n spanner.PGNumeric) spanner.GenericColumnValue {
 }
 
 // PGJSONBFromNullable returns a PostgreSQL-dialect JSON GenericColumnValue from a
-// [cloud.google.com/go/spanner.PGJsonB] wrapper. When Valid and n.Value is a string, the
-// wire JSON is stored as-is (not re-marshaled); other Value types are marshaled like
-// [PGJSONBValue].
+// [cloud.google.com/go/spanner.PGJsonB] wrapper. When Valid, n.Value is marshaled
+// like [PGJSONBValue]: a Go string becomes a quoted JSON string on the wire,
+// matching the official client's encodeValue. To store pre-encoded wire JSON
+// as-is (validated and compacted), pass it as an [encoding/json.RawMessage].
 func PGJSONBFromNullable(n spanner.PGJsonB) (spanner.GenericColumnValue, error) {
 	if !n.Valid {
 		return NullOf(typector.PGJSONB()), nil
-	}
-	if s, ok := n.Value.(string); ok {
-		return StringBasedValueOf(typector.PGJSONB(), s), nil
 	}
 	return PGJSONBValue(n.Value)
 }
