@@ -22,7 +22,8 @@ import (
 // optional stats consumption succeed; it is not called when PrepareMetadata or
 // WriteDataRow returns an error. The returned [SQLRowsResult] still carries
 // Metadata and RowsRead at the abort point (same partial-result contract as
-// [writer.RowIteratorHooks] and [writer.RunRowIterator]).
+// [github.com/apstndb/spanvalue/writer.RowIteratorHooks] and
+// [github.com/apstndb/spanvalue/writer.RunRowIterator]).
 type SQLRowsHooks struct {
 	PrepareMetadata func(*sppb.ResultSetMetadata) error
 	WriteDataRow    func([]spanner.GenericColumnValue) error

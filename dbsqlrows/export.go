@@ -67,7 +67,8 @@ func (cfg SQLRowsConfig) WithReadResultSetStats(read bool) SQLRowsConfig {
 }
 
 // SQLRowsResult holds metadata and stats surfaced from driver pseudo result sets,
-// analogous to [writer.RowIteratorResult] for native iterators.
+// analogous to [github.com/apstndb/spanvalue/writer.RowIteratorResult] for
+// native iterators.
 // On error paths after metadata is known, Metadata and RowsRead reflect progress
 // at the abort point (same partial-result contract as writer row-iterator helpers).
 // Stats is also populated on the abort path when the stats pseudo-row was
