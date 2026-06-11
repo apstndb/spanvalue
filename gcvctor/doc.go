@@ -53,9 +53,11 @@
 // instead of panicking. The legacy [NumericValue] and [PGNumericValue] helpers keep their
 // original signatures and return typed SQL NULL values on nil input.
 //
-// [PGNumericValue] and [PGJSONBValue] build PostgreSQL-dialect annotated NUMERIC/JSON values
+// [PGNumericValue], [PGJSONBValue], and [PGOIDValue] build PostgreSQL-dialect annotated
+// NUMERIC/JSON/OID values
 // ([cloud.google.com/go/spanner/apiv1/spannerpb.TypeAnnotationCode_PG_NUMERIC],
-// [cloud.google.com/go/spanner/apiv1/spannerpb.TypeAnnotationCode_PG_JSONB]).
+// [cloud.google.com/go/spanner/apiv1/spannerpb.TypeAnnotationCode_PG_JSONB],
+// [cloud.google.com/go/spanner/apiv1/spannerpb.TypeAnnotationCode_PG_OID]).
 //
 // NUMERIC wire strings: [NumericValue] and [PGNumericValue] store Spanner-canonical decimals.
 // [StringBasedValueFromCode] does not normalize; callers that build NUMERIC cells by hand must
@@ -69,16 +71,19 @@
 //
 // # Test fixtures
 //
-// For nested ARRAY and STRUCT trees in tests, prefer [MustArrayValueOf], [MustStructValueOf],
-// [MustStructValueOfFields], and [MustNormalizeArrayElements] over local panic-on-error helpers.
+// For nested ARRAY and STRUCT trees in tests, prefer [MustArrayValue], [MustArrayValueOf],
+// [MustStructValueOf], [MustStructValueOfFields], and [MustNormalizeArrayElements] over local
+// panic-on-error helpers. For checked NUMERIC fixtures, [MustNumericValueChecked] and
+// [MustPGNumericValueChecked] panic on nil input instead of returning a typed NULL.
 // They wrap the error-returning constructors and are intended for schema-known fixture data, not production paths.
 //
 // String payloads: [StringBasedValueOf] and [StringBasedValueFromCode] store the wire string as-is
 // with no validation (no extra imports beyond typector). Use [StringBasedValueOf] when the Type
 // carries annotations (for example PG-dialect NUMERIC). When the test cares about canonical wire
 // form, use validated
-// helpers such as [DateStringValue] or the corresponding [MustDateStringValue], [MustTimestampStringValue],
-// [MustIntervalStringValue], and [MustJSONValue] for inline nesting. Typed Go inputs ([DateValue] with
+// helpers such as [DateStringValue], [UUIDStringValue], and [JSONStringValue], or the corresponding
+// [MustDateStringValue], [MustTimestampStringValue], [MustIntervalStringValue], [MustUUIDStringValue],
+// [MustJSONStringValue], and [MustJSONValue] for inline nesting. Typed Go inputs ([DateValue] with
 // [cloud.google.com/go/civil.Date], [TimestampValue] with [time.Time], and so on) avoid parse errors
 // when you already hold the native value.
 //

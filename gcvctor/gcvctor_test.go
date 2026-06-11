@@ -467,6 +467,81 @@ func TestValidatedStringValueHelpers(t *testing.T) {
 			call:    gcvctor.IntervalStringValue,
 			wantErr: true,
 		},
+		{
+			name:  "UUID valid canonical",
+			input: "0e0b9caa-3f06-4b75-9d97-fadcc9d4b3e1",
+			call:  gcvctor.UUIDStringValue,
+			want: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_UUID),
+				Value: structpb.NewStringValue("0e0b9caa-3f06-4b75-9d97-fadcc9d4b3e1"),
+			},
+		},
+		{
+			name:  "UUID uppercase normalized to lowercase",
+			input: "0E0B9CAA-3F06-4B75-9D97-FADCC9D4B3E1",
+			call:  gcvctor.UUIDStringValue,
+			want: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_UUID),
+				Value: structpb.NewStringValue("0e0b9caa-3f06-4b75-9d97-fadcc9d4b3e1"),
+			},
+		},
+		{
+			name:  "UUID braced normalized to canonical",
+			input: "{0e0b9caa-3f06-4b75-9d97-fadcc9d4b3e1}",
+			call:  gcvctor.UUIDStringValue,
+			want: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_UUID),
+				Value: structpb.NewStringValue("0e0b9caa-3f06-4b75-9d97-fadcc9d4b3e1"),
+			},
+		},
+		{
+			name:    "UUID invalid wrong length",
+			input:   "0e0b9caa-3f06-4b75-9d97",
+			call:    gcvctor.UUIDStringValue,
+			wantErr: true,
+		},
+		{
+			name:    "UUID invalid bad characters",
+			input:   "0e0b9caa-3f06-4b75-9d97-fadcc9d4b3zz",
+			call:    gcvctor.UUIDStringValue,
+			wantErr: true,
+		},
+		{
+			name:    "UUID invalid empty",
+			input:   "",
+			call:    gcvctor.UUIDStringValue,
+			wantErr: true,
+		},
+		{
+			name:  "JSON valid object stored as-is without compaction",
+			input: `{"b": 1, "a": [true, null]}`,
+			call:  gcvctor.JSONStringValue,
+			want: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_JSON),
+				Value: structpb.NewStringValue(`{"b": 1, "a": [true, null]}`),
+			},
+		},
+		{
+			name:  "JSON valid string scalar with HTML characters as-is",
+			input: `"<a>"`,
+			call:  gcvctor.JSONStringValue,
+			want: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_JSON),
+				Value: structpb.NewStringValue(`"<a>"`),
+			},
+		},
+		{
+			name:    "JSON invalid truncated object",
+			input:   `{"a":`,
+			call:    gcvctor.JSONStringValue,
+			wantErr: true,
+		},
+		{
+			name:    "JSON invalid empty",
+			input:   "",
+			call:    gcvctor.JSONStringValue,
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -484,6 +559,62 @@ func TestValidatedStringValueHelpers(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if diff := cmp.Diff(tt.want, got, protocmp.Transform()); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestJSONStringValue_invalidReturnsErrInvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	got, err := gcvctor.JSONStringValue(`{"a":`)
+	if !errors.Is(err, gcvctor.ErrInvalidJSON) {
+		t.Fatalf("error = %v, want ErrInvalidJSON", err)
+	}
+	if diff := cmp.Diff(spanner.GenericColumnValue{}, got, protocmp.Transform()); diff != "" {
+		t.Fatalf("got non-zero value (-want +got):\n%s", diff)
+	}
+}
+
+func TestPGOIDValue(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		got  spanner.GenericColumnValue
+		want spanner.GenericColumnValue
+	}{
+		{
+			name: "positive",
+			got:  gcvctor.PGOIDValue(42),
+			want: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_INT64, TypeAnnotation: sppb.TypeAnnotationCode_PG_OID},
+				Value: structpb.NewStringValue("42"),
+			},
+		},
+		{
+			name: "zero",
+			got:  gcvctor.PGOIDValue(0),
+			want: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_INT64, TypeAnnotation: sppb.TypeAnnotationCode_PG_OID},
+				Value: structpb.NewStringValue("0"),
+			},
+		},
+		{
+			name: "negative",
+			got:  gcvctor.PGOIDValue(-1),
+			want: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_INT64, TypeAnnotation: sppb.TypeAnnotationCode_PG_OID},
+				Value: structpb.NewStringValue("-1"),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if diff := cmp.Diff(tt.want, tt.got, protocmp.Transform()); diff != "" {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
 			}
 		})

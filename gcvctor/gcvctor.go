@@ -36,6 +36,8 @@ var (
 	ErrNilFieldType = errors.New("gcvctor: nil struct field type")
 	// ErrNilNumeric is returned by [NumericValueChecked] and [PGNumericValueChecked] when v is nil.
 	ErrNilNumeric = errors.New("gcvctor: nil numeric input")
+	// ErrInvalidJSON is returned by [JSONStringValue] when v is not syntactically valid JSON.
+	ErrInvalidJSON = errors.New("gcvctor: invalid JSON input")
 )
 
 // ArrayElementError adds an element index to an ARRAY construction error while preserving
@@ -274,6 +276,20 @@ func UUIDValue(v uuid.UUID) spanner.GenericColumnValue {
 	return StringBasedValueFromCode(sppb.TypeCode_UUID, v.String())
 }
 
+// UUIDStringValue validates a UUID string via [github.com/google/uuid.Parse] and returns a
+// non-null UUID GenericColumnValue using the canonical lowercase wire string from
+// [github.com/google/uuid.UUID.String]. Non-canonical forms accepted by uuid.Parse
+// (uppercase hex digits, surrounding braces, a "urn:uuid:" prefix) are normalized to the
+// canonical lowercase 8-4-4-4-12 form on the wire, so the stored payload can differ from v.
+// Use [UUIDValue] when you already hold a [github.com/google/uuid.UUID].
+func UUIDStringValue(v string) (spanner.GenericColumnValue, error) {
+	u, err := uuid.Parse(v)
+	if err != nil {
+		return spanner.GenericColumnValue{}, err
+	}
+	return UUIDValue(u), nil
+}
+
 // JSONValue marshals v to JSON and returns a non-null JSON GenericColumnValue.
 func JSONValue(v any) (spanner.GenericColumnValue, error) {
 	s, err := jsonWireString(v)
@@ -281,6 +297,19 @@ func JSONValue(v any) (spanner.GenericColumnValue, error) {
 		return spanner.GenericColumnValue{}, err
 	}
 	return StringBasedValueFromCode(sppb.TypeCode_JSON, s), nil
+}
+
+// JSONStringValue validates that v is syntactically valid JSON ([encoding/json.Valid]) and
+// returns a non-null JSON GenericColumnValue with v stored as-is on the wire. It does not
+// normalize, compact, or re-marshal the payload, matching the package's wire-as-is convention
+// for string payloads (see [StringBasedValueFromCode]); whitespace and key order are preserved
+// exactly as given. Invalid JSON returns [ErrInvalidJSON]. Use [JSONValue] to marshal a Go
+// value to a canonical compact wire string instead.
+func JSONStringValue(v string) (spanner.GenericColumnValue, error) {
+	if !json.Valid([]byte(v)) {
+		return spanner.GenericColumnValue{}, ErrInvalidJSON
+	}
+	return StringBasedValueFromCode(sppb.TypeCode_JSON, v), nil
 }
 
 // PGNumericValue returns a PostgreSQL-dialect NUMERIC GenericColumnValue
@@ -303,6 +332,12 @@ func PGNumericValueChecked(v *big.Rat) (spanner.GenericColumnValue, error) {
 		return spanner.GenericColumnValue{}, ErrNilNumeric
 	}
 	return PGNumericValue(v), nil
+}
+
+// PGOIDValue returns a non-null PostgreSQL-dialect OID GenericColumnValue
+// ([sppb.TypeAnnotationCode_PG_OID]) with a decimal string wire payload like [Int64Value].
+func PGOIDValue(v int64) spanner.GenericColumnValue {
+	return StringBasedValueOf(typector.PGOID(), strconv.FormatInt(v, 10))
 }
 
 // PGJSONBValue marshals v to JSON and returns a non-null PostgreSQL-dialect JSON GenericColumnValue
