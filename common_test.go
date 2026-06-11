@@ -369,8 +369,11 @@ func TestFormatProtoEnumCastRejectsNonStringWire(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			_, err := LiteralFormatConfig().FormatToplevelColumn(tt.gcv)
-			if !errors.Is(err, ErrUnknownType) {
-				t.Fatalf("error = %v, want ErrUnknownType", err)
+			if !errors.Is(err, ErrMalformedWire) {
+				t.Fatalf("error = %v, want ErrMalformedWire", err)
+			}
+			if errors.Is(err, ErrUnknownType) {
+				t.Fatalf("error = %v, must not match ErrUnknownType", err)
 			}
 		})
 	}
@@ -387,5 +390,54 @@ func TestFormatEnumAsCastRejectsInvalidWirePayload(t *testing.T) {
 	_, err := LiteralFormatConfig().FormatToplevelColumn(gcv)
 	if err == nil {
 		t.Fatal("expected error for non-integer ENUM wire payload")
+	}
+}
+
+// TestErrMalformedWireClassification pins the split introduced for
+// https://github.com/apstndb/spanvalue/issues/216: a known type with an
+// invalid wire payload is ErrMalformedWire (and not ErrUnknownType), while a
+// genuinely unknown type code stays ErrUnknownType (and is not
+// ErrMalformedWire).
+func TestErrMalformedWireClassification(t *testing.T) {
+	t.Parallel()
+
+	malformedBool := spanner.GenericColumnValue{
+		Type:  typector.CodeToSimpleType(sppb.TypeCode_BOOL),
+		Value: structpb.NewStringValue("true"),
+	}
+	unknownCode := spanner.GenericColumnValue{
+		Type:  &sppb.Type{Code: sppb.TypeCode(9999)},
+		Value: structpb.NewStringValue("whatever"),
+	}
+
+	configs := []struct {
+		name string
+		fc   *FormatConfig
+	}{
+		{name: "simple", fc: SimpleFormatConfig()},
+		{name: "literal", fc: LiteralFormatConfig()},
+		{name: "spanner cli compatible", fc: SpannerCLICompatibleFormatConfig()},
+	}
+
+	for _, tt := range configs {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := tt.fc.FormatToplevelColumn(malformedBool)
+			if !errors.Is(err, ErrMalformedWire) {
+				t.Errorf("malformed BOOL wire: error = %v, want ErrMalformedWire", err)
+			}
+			if errors.Is(err, ErrUnknownType) {
+				t.Errorf("malformed BOOL wire: error = %v, must not match ErrUnknownType", err)
+			}
+
+			_, err = tt.fc.FormatToplevelColumn(unknownCode)
+			if !errors.Is(err, ErrUnknownType) {
+				t.Errorf("unknown type code: error = %v, want ErrUnknownType", err)
+			}
+			if errors.Is(err, ErrMalformedWire) {
+				t.Errorf("unknown type code: error = %v, must not match ErrMalformedWire", err)
+			}
+		})
 	}
 }

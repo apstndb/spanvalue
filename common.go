@@ -16,9 +16,25 @@ import (
 )
 
 var (
-	ErrNilRow                     = errors.New("nil row")
-	ErrNilStructField             = errors.New("nil struct field descriptor")
-	ErrUnknownType                = errors.New("unknown type")
+	ErrNilRow         = errors.New("nil row")
+	ErrNilStructField = errors.New("nil struct field descriptor")
+	// ErrUnknownType is returned when a type code (or, on the Decode path, a Go
+	// value type) is not supported by the formatter. It signals a
+	// configuration/coverage problem: the value may become formattable by adding
+	// a [FormatComplexFunc] plugin or choosing a different preset. For known
+	// types whose wire payload is invalid, see [ErrMalformedWire].
+	ErrUnknownType = errors.New("unknown type")
+	// ErrMalformedWire is returned when the type code of a value is known but
+	// its wire payload does not match the encoding Spanner uses for that type —
+	// for example a BOOL whose [structpb.Value] kind is a string, a FLOAT64
+	// string other than "NaN"/"Infinity"/"-Infinity", or a NULL that
+	// unexpectedly reaches the scalar wire validator. Unlike [ErrUnknownType]
+	// (a configuration problem that a plugin or preset change can address),
+	// ErrMalformedWire means the [cloud.google.com/go/spanner.GenericColumnValue]
+	// itself is corrupt: consumers should treat it as a data problem and fail
+	// the export rather than reconfigure formatting. It does not match
+	// [ErrUnknownType] via [errors.Is].
+	ErrMalformedWire              = errors.New("malformed wire value")
 	ErrMismatchedFields           = errors.New("mismatched struct value/field count")
 	ErrUnexpectedComplexValueKind = errors.New("unexpected complex value kind")
 	ErrEmptyTypeFQN               = errors.New("empty type FQN")

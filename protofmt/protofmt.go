@@ -334,7 +334,7 @@ func find[T any](resolvers []ProtoEnumResolver, lookup func(ProtoEnumResolver) (
 
 func stringWire(value spanner.GenericColumnValue, code sppb.TypeCode) (string, error) {
 	if _, ok := value.Value.GetKind().(*structpb.Value_StringValue); !ok {
-		return "", fmt.Errorf("%w: %v value kind %T", spanvalue.ErrUnknownType, code, value.Value.GetKind())
+		return "", fmt.Errorf("%w: %v value kind %T", spanvalue.ErrMalformedWire, code, value.Value.GetKind())
 	}
 	return value.Value.GetStringValue(), nil
 }
