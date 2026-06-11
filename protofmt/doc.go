@@ -15,4 +15,9 @@
 // To enable descriptor-aware display, clone an existing spanvalue format preset
 // and prepend [FormatProtoTextValue] and [FormatEnumNameValue] before the
 // preset's existing plugins. See the package examples for the minimal pattern.
+//
+// Resolution failures fall through to wire forms by default (base64 for PROTO,
+// numeric string for ENUM). Set [ProtoTextValueOptions.OnUnresolved] /
+// [EnumNameValueOptions.OnUnresolved] to observe such fallthroughs when a
+// resolver is configured, or to turn them into errors (strict mode).
 package protofmt
