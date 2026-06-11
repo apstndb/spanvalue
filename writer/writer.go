@@ -32,7 +32,8 @@ var (
 	ErrEmptyColumnName = errors.New("empty column name")
 	// ErrNilOutputWriter reports that a writer was constructed without an output.
 	ErrNilOutputWriter = errors.New("nil output writer")
-	// ErrNilRow reports that WriteRow was called with a nil row.
+	// ErrNilRow reports that WriteRow was called with a nil row, or that a
+	// row sequence yielded a nil row with a nil error (see [RunRowSeq]).
 	ErrNilRow = spanvalue.ErrNilRow
 	// ErrMissingColumnNames reports that an operation requires a registered column schema
 	// when none was registered yet, or column names/types are insufficient for the write
