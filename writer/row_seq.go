@@ -51,6 +51,9 @@ func RunRowSeq(md *sppb.ResultSetMetadata, rows iter.Seq2[*spanner.Row, error], 
 		return nil, ErrNilRowSeq
 	}
 	next, release := iter.Pull2(rows)
+	// Wrapping the static metadata in a closure costs one allocation per run
+	// (not per row); it keeps the facade single-representation instead of a
+	// two-field variant with a which-field-wins branch.
 	return runRowIterator(&seqRowFacade{md: func() *sppb.ResultSetMetadata { return md }, nextPair: next, release: release}, hooks)
 }
 
