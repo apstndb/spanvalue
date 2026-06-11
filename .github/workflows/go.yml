@@ -1,5 +1,6 @@
 # CI mirrors local `make check` (fmt-check, vet, build, test, lint) plus
-# race detection, Example tests, and scheduled govulncheck.
+# race detection, Example tests, and govulncheck (PR-blocking; also scheduled
+# weekly to catch newly published advisories without a code change).
 
 name: Go
 
@@ -99,7 +100,10 @@ jobs:
 
   govulncheck:
     name: govulncheck
-    if: github.event_name == 'push' || github.event_name == 'schedule'
+    # Runs on every trigger (push, pull_request, schedule) and is PR-blocking:
+    # the baseline is clean at the symbol level (#177), so any reachable
+    # finding is a regression. The weekly schedule still catches advisories
+    # published between merges.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
