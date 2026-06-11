@@ -43,6 +43,12 @@
 // already comes from the Spanner client library. For explicit typed NULL without an input
 // value, keep using [NullOf] or [NullFromCode].
 //
+// [JSONFromNullable] and [PGJSONBFromNullable] marshal Value like [JSONValue] and
+// [PGJSONBValue]: a Go string becomes a quoted JSON string on the wire, matching the
+// official client's encodeValue. Pass pre-encoded wire JSON as an
+// [encoding/json.RawMessage] to store it as-is (validated and compacted); see
+// ExampleJSONFromNullable.
+//
 // [NumericValueChecked] and [PGNumericValueChecked] return errors on nil [*big.Rat] input
 // instead of panicking. The legacy [NumericValue] and [PGNumericValue] helpers keep their
 // original signatures and return typed SQL NULL values on nil input.

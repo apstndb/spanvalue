@@ -1,6 +1,7 @@
 package gcvctor_test
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"cloud.google.com/go/spanner"
@@ -176,4 +177,18 @@ func ExampleInt64FromPtr_fromNullable() {
 	// true
 	// 42
 	// 42
+}
+
+// A Go string in NullJSON.Value marshals to a quoted JSON string, matching
+// the official client's encodeValue; pass pre-encoded wire JSON as a
+// json.RawMessage to store it as-is.
+func ExampleJSONFromNullable() {
+	str, _ := gcvctor.JSONFromNullable(spanner.NullJSON{Value: `{"a":1}`, Valid: true})
+	raw, _ := gcvctor.JSONFromNullable(spanner.NullJSON{Value: json.RawMessage(`{"a":1}`), Valid: true})
+
+	fmt.Println(str.Value.GetStringValue())
+	fmt.Println(raw.Value.GetStringValue())
+	// Output:
+	// "{\"a\":1}"
+	// {"a":1}
 }

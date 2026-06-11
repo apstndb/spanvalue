@@ -2,6 +2,7 @@ package gcvctor_test
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"math/big"
 	"strconv"
 	"testing"
@@ -239,13 +240,25 @@ func TestExtendedFromNullableScalars(t *testing.T) {
 		})
 	}
 
+	wantJSON := wantJSONWire(`{"k":"v"}`)
+	// A Go string marshals to a quoted JSON string, matching the client's
+	// encodeValue; json.RawMessage is the pre-encoded as-is path.
 	gotJSONStr, err := gcvctor.JSONFromNullable(spanner.NullJSON{Value: `{"k":"v"}`, Valid: true})
 	if err != nil {
 		t.Fatalf("JSONFromNullable string value: %v", err)
 	}
-	wantJSON := wantJSONWire(`{"k":"v"}`)
-	if diff := cmp.Diff(wantJSON, gotJSONStr, protocmp.Transform()); diff != "" {
+	if diff := cmp.Diff(wantJSONWire(`"{\"k\":\"v\"}"`), gotJSONStr, protocmp.Transform()); diff != "" {
 		t.Fatalf("JSONFromNullable string value mismatch (-want +got):\n%s", diff)
+	}
+	gotJSONRaw, err := gcvctor.JSONFromNullable(spanner.NullJSON{Value: json.RawMessage(`{"k":"v"}`), Valid: true})
+	if err != nil {
+		t.Fatalf("JSONFromNullable raw message: %v", err)
+	}
+	if diff := cmp.Diff(wantJSON, gotJSONRaw, protocmp.Transform()); diff != "" {
+		t.Fatalf("JSONFromNullable raw message mismatch (-want +got):\n%s", diff)
+	}
+	if _, err := gcvctor.JSONFromNullable(spanner.NullJSON{Value: json.RawMessage(`{invalid`), Valid: true}); err == nil {
+		t.Fatal("JSONFromNullable invalid raw message: want error, got nil")
 	}
 	gotJSONMap, err := gcvctor.JSONFromNullable(spanner.NullJSON{Value: map[string]string{"k": "v"}, Valid: true})
 	if err != nil {
@@ -262,13 +275,20 @@ func TestExtendedFromNullableScalars(t *testing.T) {
 		t.Fatalf("JSONFromNullable null mismatch (-want +got):\n%s", diff)
 	}
 
-	gotPGJSON, err := gcvctor.PGJSONBFromNullable(spanner.PGJsonB{Value: `{"k":"v"}`, Valid: true})
-	if err != nil {
-		t.Fatalf("PGJSONBFromNullable wire string: %v", err)
-	}
 	wantPGJSON := wantPGJSONBWire(`{"k":"v"}`)
-	if diff := cmp.Diff(wantPGJSON, gotPGJSON, protocmp.Transform()); diff != "" {
-		t.Fatalf("PGJSONBFromNullable wire string mismatch (-want +got):\n%s", diff)
+	gotPGJSONStr, err := gcvctor.PGJSONBFromNullable(spanner.PGJsonB{Value: `{"k":"v"}`, Valid: true})
+	if err != nil {
+		t.Fatalf("PGJSONBFromNullable string value: %v", err)
+	}
+	if diff := cmp.Diff(wantPGJSONBWire(`"{\"k\":\"v\"}"`), gotPGJSONStr, protocmp.Transform()); diff != "" {
+		t.Fatalf("PGJSONBFromNullable string value mismatch (-want +got):\n%s", diff)
+	}
+	gotPGJSONRaw, err := gcvctor.PGJSONBFromNullable(spanner.PGJsonB{Value: json.RawMessage(`{"k":"v"}`), Valid: true})
+	if err != nil {
+		t.Fatalf("PGJSONBFromNullable raw message: %v", err)
+	}
+	if diff := cmp.Diff(wantPGJSON, gotPGJSONRaw, protocmp.Transform()); diff != "" {
+		t.Fatalf("PGJSONBFromNullable raw message mismatch (-want +got):\n%s", diff)
 	}
 	gotPGJSONMap, err := gcvctor.PGJSONBFromNullable(spanner.PGJsonB{Value: map[string]string{"k": "v"}, Valid: true})
 	if err != nil {
