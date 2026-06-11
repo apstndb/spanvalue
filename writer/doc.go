@@ -58,10 +58,24 @@
 // before the first Next registers an empty schema—use [RowIteratorWriter.PrepareRowType] after
 // the first Next or [WriteRowIterator] instead.
 //
+// # Write errors
+//
+// All three writers latch the first error caused by writing to the underlying
+// io.Writer (the [encoding/csv] Writer.Error pattern): after any Write* or
+// [Flusher.Flush] call fails with an output error, every subsequent Write* or
+// Flush call returns that first error and no further output is attempted.
+// Discard the writer after any write error. Validation errors reported before
+// output is attempted (for example [ErrMissingColumnNames] or
+// [ErrColumnNamesMismatch]) are not latched.
+//
 // # SQL INSERT
 //
 // [NewSQLInsertWriter] accepts [WithSQLInsertKind], [WithSQLDialect], and [WithSQLBatchSize].
-// It rejects an empty table name (after strings.TrimSpace) at construction with [ErrEmptyTableName]. Qualified names with empty segments are rejected on the first write with [ErrEmptyTableName].
-// After any write error from [SQLInsertWriter], discard the writer. [*SQLInsertWriter.Flush]
+// It rejects an empty table name (after strings.TrimSpace) at construction with [ErrEmptyTableName]
+// and an out-of-range [SQLInsertKind] with [ErrInvalidSQLInsertKind]. Qualified names with empty
+// segments are rejected on the first write with [ErrEmptyTableName].
+// Each statement is emitted with a single Write; batched rows are buffered until the multi-row
+// statement completes. After any write error from [SQLInsertWriter], discard the writer; later
+// calls return the latched error (see "Write errors"). [*SQLInsertWriter.Flush]
 // closes a partial batch when batching.
 package writer

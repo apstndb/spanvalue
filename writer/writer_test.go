@@ -958,13 +958,12 @@ func TestSQLInsertWriterBatchSize(t *testing.T) {
 				t.Fatalf("WriteValues() error = %v", err)
 			}
 		}
-		// Intentionally no Flush(): the third row leaves a partial batch without a trailing semicolon.
+		// Intentionally no Flush(): the third row stays buffered in the partial
+		// batch and is not emitted (statements are written whole; see #204).
 		want := "" +
 			"INSERT INTO `users` (`id`, `name`) VALUES\n" +
 			"  (1, \"a\"),\n" +
-			"  (2, \"b\");\n" +
-			"INSERT INTO `users` (`id`, `name`) VALUES\n" +
-			"  (3, \"c\")"
+			"  (2, \"b\");\n"
 		if diff := cmp.Diff(want, out.String()); diff != "" {
 			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
 		}
@@ -1022,12 +1021,15 @@ func TestSQLInsertWriterBatchSize(t *testing.T) {
 		if err := w.WriteValues(columnNames, row(3, "c")); err != nil {
 			t.Fatalf("WriteValues() after table change error = %v", err)
 		}
+		if err := w.Flush(); err != nil {
+			t.Fatalf("Flush() error = %v", err)
+		}
 		want := "" +
 			"INSERT INTO `db`.`users` (`id`, `name`) VALUES\n" +
 			"  (1, \"a\"),\n" +
 			"  (2, \"b\");\n" +
 			"INSERT INTO `archive`.`users` (`id`, `name`) VALUES\n" +
-			"  (3, \"c\")"
+			"  (3, \"c\");\n"
 		if diff := cmp.Diff(want, out.String()); diff != "" {
 			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
 		}
@@ -1047,9 +1049,18 @@ func TestSQLInsertWriterBatchSize(t *testing.T) {
 		if !errors.Is(err, ErrTableNameChangedMidBatch) {
 			t.Fatalf("WriteValues() after table change error = %v, want ErrTableNameChangedMidBatch", err)
 		}
+		// The rejected row was never buffered, so nothing was emitted yet.
+		if got := out.String(); got != "" {
+			t.Fatalf("output before Flush = %q, want empty", got)
+		}
+		// Validation errors are not latched: Flush still emits the pending batch
+		// for the table captured at batch start.
+		if err := w.Flush(); err != nil {
+			t.Fatalf("Flush() error = %v", err)
+		}
 		want := "" +
 			"INSERT INTO `db`.`users` (`id`, `name`) VALUES\n" +
-			"  (1, \"a\")"
+			"  (1, \"a\");\n"
 		if diff := cmp.Diff(want, out.String()); diff != "" {
 			t.Fatalf("SQL output mismatch (-want +got):\n%s", diff)
 		}
