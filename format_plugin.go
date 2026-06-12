@@ -1,8 +1,10 @@
 package spanvalue
 
 import (
-	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"errors"
+
 	"cloud.google.com/go/spanner"
+	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 )
 
 // PluginForType restricts plugin to values whose [sppb.Type] satisfies match;
@@ -46,5 +48,61 @@ func PluginSkippingNull(plugin FormatComplexFunc) FormatComplexFunc {
 			return "", ErrFallthrough
 		}
 		return plugin(formatter, value, toplevel)
+	}
+}
+
+// PluginFromNullable lifts a [FormatNullableFunc] into the plugin chain:
+// non-NULL scalar values are decoded to their [NullableValue] wrapper — the
+// same Decode-based dispatch as the [FormatConfig.FormatNullable] slow path,
+// including the PG-annotated wrappers ([cloud.google.com/go/spanner.PGNumeric],
+// [cloud.google.com/go/spanner.PGJsonB]) — and formatted with f. ARRAY and
+// STRUCT values, SQL NULLs, and type codes outside the scalar set fall
+// through ([ErrFallthrough]).
+//
+// f itself may return [ErrFallthrough] to defer values it does not claim,
+// so per-type overrides compose with [NullableFormatterFor] and the rest of
+// the chain (preset scalar plugins, built-ins) keeps formatting everything
+// the override leaves alone — no access to a preset's own FormatNullable
+// function is needed:
+//
+//	cfg := spanvalue.SimpleFormatConfig().WithComplexPlugin(
+//	    spanvalue.PluginFromNullable(spanvalue.NullableFormatterFor(
+//	        func(v spanner.NullNumeric) (string, error) {
+//	            return "NUMERIC:" + v.Numeric.FloatString(2), nil
+//	        })))
+//
+// Like every complex plugin it also runs for ARRAY elements, so an override
+// applies inside ARRAY<T> as well. Decode failures other than the
+// unsupported-type-code class are returned as real errors.
+func PluginFromNullable(f FormatNullableFunc) FormatComplexFunc {
+	return func(_ Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
+		if isComplexType(value.Type.GetCode()) || IsNull(value) {
+			return "", ErrFallthrough
+		}
+		nv, err := simpleGCVToNullable(value)
+		if errors.Is(err, ErrUnknownType) {
+			// An unsupported type code is a coverage question for the rest
+			// of the chain, not this plugin's error to raise.
+			return "", ErrFallthrough
+		}
+		if err != nil {
+			return "", err
+		}
+		return f(nv)
+	}
+}
+
+// NullableFormatterFor restricts a typed formatter to the single
+// [NullableValue] wrapper type T, deferring every other value with
+// [ErrFallthrough]. It is meant for composition through
+// [PluginFromNullable]; assigned directly to [FormatConfig.FormatNullable]
+// the deferral surfaces as an error, because only the plugin chain
+// interprets [ErrFallthrough].
+func NullableFormatterFor[T NullableValue](f func(T) (string, error)) FormatNullableFunc {
+	return func(v NullableValue) (string, error) {
+		if tv, ok := v.(T); ok {
+			return f(tv)
+		}
+		return "", ErrFallthrough
 	}
 }

@@ -2,12 +2,15 @@ package spanvalue_test
 
 import (
 	"errors"
+	"math/big"
 	"testing"
 
-	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"cloud.google.com/go/spanner"
+	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"github.com/apstndb/spantype/typector"
 	"github.com/apstndb/spanvalue"
 	"github.com/apstndb/spanvalue/gcvctor"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // constPlugin returns out for every value it sees.
@@ -112,5 +115,77 @@ func TestPluginCombinatorErrorPropagation(t *testing.T) {
 	got, err := fc.FormatToplevelColumn(gcvctor.StringValue("s"))
 	if err != nil || got != "s" {
 		t.Errorf("fallthrough body = (%q, %v), want built-in (s, nil)", got, err)
+	}
+}
+
+func TestPluginFromNullable(t *testing.T) {
+	t.Parallel()
+
+	numericOverride := spanvalue.PluginFromNullable(spanvalue.NullableFormatterFor(
+		func(v spanner.NullNumeric) (string, error) {
+			return "N:" + v.Numeric.FloatString(2), nil
+		}))
+	fc := pluginConfig(numericOverride)
+
+	numeric := gcvctor.NumericValue(big.NewRat(3, 2))
+	got, err := fc.FormatToplevelColumn(numeric)
+	if err != nil || got != "N:1.50" {
+		t.Errorf("NUMERIC = (%q, %v), want (N:1.50, nil)", got, err)
+	}
+
+	// Values the typed formatter does not claim keep the preset behavior.
+	got, err = fc.FormatToplevelColumn(gcvctor.StringValue("s"))
+	if err != nil || got != "s" {
+		t.Errorf("STRING = (%q, %v), want preset (s, nil)", got, err)
+	}
+
+	// NULL NUMERIC keeps the preset null string (NULL falls through).
+	got, err = fc.FormatToplevelColumn(gcvctor.NullFromCode(sppb.TypeCode_NUMERIC))
+	if err != nil || got != fc.GetNullString() {
+		t.Errorf("NULL NUMERIC = (%q, %v), want (%q, nil)", got, err, fc.GetNullString())
+	}
+
+	// The override also applies inside ARRAY<NUMERIC> (plugins run per
+	// element).
+	arr, err := gcvctor.ArrayValueOf(typector.Numeric(), numeric)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err = fc.FormatToplevelColumn(arr)
+	if err != nil || got != "[N:1.50]" {
+		t.Errorf("ARRAY<NUMERIC> = (%q, %v), want ([N:1.50], nil)", got, err)
+	}
+
+	// Unknown type codes fall through to the built-in coverage error
+	// instead of becoming this plugin's error.
+	_, err = fc.FormatToplevelColumn(spanner.GenericColumnValue{
+		Type:  &sppb.Type{Code: sppb.TypeCode(9999)},
+		Value: structpb.NewStringValue("x"),
+	})
+	if !errors.Is(err, spanvalue.ErrUnknownType) {
+		t.Errorf("unknown code error = %v, want ErrUnknownType from built-ins", err)
+	}
+}
+
+// TestPluginFromNullableAnnotationDispatch pins that the Decode-based
+// dispatch distinguishes PG-annotated wrappers, so a PGNumeric-typed
+// formatter does not claim plain NUMERIC.
+func TestPluginFromNullableAnnotationDispatch(t *testing.T) {
+	t.Parallel()
+
+	fc := pluginConfig(spanvalue.PluginFromNullable(spanvalue.NullableFormatterFor(
+		func(v spanner.PGNumeric) (string, error) {
+			return "PG:" + v.Numeric, nil
+		})))
+
+	got, err := fc.FormatToplevelColumn(gcvctor.PGNumericValue(big.NewRat(3, 2)))
+	if err != nil || got != "PG:1.500000000" {
+		t.Errorf("PG_NUMERIC = (%q, %v), want (PG:1.500000000, nil)", got, err)
+	}
+
+	// Plain NUMERIC is decoded to NullNumeric, not PGNumeric: falls through.
+	got, err = fc.FormatToplevelColumn(gcvctor.NumericValue(big.NewRat(3, 2)))
+	if err != nil || got != "1.500000000" {
+		t.Errorf("plain NUMERIC = (%q, %v), want preset wire string", got, err)
 	}
 }
