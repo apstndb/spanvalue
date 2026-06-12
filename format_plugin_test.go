@@ -46,6 +46,21 @@ func TestPluginForTypeCode(t *testing.T) {
 	if err != nil || got != "matched" {
 		t.Errorf("NULL INT64 = (%q, %v), want (matched, nil)", got, err)
 	}
+
+	// A nil Type falls through without invoking the predicate; the built-in
+	// handling classifies the malformed value.
+	matchPanics := spanvalue.PluginForType(func(t *sppb.Type) bool {
+		if t == nil {
+			panic("predicate must not see nil Type")
+		}
+		return true
+	}, constPlugin("never"))
+	_, err = pluginConfig(matchPanics).FormatToplevelColumn(spanner.GenericColumnValue{
+		Value: structpb.NewStringValue("x"),
+	})
+	if err == nil {
+		t.Error("nil Type: want built-in malformed-wire error, got nil")
+	}
 }
 
 func TestPluginForType(t *testing.T) {

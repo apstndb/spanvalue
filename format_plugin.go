@@ -17,12 +17,14 @@ import (
 //	        t.GetTypeAnnotation() == sppb.TypeAnnotationCode_PG_JSONB
 //	}, body)
 //
-// match must be non-nil. For a bare type-code guard, use [PluginForTypeCode];
-// compose with [PluginSkippingNull] when the body only handles non-NULL
-// values.
+// match must be non-nil. A nil [sppb.Type] falls through without calling
+// match (the built-in handling classifies such values as malformed wire),
+// so predicates need not be nil-safe. For a bare type-code guard, use
+// [PluginForTypeCode]; compose with [PluginSkippingNull] when the body only
+// handles non-NULL values.
 func PluginForType(match func(*sppb.Type) bool, plugin FormatComplexFunc) FormatComplexFunc {
 	return func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
-		if !match(value.Type) {
+		if value.Type == nil || !match(value.Type) {
 			return "", ErrFallthrough
 		}
 		return plugin(formatter, value, toplevel)
