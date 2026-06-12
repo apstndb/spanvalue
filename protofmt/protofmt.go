@@ -95,8 +95,9 @@ type EnumNameValueOptions struct {
 // type.
 //
 // The plugin returns [spanvalue.ErrFallthrough] for non-PROTO values, nil or
-// missing resolvers, empty type names, and missing message types. Typed NULL
-// PROTO values return [spanvalue.Formatter.GetNullString] without consulting the resolver.
+// missing resolvers, empty type names, missing message types, and typed NULL
+// PROTO values (without consulting the resolver; the chain's built-in
+// handling renders NULL via [spanvalue.Formatter.GetNullString]).
 // Malformed non-NULL wire payloads, base64 decode failures, unmarshal failures,
 // and marshal failures are returned as real errors.
 //
@@ -109,15 +110,10 @@ type EnumNameValueOptions struct {
 func FormatProtoTextValue(opts ProtoTextValueOptions) spanvalue.FormatComplexFunc {
 	resolver := opts.Resolver
 	if isNilResolver(resolver) {
-		return func(formatter spanvalue.Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
-			if value.Type.GetCode() != sppb.TypeCode_PROTO {
-				return "", spanvalue.ErrFallthrough
-			}
-			if spanvalue.IsNull(value) {
-				return formatter.GetNullString(), nil
-			}
-			return "", spanvalue.ErrFallthrough
-		}
+		// Nothing can be decoded without a resolver; defer everything.
+		// NULL PROTO falls through too — the built-in scalar handling
+		// renders it via GetNullString on every preset.
+		return fallthroughPlugin
 	}
 
 	unmarshal := opts.Unmarshal
@@ -126,14 +122,7 @@ func FormatProtoTextValue(opts ProtoTextValueOptions) spanvalue.FormatComplexFun
 	marshal.Resolver = resolver
 	onUnresolved := opts.OnUnresolved
 
-	return func(formatter spanvalue.Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
-		if value.Type.GetCode() != sppb.TypeCode_PROTO {
-			return "", spanvalue.ErrFallthrough
-		}
-		if spanvalue.IsNull(value) {
-			return formatter.GetNullString(), nil
-		}
-
+	return spanvalue.PluginForTypeCode(sppb.TypeCode_PROTO, spanvalue.PluginSkippingNull(func(formatter spanvalue.Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
 		typeName := protoreflect.FullName(value.Type.GetProtoTypeFqn())
 		if typeName == "" {
 			return "", spanvalue.ErrFallthrough
@@ -168,7 +157,7 @@ func FormatProtoTextValue(opts ProtoTextValueOptions) spanvalue.FormatComplexFun
 			return "", err
 		}
 		return strings.TrimSuffix(string(out), "\n"), nil
-	}
+	}))
 }
 
 // FormatEnumNameValue returns a spanvalue plugin that formats Spanner ENUM
@@ -176,8 +165,9 @@ func FormatProtoTextValue(opts ProtoTextValueOptions) spanvalue.FormatComplexFun
 // value number.
 //
 // The plugin returns [spanvalue.ErrFallthrough] for non-ENUM values, nil or
-// missing resolvers, empty type names, and missing enum types. Typed NULL ENUM
-// values return [spanvalue.Formatter.GetNullString] without consulting the resolver. Known
+// missing resolvers, empty type names, missing enum types, and typed NULL
+// ENUM values (without consulting the resolver; the chain's built-in
+// handling renders NULL via [spanvalue.Formatter.GetNullString]). Known
 // enum types with unknown or out-of-range numeric values return the original
 // numeric string.
 //
@@ -187,26 +177,12 @@ func FormatProtoTextValue(opts ProtoTextValueOptions) spanvalue.FormatComplexFun
 func FormatEnumNameValue(opts EnumNameValueOptions) spanvalue.FormatComplexFunc {
 	resolver := opts.Resolver
 	if isNilResolver(resolver) {
-		return func(formatter spanvalue.Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
-			if value.Type.GetCode() != sppb.TypeCode_ENUM {
-				return "", spanvalue.ErrFallthrough
-			}
-			if spanvalue.IsNull(value) {
-				return formatter.GetNullString(), nil
-			}
-			return "", spanvalue.ErrFallthrough
-		}
+		// See FormatProtoTextValue: defer everything, NULL included.
+		return fallthroughPlugin
 	}
 
 	onUnresolved := opts.OnUnresolved
-	return func(formatter spanvalue.Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
-		if value.Type.GetCode() != sppb.TypeCode_ENUM {
-			return "", spanvalue.ErrFallthrough
-		}
-		if spanvalue.IsNull(value) {
-			return formatter.GetNullString(), nil
-		}
-
+	return spanvalue.PluginForTypeCode(sppb.TypeCode_ENUM, spanvalue.PluginSkippingNull(func(formatter spanvalue.Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
 		typeName := protoreflect.FullName(value.Type.GetProtoTypeFqn())
 		if typeName == "" {
 			return "", spanvalue.ErrFallthrough
@@ -239,7 +215,7 @@ func FormatEnumNameValue(opts EnumNameValueOptions) spanvalue.FormatComplexFunc 
 			return wire, nil
 		}
 		return string(valueDesc.Name()), nil
-	}
+	}))
 }
 
 // ProtoEnumResolverFromFileDescriptorSet builds a dynamic protobuf resolver
@@ -355,6 +331,11 @@ func isExactNotFound(err error) bool {
 	// Resolver contracts require the exact sentinel so wrapped NotFound errors
 	// remain real errors instead of accidental fallback.
 	return err == protoregistry.NotFound //nolint:errorlint
+}
+
+// fallthroughPlugin defers every value to the rest of the chain.
+func fallthroughPlugin(spanvalue.Formatter, spanner.GenericColumnValue, bool) (string, error) {
+	return "", spanvalue.ErrFallthrough
 }
 
 func isNilResolver(resolver any) bool {

@@ -21,7 +21,7 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 
 ## Formatting
 
-- `FormatColumn`: `FormatComplexPlugins` first (`ARRAY`/`STRUCT` included), then built-ins; plugins return **`ErrFallthrough`** to defer.
+- `FormatColumn`: `FormatComplexPlugins` first (`ARRAY`/`STRUCT` included), then built-ins; plugins return **`ErrFallthrough`** to defer. NULL is deliberately NOT pre-filtered (common.go comment: plugins may own type-specific NULL renderings); guard combinators `PluginForType` / `PluginForTypeCode` / `PluginSkippingNull` (#250) lift the boilerplate — protofmt dogfoods them.
 - Presets (each returns fresh `*FormatConfig`): `LiteralFormatConfig`, `SimpleFormatConfig`, `SpannerCLICompatibleFormatConfig`, `JSONFormatConfig`. Preset-backed convenience wrappers: `FormatRowLiteral`, `FormatColumnLiteral`, `FormatRowSpannerCLICompatible`, `FormatColumnSpannerCLICompatible`. `FormatRowJSONObject` takes an explicit JSON-emitting `*FormatConfig` (typically from `JSONFormatConfig()`), not a preset wrapper.
 - **v0.4.2+ scalar plugins** on presets: `FormatSimpleValue`, `FormatLiteralValue`, `FormatSpannerCLIValue`. Strip via `FormatConfigWithoutScalarPlugins` or edit `FormatComplexPlugins` on a **clone** (singleton configs used by convenience funcs are shared—do not mutate).
 - **NUMERIC output** (wire `"99.5"` example):
