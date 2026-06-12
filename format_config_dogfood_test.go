@@ -13,19 +13,6 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// legacyStructField adapts a legacy FormatStructFieldFunc (taking
-// *FormatConfig) to the Formatter-based callback that PluginForStruct and
-// WithStructFormat accept. The formatter passed to plugins by
-// FormatColumn is always the *FormatConfig itself, so the assertion holds for
-// every config under test; plugin authors outside this package write
-// Formatter-based callbacks directly (the breaking phase of #253 aligns
-// FormatStructFieldFunc itself).
-func legacyStructField(f FormatStructFieldFunc) func(Formatter, *sppb.StructType_Field, *structpb.Value) (string, error) {
-	return func(formatter Formatter, sf *sppb.StructType_Field, value *structpb.Value) (string, error) {
-		return f(formatter.(*FormatConfig), sf, value)
-	}
-}
-
 type dogfoodCase struct {
 	name string
 	gcv  spanner.GenericColumnValue
@@ -109,29 +96,17 @@ func dogfoodBattery(t *testing.T) []dogfoodCase {
 	return cases
 }
 
-// TestNewFormatConfigDogfoodsPresets is the #253 acceptance evidence: each
-// preset is rebuilt through NewFormatConfig from the preset's own plugin
-// functions plus its FormatArray/FormatStruct/FormatNullable behaviors
-// expressed via the builder options, and the output must be byte-identical
-// across the battery at both toplevel values.
+// TestNewFormatConfigDogfoodsPresets pins #253's end state: each preset is
+// rebuilt through NewFormatConfig from the preset's own plugin functions plus
+// its array/struct/scalar behaviors expressed via the builder options, and
+// the output must be byte-identical across the battery at both toplevel
+// values. The rebuilt configs carry a PluginFromNullable tail that the preset
+// scalar plugin shadows for every battery value; the presets themselves omit
+// that dead tail.
 //
-// The rebuilds use unexported preset internals (formatNullableValueSimple,
-// formatNullableValueLiteral, formatSimpleStructField, formatTypedStructParen)
-// that only this internal test package can name; external callers write
-// equivalent closures. Note the symmetry: in each preset the scalar fast-path
-// plugin shadows the FormatNullable field, and in the rebuilt config the same
-// plugin shadows the WithScalarFormatter tail — the canonical chain shape #252
-// describes.
-//
-// Known, intentional gaps (not byte-identical, pinned separately below):
-//   - Unknown scalar type codes error differently: presets reach the
-//     FormatNullable slow path and report ErrUnknownType; builder-built
-//     configs have no FormatNullable field, so the built-in path reports
-//     ErrFormatNullableRequired (see the NewFormatConfig doc).
-//   - Only the literal preset's default quote options are dogfooded:
-//     non-default LiteralFormatOptions live on the deprecated Literal field,
-//     which the builder intentionally does not set; #253's breaking phase
-//     moves them into constructor-captured plugin state.
+// Only the literal preset's default quote options are dogfooded here; the
+// quote-mode suites in literal_quote_test.go cover the constructor-captured
+// non-default options.
 func TestNewFormatConfigDogfoodsPresets(t *testing.T) {
 	t.Parallel()
 
@@ -148,7 +123,7 @@ func TestNewFormatConfigDogfoodsPresets(t *testing.T) {
 					WithNullString(nullStringClientLib),
 					WithPlugin(FormatSimpleValue),
 					WithArrayFormat(FormatUntypedArray),
-					WithStructFormat(legacyStructField(FormatTypelessStructField), FormatTupleStruct),
+					WithStructFormat(FormatTypelessStructField, FormatTupleStruct),
 					WithScalarFormatter(formatNullableValueSimple),
 				)
 			},
@@ -161,7 +136,7 @@ func TestNewFormatConfigDogfoodsPresets(t *testing.T) {
 					WithNullString(nullStringUpperCase),
 					WithPlugin(FormatSpannerCLIValue),
 					WithArrayFormat(FormatUntypedArray),
-					WithStructFormat(legacyStructField(FormatSimpleStructField), FormatBracketStruct),
+					WithStructFormat(FormatSimpleStructField, FormatBracketStruct),
 					WithScalarFormatter(FormatNullableSpannerCLICompatible),
 				)
 			},
@@ -172,14 +147,14 @@ func TestNewFormatConfigDogfoodsPresets(t *testing.T) {
 			rebuilt: func() (*FormatConfig, error) {
 				// Most recent WithPlugin runs first, so register in reverse
 				// of the preset chain [FormatProtoAsCast, FormatEnumAsCast,
-				// FormatLiteralValue].
+				// LiteralValuePlugin].
 				return NewFormatConfig(
 					WithNullString(nullStringUpperCase),
-					WithPlugin(FormatLiteralValue),
+					WithPlugin(LiteralValuePlugin(LiteralFormatOptions{})),
 					WithPlugin(FormatEnumAsCast),
 					WithPlugin(FormatProtoAsCast),
 					WithArrayFormat(FormatOptionallyTypedArray),
-					WithStructFormat(legacyStructField(formatSimpleStructField), formatTypedStructParen),
+					WithStructFormat(FormatSimpleStructField, FormatTypedStruct),
 					WithScalarFormatter(formatNullableValueLiteral),
 				)
 			},
@@ -192,7 +167,7 @@ func TestNewFormatConfigDogfoodsPresets(t *testing.T) {
 					WithNullString("null"),
 					WithPlugin(FormatJSONSimpleValue),
 					WithArrayFormat(FormatCompactArray),
-					WithStructFormat(legacyStructField(FormatSimpleStructField), NewJSONObjectStructFormatter(nil)),
+					WithStructFormat(FormatSimpleStructField, NewJSONObjectStructFormatter(nil)),
 					WithScalarFormatter(FormatNullableSpannerCLICompatible),
 				)
 			},
@@ -229,11 +204,10 @@ func TestNewFormatConfigDogfoodsPresets(t *testing.T) {
 	}
 }
 
-// TestNewFormatConfigUnknownCodeErrorClass pins the documented divergence for
-// type codes outside the scalar domain: the preset's FormatNullable slow path
-// reports ErrUnknownType, while a builder-built config (no FormatNullable
-// field) reports ErrFormatNullableRequired from the built-in scalar path after
-// the PluginFromNullable tail defers.
+// TestNewFormatConfigUnknownCodeErrorClass pins that type codes outside the
+// scalar domain fail identically on preset and builder-built configs: every
+// plugin (including the PluginFromNullable tail) defers, so the chain reports
+// ErrUnhandledValue.
 func TestNewFormatConfigUnknownCodeErrorClass(t *testing.T) {
 	t.Parallel()
 
@@ -242,21 +216,21 @@ func TestNewFormatConfigUnknownCodeErrorClass(t *testing.T) {
 		Value: structpb.NewStringValue("x"),
 	}
 
-	if _, err := SimpleFormatConfig().FormatToplevelColumn(unknown); !errors.Is(err, ErrUnknownType) {
-		t.Errorf("preset error = %v, want ErrUnknownType", err)
+	if _, err := SimpleFormatConfig().FormatToplevelColumn(unknown); !errors.Is(err, ErrUnhandledValue) {
+		t.Errorf("preset error = %v, want ErrUnhandledValue", err)
 	}
 
 	rebuilt, err := NewFormatConfig(
 		WithNullString(nullStringClientLib),
 		WithPlugin(FormatSimpleValue),
 		WithArrayFormat(FormatUntypedArray),
-		WithStructFormat(legacyStructField(FormatTypelessStructField), FormatTupleStruct),
+		WithStructFormat(FormatTypelessStructField, FormatTupleStruct),
 		WithScalarFormatter(formatNullableValueSimple),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rebuilt.FormatToplevelColumn(unknown); !errors.Is(err, ErrFormatNullableRequired) {
-		t.Errorf("rebuilt error = %v, want ErrFormatNullableRequired", err)
+	if _, err := rebuilt.FormatToplevelColumn(unknown); !errors.Is(err, ErrUnhandledValue) {
+		t.Errorf("rebuilt error = %v, want ErrUnhandledValue", err)
 	}
 }

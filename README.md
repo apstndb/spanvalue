@@ -46,12 +46,14 @@ quotedColumn := spanvalue.QuoteIdentifier(
 [SpannerCLICompatibleFormatConfig](https://pkg.go.dev/github.com/apstndb/spanvalue#SpannerCLICompatibleFormatConfig)
 matches official [spanner-cli](https://github.com/cloudspannerecosystem/spanner-cli)
 output, including bracket-style STRUCT in arrays (`[[1, east]]`). For tuple
-parentheses (`[(1, east)]`) while keeping CLI scalar rules, clone the preset and
-set [FormatTupleStruct](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatTupleStruct):
+parentheses (`[(1, east)]`) while keeping CLI scalar rules, prepend a
+[PluginForStruct](https://pkg.go.dev/github.com/apstndb/spanvalue#PluginForStruct)
+override with [FormatTupleStruct](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatTupleStruct)
+(prepended plugins run before the preset handlers):
 
 ```go
-fc := spanvalue.SpannerCLICompatibleFormatConfig().Clone()
-fc.FormatStruct.FormatStructParen = spanvalue.FormatTupleStruct
+fc := spanvalue.SpannerCLICompatibleFormatConfig().WithComplexPlugin(
+    spanvalue.PluginForStruct(spanvalue.FormatSimpleStructField, spanvalue.FormatTupleStruct))
 ```
 
 See [ExampleSpannerCLICompatibleFormatConfig_tupleStruct](https://pkg.go.dev/github.com/apstndb/spanvalue#example-SpannerCLICompatibleFormatConfig-TupleStruct).
@@ -59,14 +61,19 @@ Keep product-specific combinations in your application (not as new spanvalue pre
 
 ## Hand-built FormatConfig
 
-Preset constructors ([`LiteralFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#LiteralFormatConfig), [`SimpleFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#SimpleFormatConfig), and others) return configs that pass [`FormatConfig.Validate`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig.Validate). After hand-assembling or mutating a config—[`Clone()`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig.Clone) then edit [`FormatComplexPlugins`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig.FormatComplexPlugins), or strip scalar plugins with [`FormatConfigWithoutScalarPlugins`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfigWithoutScalarPlugins)—call `Validate` before the first format or export so nil callbacks and an empty `NullString` fail at construction time rather than on the first row.
+[`FormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig) holds exactly two fields: `NullString` and the ordered `FormatComplexPlugins` chain. Preset constructors ([`LiteralFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#LiteralFormatConfig), [`SimpleFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#SimpleFormatConfig), and others) return configs that pass [`FormatConfig.Validate`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig.Validate). Prefer assembling custom configs with [`NewFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#NewFormatConfig), which validates the canonical array/struct/scalar handlers at build time. After hand-assembling or mutating a config—[`Clone()`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig.Clone) then edit [`FormatComplexPlugins`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig.FormatComplexPlugins)—call `Validate` before the first format or export so an empty chain or an empty `NullString` fails at construction time rather than on the first row.
 
-Custom scalar plugins in `FormatComplexPlugins` are not detected by `Validate`; keep `FormatNullable` set when using them. Writers accept any `*FormatConfig` via [`writer.WithFormatter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithFormatter) but do **not** call `Validate` today—validate hand-built formatters before passing them to writers.
+`Validate` cannot prove chain coverage: a non-NULL value that every plugin defers fails at format time with [`ErrUnhandledValue`](https://pkg.go.dev/github.com/apstndb/spanvalue#ErrUnhandledValue). Writers accept any `*FormatConfig` via [`writer.WithFormatter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithFormatter) but do **not** call `Validate` today—validate hand-built formatters before passing them to writers.
 
 ```go
-fc := spanvalue.SimpleFormatConfig().Clone()
-fc.FormatComplexPlugins = append(fc.FormatComplexPlugins, myPlugin)
-if err := fc.Validate(); err != nil {
+fc, err := spanvalue.NewFormatConfig(
+    spanvalue.WithNullString("NULL"),
+    spanvalue.WithPlugin(myPlugin), // optional overrides, most recent first
+    spanvalue.WithArrayFormat(spanvalue.FormatUntypedArray),
+    spanvalue.WithStructFormat(spanvalue.FormatSimpleStructField, spanvalue.FormatTupleStruct),
+    spanvalue.WithScalarFormatter(spanvalue.FormatNullableSpannerCLICompatible),
+)
+if err != nil {
 	return err
 }
 ```

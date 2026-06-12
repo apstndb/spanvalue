@@ -105,19 +105,19 @@ var benchPerTypePresets = []struct {
 }{
 	{name: "Simple/Direct", fc: SimpleFormatConfig},
 	{name: "Simple/Nullable", fc: func() *FormatConfig {
-		return formatConfigNullableOnly(SimpleFormatConfig())
+		return simpleNullablePathConfig()
 	}},
 	{name: "Literal/Direct", fc: LiteralFormatConfig},
 	{name: "Literal/Nullable", fc: func() *FormatConfig {
-		return formatConfigNullableOnly(LiteralFormatConfig())
+		return literalNullablePathConfig(LiteralQuoteConfig{})
 	}},
 	{name: "SpannerCLI/Direct", fc: SpannerCLICompatibleFormatConfig},
 	{name: "SpannerCLI/Nullable", fc: func() *FormatConfig {
-		return formatConfigNullableOnly(SpannerCLICompatibleFormatConfig())
+		return spannerCLINullablePathConfig()
 	}},
 	{name: "JSON/Direct", fc: JSONFormatConfig},
 	{name: "JSON/Nullable", fc: func() *FormatConfig {
-		return formatConfigNullableOnly(JSONFormatConfig())
+		return jsonNullablePathConfig()
 	}},
 }
 

@@ -21,11 +21,11 @@ var spannerCLICompatibleFormatConfig = SpannerCLICompatibleFormatConfig()
 //
 // Tuple-style STRUCT parentheses such as [(1, east)] are not spanner-cli output.
 // To keep Spanner CLI scalar formatting but render STRUCT with [FormatTupleStruct],
-// clone and customize (constructors return a new config; [FormatConfig.Clone] copies
-// [FormatConfig.FormatComplexPlugins] before you mutate):
+// prepend a [PluginForStruct] override (it runs before the preset's STRUCT handler
+// and claims non-NULL STRUCT values):
 //
-//	fc := SpannerCLICompatibleFormatConfig().Clone()
-//	fc.FormatStruct.FormatStructParen = FormatTupleStruct
+//	fc := SpannerCLICompatibleFormatConfig().WithComplexPlugin(
+//	    PluginForStruct(FormatSimpleStructField, FormatTupleStruct))
 //
 // See the repository README for a tuple STRUCT example. Application-specific presets
 // (for example spanner-mycli table modes) should compose [FormatConfig] in the caller
@@ -34,15 +34,11 @@ var spannerCLICompatibleFormatConfig = SpannerCLICompatibleFormatConfig()
 // [spanner-cli]: https://github.com/cloudspannerecosystem/spanner-cli
 func SpannerCLICompatibleFormatConfig() *FormatConfig {
 	return &FormatConfig{
-		NullString:  nullStringUpperCase,
-		FormatArray: FormatUntypedArray,
-		FormatStruct: FormatStruct{
-			FormatStructField: FormatSimpleStructField,
-			FormatStructParen: FormatBracketStruct,
-		},
-		FormatNullable: FormatNullableSpannerCLICompatible,
+		NullString: nullStringUpperCase,
 		FormatComplexPlugins: []FormatComplexFunc{
 			FormatSpannerCLIValue,
+			PluginForArray(FormatUntypedArray),
+			PluginForStruct(FormatSimpleStructField, FormatBracketStruct),
 		},
 	}
 }
@@ -53,7 +49,7 @@ func FormatRowSpannerCLICompatible(row *spanner.Row) ([]string, error) {
 }
 
 func FormatNullableSpannerCLICompatible(value NullableValue) (string, error) {
-	// NULL is already handled in formatSimpleColumn before FormatNullable is called; this
+	// NULL is already handled before [PluginFromNullable] invokes the formatter; this
 	// re-check keeps FormatNullableSpannerCLICompatible safe when used as a standalone callback.
 	if value.IsNull() {
 		return nullStringUpperCase, nil

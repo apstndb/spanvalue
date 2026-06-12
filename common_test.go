@@ -24,9 +24,10 @@ func TestFormatColumnComplexPlugins(t *testing.T) {
 		[]spanner.GenericColumnValue{gcvctor.StringValue("Alice")},
 	))
 
-	fc := SimpleFormatConfig()
 	calls := make([]sppb.TypeCode, 0, 3)
-	fc.FormatComplexPlugins = []FormatComplexFunc{
+	// Prepend the tracking plugin: it claims ARRAY/STRUCT before the preset
+	// handlers and defers scalars to the preset scalar plugin.
+	fc := SimpleFormatConfig().WithComplexPlugin(
 		func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
 			calls = append(calls, value.Type.GetCode())
 			switch value.Type.GetCode() {
@@ -38,7 +39,7 @@ func TestFormatColumnComplexPlugins(t *testing.T) {
 				return "", ErrFallthrough
 			}
 		},
-	}
+	)
 
 	tests := []struct {
 		name string
@@ -395,9 +396,10 @@ func TestFormatEnumAsCastRejectsInvalidWirePayload(t *testing.T) {
 
 // TestErrMalformedWireClassification pins the split introduced for
 // https://github.com/apstndb/spanvalue/issues/216: a known type with an
-// invalid wire payload is ErrMalformedWire (and not ErrUnknownType), while a
-// genuinely unknown type code stays ErrUnknownType (and is not
-// ErrMalformedWire).
+// invalid wire payload is ErrMalformedWire (and not a coverage error), while
+// a genuinely unknown type code is a coverage error — since v0.8 the chain
+// reports ErrUnhandledValue (previously the built-in path's ErrUnknownType) —
+// and is not ErrMalformedWire.
 func TestErrMalformedWireClassification(t *testing.T) {
 	t.Parallel()
 
@@ -427,13 +429,13 @@ func TestErrMalformedWireClassification(t *testing.T) {
 			if !errors.Is(err, ErrMalformedWire) {
 				t.Errorf("malformed BOOL wire: error = %v, want ErrMalformedWire", err)
 			}
-			if errors.Is(err, ErrUnknownType) {
-				t.Errorf("malformed BOOL wire: error = %v, must not match ErrUnknownType", err)
+			if errors.Is(err, ErrUnhandledValue) {
+				t.Errorf("malformed BOOL wire: error = %v, must not match ErrUnhandledValue", err)
 			}
 
 			_, err = tt.fc.FormatToplevelColumn(unknownCode)
-			if !errors.Is(err, ErrUnknownType) {
-				t.Errorf("unknown type code: error = %v, want ErrUnknownType", err)
+			if !errors.Is(err, ErrUnhandledValue) {
+				t.Errorf("unknown type code: error = %v, want ErrUnhandledValue", err)
 			}
 			if errors.Is(err, ErrMalformedWire) {
 				t.Errorf("unknown type code: error = %v, must not match ErrMalformedWire", err)

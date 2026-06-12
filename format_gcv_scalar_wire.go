@@ -9,8 +9,10 @@ import (
 )
 
 // isScalarFastPathTypeCode reports whether the preset scalar plugins format this
-// [sppb.TypeCode] directly. Other codes fall through to later plugins or
-// [FormatConfig.formatSimpleColumn].
+// [sppb.TypeCode] directly. Other codes fall through to later plugins in the
+// chain (and to [ErrUnhandledValue] when no plugin claims them). The set
+// matches the simpleGCVToNullable Decode dispatch domain used by
+// [PluginFromNullable].
 func isScalarFastPathTypeCode(code sppb.TypeCode) bool {
 	switch code {
 	case sppb.TypeCode_BOOL, sppb.TypeCode_INT64, sppb.TypeCode_ENUM,

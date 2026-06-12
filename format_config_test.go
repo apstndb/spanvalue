@@ -29,9 +29,6 @@ func TestFormatConfigValidate_handBuiltInvalid(t *testing.T) {
 
 	valid := &FormatConfig{
 		NullString:           "NULL",
-		FormatArray:          FormatCompactArray,
-		FormatStruct:         TypedStructFormat(),
-		FormatNullable:       formatNullableValueSimple,
 		FormatComplexPlugins: []FormatComplexFunc{FormatSimpleValue},
 	}
 	if err := valid.Validate(); err != nil {
@@ -54,41 +51,12 @@ func TestFormatConfigValidate_handBuiltInvalid(t *testing.T) {
 			},
 			wantErr: ErrEmptyNullString,
 		},
-		// Nil deprecated fields are static errors only when FormatComplexPlugins
-		// is empty; with plugins present they are acceptable (the plugins may
-		// cover the shape — see the Validate doc comment and #253).
 		{
-			name: "nil format array without plugins",
+			name: "empty plugin chain",
 			mutate: func(fc *FormatConfig) {
-				fc.FormatArray = nil
 				fc.FormatComplexPlugins = nil
 			},
-			wantErr: ErrNilFormatArray,
-		},
-		{
-			name: "nil format struct field without plugins",
-			mutate: func(fc *FormatConfig) {
-				fc.FormatStruct.FormatStructField = nil
-				fc.FormatComplexPlugins = nil
-			},
-			wantErr: ErrNilFormatStructField,
-		},
-		{
-			name: "nil format struct paren without plugins",
-			mutate: func(fc *FormatConfig) {
-				fc.FormatStruct.FormatStructParen = nil
-				fc.FormatComplexPlugins = nil
-			},
-			wantErr: ErrNilFormatStructParen,
-		},
-		{
-			name: "nil deprecated fields with plugins pass",
-			mutate: func(fc *FormatConfig) {
-				fc.FormatArray = nil
-				fc.FormatStruct = FormatStruct{}
-				fc.FormatNullable = nil
-			},
-			wantErr: nil,
+			wantErr: ErrEmptyFormatComplexPlugins,
 		},
 		{
 			name: "nil plugin in format complex plugins",
@@ -96,14 +64,6 @@ func TestFormatConfigValidate_handBuiltInvalid(t *testing.T) {
 				fc.FormatComplexPlugins = append(slices.Clone(fc.FormatComplexPlugins), nil)
 			},
 			wantErr: ErrNilFormatComplexPlugin,
-		},
-		{
-			name: "nil format nullable without scalar plugins",
-			mutate: func(fc *FormatConfig) {
-				fc.FormatNullable = nil
-				fc.FormatComplexPlugins = nil
-			},
-			wantErr: ErrFormatNullableRequired,
 		},
 	}
 
@@ -126,16 +86,6 @@ func TestFormatConfigValidate_handBuiltInvalid(t *testing.T) {
 	}
 }
 
-func TestFormatConfigValidate_nilFormatNullableWithScalarPlugins(t *testing.T) {
-	t.Parallel()
-
-	fc := SimpleFormatConfig()
-	fc.FormatNullable = nil
-	if err := fc.Validate(); err != nil {
-		t.Fatalf("Validate() = %v, want nil when scalar plugins remain", err)
-	}
-}
-
 func TestFormatConfigClone(t *testing.T) {
 	t.Parallel()
 
@@ -144,10 +94,7 @@ func TestFormatConfigClone(t *testing.T) {
 	})
 	original := &FormatConfig{
 		NullString:           "null",
-		FormatArray:          FormatCompactArray,
-		FormatStruct:         TypedStructFormat(),
 		FormatComplexPlugins: []FormatComplexFunc{plugin},
-		FormatNullable:       FormatNullableSpannerCLICompatible,
 	}
 
 	clone := original.Clone()
@@ -248,9 +195,6 @@ func TestFormatConfigWithComplexPlugin(t *testing.T) {
 		t.Parallel()
 		original := &FormatConfig{
 			NullString:           "NULL",
-			FormatArray:          FormatCompactArray,
-			FormatStruct:         TypedStructFormat(),
-			FormatNullable:       formatNullableValueSimple,
 			FormatComplexPlugins: []FormatComplexFunc{plugin},
 		}
 		got := original.WithComplexPlugin(other)

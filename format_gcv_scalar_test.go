@@ -4,7 +4,6 @@ import (
 	"errors"
 	"math"
 	"math/big"
-	"reflect"
 	"testing"
 	"time"
 
@@ -19,25 +18,59 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-func formatConfigDecodePath(fc *FormatConfig, nv FormatNullableFunc) *FormatConfig {
-	stripped := FormatConfigWithoutScalarPlugins(fc)
-	stripped.FormatNullable = nv
-	return stripped
+// The nullablePathConfig helpers rebuild each preset with its scalar plugin
+// replaced by the Decode-based [PluginFromNullable] tail, so parity tests and
+// benchmarks can compare the direct scalar plugins against the Decode path.
+// They mirror the preset constructors' array/struct plugins.
+
+func simpleNullablePathConfig() *FormatConfig {
+	return &FormatConfig{
+		NullString: nullStringClientLib,
+		FormatComplexPlugins: []FormatComplexFunc{
+			PluginForArray(FormatUntypedArray),
+			PluginForStruct(FormatTypelessStructField, FormatTupleStruct),
+			PluginFromNullable(formatNullableValueSimple),
+		},
+	}
 }
 
-func formatConfigNullableOnly(fc *FormatConfig) *FormatConfig {
-	return FormatConfigWithoutScalarPlugins(fc)
+func literalNullablePathConfig(q LiteralQuoteConfig) *FormatConfig {
+	return &FormatConfig{
+		NullString: nullStringUpperCase,
+		FormatComplexPlugins: []FormatComplexFunc{
+			protoAsCastPlugin(q),
+			FormatEnumAsCast,
+			PluginForArray(FormatOptionallyTypedArray),
+			PluginForStruct(FormatSimpleStructField, FormatTypedStruct),
+			PluginFromNullable(func(nv NullableValue) (string, error) {
+				return formatNullableValueLiteralWithQuote(q, nv)
+			}),
+		},
+	}
 }
 
-func TestFormatConfigWithoutScalarPlugins_removesJSONScalarPlugin(t *testing.T) {
-	t.Parallel()
+func spannerCLINullablePathConfig() *FormatConfig {
+	return &FormatConfig{
+		NullString: nullStringUpperCase,
+		FormatComplexPlugins: []FormatComplexFunc{
+			PluginForArray(FormatUntypedArray),
+			PluginForStruct(FormatSimpleStructField, FormatBracketStruct),
+			PluginFromNullable(FormatNullableSpannerCLICompatible),
+		},
+	}
+}
 
-	stripped := FormatConfigWithoutScalarPlugins(JSONFormatConfig())
-	jsonPlugin := reflect.ValueOf(FormatJSONSimpleValue).Pointer()
-	for _, p := range stripped.FormatComplexPlugins {
-		if reflect.ValueOf(p).Pointer() == jsonPlugin {
-			t.Fatal("FormatJSONSimpleValue still present after FormatConfigWithoutScalarPlugins")
-		}
+// jsonNullablePathConfig approximates the JSON preset on the Decode path for
+// benchmarks only: FormatNullableSpannerCLICompatible does not emit JSON
+// quoting, so it is not output-equivalent to FormatJSONSimpleValue.
+func jsonNullablePathConfig() *FormatConfig {
+	return &FormatConfig{
+		NullString: "null",
+		FormatComplexPlugins: []FormatComplexFunc{
+			PluginForArray(FormatCompactArray),
+			PluginForStruct(FormatSimpleStructField, NewJSONObjectStructFormatter(nil)),
+			PluginFromNullable(FormatNullableSpannerCLICompatible),
+		},
 	}
 }
 
@@ -72,18 +105,19 @@ func TestFormatGCVScalarPluginsMatchNullablePath(t *testing.T) {
 	}
 
 	presets := []struct {
-		name string
-		fc   *FormatConfig
+		name   string
+		fc     *FormatConfig
+		legacy *FormatConfig
 	}{
-		{name: "simple", fc: SimpleFormatConfig()},
-		{name: "literal", fc: LiteralFormatConfig()},
-		{name: "spanner_cli", fc: SpannerCLICompatibleFormatConfig()},
+		{name: "simple", fc: SimpleFormatConfig(), legacy: simpleNullablePathConfig()},
+		{name: "literal", fc: LiteralFormatConfig(), legacy: literalNullablePathConfig(LiteralQuoteConfig{})},
+		{name: "spanner_cli", fc: SpannerCLICompatibleFormatConfig(), legacy: spannerCLINullablePathConfig()},
 	}
 
 	for _, preset := range presets {
 		t.Run(preset.name, func(t *testing.T) {
 			t.Parallel()
-			legacy := formatConfigNullableOnly(preset.fc)
+			legacy := preset.legacy
 			for i, gcv := range scalars {
 				got, err := preset.fc.FormatToplevelColumn(gcv)
 				if err != nil {
@@ -101,20 +135,23 @@ func TestFormatGCVScalarPluginsMatchNullablePath(t *testing.T) {
 	}
 }
 
-func TestFormatConfig_nilFormatNullableFailFast(t *testing.T) {
+// TestFormatConfig_noScalarHandlerErrUnhandledValue pins the runtime coverage
+// contract: a chain without a scalar handler fails non-NULL scalars with
+// ErrUnhandledValue, while NULL scalars still render as NullString.
+func TestFormatConfig_noScalarHandlerErrUnhandledValue(t *testing.T) {
 	t.Parallel()
 
-	fc := formatConfigDecodePath(SimpleFormatConfig(), nil)
-	_, err := fc.FormatToplevelColumn(gcvctor.BoolValue(true))
-	if !errors.Is(err, ErrFormatNullableRequired) {
-		t.Fatalf("got err %v want %v", err, ErrFormatNullableRequired)
+	fc := &FormatConfig{
+		NullString: nullStringClientLib,
+		FormatComplexPlugins: []FormatComplexFunc{
+			PluginForArray(FormatUntypedArray),
+		},
 	}
-}
+	_, err := fc.FormatToplevelColumn(gcvctor.BoolValue(true))
+	if !errors.Is(err, ErrUnhandledValue) {
+		t.Fatalf("got err %v want %v", err, ErrUnhandledValue)
+	}
 
-func TestFormatConfig_nullScalarSkipsFormatNullable(t *testing.T) {
-	t.Parallel()
-
-	fc := formatConfigDecodePath(SimpleFormatConfig(), nil)
 	got, err := fc.FormatToplevelColumn(gcvctor.NullOf(typector.CodeToSimpleType(sppb.TypeCode_BOOL)))
 	if err != nil {
 		t.Fatal(err)
@@ -124,25 +161,14 @@ func TestFormatConfig_nullScalarSkipsFormatNullable(t *testing.T) {
 	}
 }
 
-func TestFormatConfig_nilFormatNullableKeepsScalarPlugins(t *testing.T) {
+// TestFormatConfig_prependedScalarOverrideShadowsPreset pins the migration
+// recipe for the removed FormatNullable field: prepend PluginFromNullable so
+// the override runs before the preset scalar plugin.
+func TestFormatConfig_prependedScalarOverrideShadowsPreset(t *testing.T) {
 	t.Parallel()
 
-	fc := SimpleFormatConfig()
-	fc.FormatNullable = nil
-	got, err := fc.FormatToplevelColumn(gcvctor.BoolValue(true))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != "true" {
-		t.Fatalf("got %q want true", got)
-	}
-}
-
-func TestFormatConfig_customFormatNullableUsesHook(t *testing.T) {
-	t.Parallel()
-
-	fc := SimpleFormatConfig()
-	fc.FormatNullable = func(NullableValue) (string, error) { return "CUSTOM", nil }
+	fc := SimpleFormatConfig().WithComplexPlugin(
+		PluginFromNullable(func(NullableValue) (string, error) { return "CUSTOM", nil }))
 
 	got, err := fc.FormatToplevelColumn(gcvctor.BoolValue(true))
 	if err != nil {
