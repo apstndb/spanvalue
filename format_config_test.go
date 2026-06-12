@@ -54,26 +54,41 @@ func TestFormatConfigValidate_handBuiltInvalid(t *testing.T) {
 			},
 			wantErr: ErrEmptyNullString,
 		},
+		// Nil deprecated fields are static errors only when FormatComplexPlugins
+		// is empty; with plugins present they are acceptable (the plugins may
+		// cover the shape — see the Validate doc comment and #253).
 		{
-			name: "nil format array",
+			name: "nil format array without plugins",
 			mutate: func(fc *FormatConfig) {
 				fc.FormatArray = nil
+				fc.FormatComplexPlugins = nil
 			},
 			wantErr: ErrNilFormatArray,
 		},
 		{
-			name: "nil format struct field",
+			name: "nil format struct field without plugins",
 			mutate: func(fc *FormatConfig) {
 				fc.FormatStruct.FormatStructField = nil
+				fc.FormatComplexPlugins = nil
 			},
 			wantErr: ErrNilFormatStructField,
 		},
 		{
-			name: "nil format struct paren",
+			name: "nil format struct paren without plugins",
 			mutate: func(fc *FormatConfig) {
 				fc.FormatStruct.FormatStructParen = nil
+				fc.FormatComplexPlugins = nil
 			},
 			wantErr: ErrNilFormatStructParen,
+		},
+		{
+			name: "nil deprecated fields with plugins pass",
+			mutate: func(fc *FormatConfig) {
+				fc.FormatArray = nil
+				fc.FormatStruct = FormatStruct{}
+				fc.FormatNullable = nil
+			},
+			wantErr: nil,
 		},
 		{
 			name: "nil plugin in format complex plugins",

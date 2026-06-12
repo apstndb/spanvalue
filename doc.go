@@ -14,9 +14,9 @@
 // time (or immediately after [*FormatConfig.Clone] and mutation) to catch nil callbacks
 // or an empty [FormatConfig.NullString] before the first [*FormatConfig.FormatRow] call.
 // [FormatConfigWithoutScalarPlugins] and edits to [FormatConfig.FormatComplexPlugins]
-// can remove preset scalar plugins; re-validate after such changes. Custom scalar
-// plugins in [FormatConfig.FormatComplexPlugins] are not detected by Validate—keep
-// [FormatConfig.FormatNullable] non-nil when using them. Package writer does not call
+// can remove preset scalar plugins; re-validate after such changes. Validate cannot
+// prove that a plugin chain covers every type (see its doc for the nil-field
+// relaxation when plugins are present). Package writer does not call
 // Validate on [writer.WithFormatter] configs; validate hand-built formatters before
 // passing them to writers.
 // Scalar plugins ([FormatSimpleValue], [FormatLiteralValue],
@@ -46,6 +46,17 @@
 // [PluginSkippingNull]; [PluginFromNullable] lifts a [FormatNullableFunc]
 // into the chain, and with [NullableFormatterFor] a single scalar type can
 // be overridden while the rest of the chain keeps the preset behavior.
+// [PluginForArray] and [PluginForStruct] lift ARRAY join and STRUCT
+// field/paren callbacks into the chain with the built-in branches' exact
+// non-NULL semantics.
+//
+// [NewFormatConfig] assembles a config from those combinators in canonical
+// order — [WithPlugin] overrides (most recent first), then [WithArrayFormat],
+// [WithStructFormat], and the [WithScalarFormatter] tail — validating at build
+// time instead of on the first row; the resulting config uses only
+// [FormatConfig.NullString] and [FormatConfig.FormatComplexPlugins], the shape
+// the deprecated FormatArray, FormatStruct, FormatNullable, and Literal fields
+// are retired toward.
 // Customize a [FormatConfig] from a constructor, or
 // [FormatConfig.Clone] when reusing one. Convenience formatters such as
 // [FormatRowSpannerCLICompatible] use internal singleton configs; call

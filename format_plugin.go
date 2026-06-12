@@ -5,6 +5,7 @@ import (
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // PluginForType restricts plugin to values whose [sppb.Type] satisfies match;
@@ -50,6 +51,58 @@ func PluginSkippingNull(plugin FormatComplexFunc) FormatComplexFunc {
 			return "", ErrFallthrough
 		}
 		return plugin(formatter, value, toplevel)
+	}
+}
+
+// PluginForArray lifts a [FormatArrayFunc] into the plugin chain: non-NULL
+// ARRAY values are formatted exactly like the built-in ARRAY branch — the wire
+// list value is extracted (non-list payloads are [ErrUnexpectedComplexValueKind]),
+// each element is recursively formatted with formatter.FormatColumn(elem, false)
+// so the whole chain applies per element, and the element strings are handed
+// to join. join must be non-nil.
+//
+// A nil Type, a non-ARRAY type code, and SQL NULL fall through
+// ([ErrFallthrough]); NULL deferral lets the built-in handling render
+// [Formatter.GetNullString], matching the [FormatConfig.FormatArray] field
+// semantics byte for byte. Plugin authors who want typed NULL arrays — for
+// example rendering CAST(NULL AS bigint[]) — should instead write a plain
+// [PluginForTypeCode](ARRAY, ...) plugin, which receives NULL values; that
+// expressiveness is exactly what the retired field structurally lacked.
+func PluginForArray(join FormatArrayFunc) FormatComplexFunc {
+	return func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
+		if value.Type.GetCode() != sppb.TypeCode_ARRAY || IsNull(value) {
+			return "", ErrFallthrough
+		}
+		return formatArrayElems(formatter, value, toplevel, join)
+	}
+}
+
+// PluginForStruct lifts STRUCT formatting into the plugin chain: non-NULL
+// STRUCT values are formatted exactly like the built-in STRUCT branch — the
+// wire list value is extracted (non-list payloads are
+// [ErrUnexpectedComplexValueKind]), the value count is checked against the
+// field descriptors ([ErrMismatchedFields]), each field is formatted with the
+// field callback, and the field strings are handed to paren. Both callbacks
+// must be non-nil.
+//
+// The field callback receives the [Formatter] (use
+// formatter.FormatColumn(elementGCV, false) to recurse into the field value)
+// instead of the *FormatConfig that the legacy [FormatStructFieldFunc] takes;
+// this is the signature the next breaking release aligns
+// [FormatStructFieldFunc] itself to.
+//
+// A nil Type, a non-STRUCT type code, and SQL NULL fall through
+// ([ErrFallthrough]); NULL deferral lets the built-in handling render
+// [Formatter.GetNullString]. For typed NULL STRUCT rendering write a plain
+// [PluginForTypeCode](STRUCT, ...) plugin, which receives NULL values.
+func PluginForStruct(field func(formatter Formatter, field *sppb.StructType_Field, value *structpb.Value) (string, error), paren FormatStructParenFunc) FormatComplexFunc {
+	return func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
+		if value.Type.GetCode() != sppb.TypeCode_STRUCT || IsNull(value) {
+			return "", ErrFallthrough
+		}
+		return formatStructFields(value, toplevel, func(sf *sppb.StructType_Field, v *structpb.Value) (string, error) {
+			return field(formatter, sf, v)
+		}, paren)
 	}
 }
 

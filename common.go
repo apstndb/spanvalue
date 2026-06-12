@@ -257,13 +257,33 @@ type Formatter interface {
 // Use [*FormatConfig.Clone] or [*FormatConfig.WithComplexPlugin] (prepends plugins) to customize a preset
 // without mutating shared instances.
 // Call [*FormatConfig.Validate] after hand-assembling a config to fail fast on nil callbacks
-// or an empty [FormatConfig.NullString].
+// or an empty [FormatConfig.NullString]. [NewFormatConfig] assembles and validates a config
+// whose behavior lives entirely in NullString and FormatComplexPlugins, without the
+// deprecated fields below.
 type FormatConfig struct {
-	NullString           string
-	FormatArray          FormatArrayFunc
+	NullString string
+	// FormatArray formats non-NULL ARRAY values on the built-in path.
+	//
+	// Deprecated: register [PluginForArray] in FormatComplexPlugins (or build the
+	// config with [NewFormatConfig] and [WithArrayFormat]) instead. This field
+	// will be removed in the next breaking release (#253).
+	FormatArray FormatArrayFunc
+	// FormatStruct formats non-NULL STRUCT values on the built-in path.
+	//
+	// Deprecated: register [PluginForStruct] in FormatComplexPlugins (or build the
+	// config with [NewFormatConfig] and [WithStructFormat]) instead. This field
+	// will be removed in the next breaking release (#253).
 	FormatStruct         FormatStruct
 	FormatComplexPlugins []FormatComplexFunc
-	FormatNullable       FormatNullableFunc
+	// FormatNullable formats non-NULL scalar values after Decode on the built-in
+	// slow path, when no plugin handled the value first.
+	//
+	// Deprecated: append [PluginFromNullable] as the last element of
+	// FormatComplexPlugins so it runs after any preset plugins it should not
+	// shadow (or build the config with [NewFormatConfig] and
+	// [WithScalarFormatter]). This field will be removed in the next breaking
+	// release (#252, #253).
+	FormatNullable FormatNullableFunc
 	// Literal holds options for the literal preset only ([LiteralFormatOptions]).
 	// Quote is read when FormatNullable is the preset formatNullableValueLiteral (including the
 	// formatSimpleColumn slow-path intercept) and by literal preset complex plugins such as
@@ -272,6 +292,12 @@ type FormatConfig struct {
 	// legacy suitableQuote behavior (QuoteLegacy + PreferredDoubleQuote). Invalid enum values
 	// are normalized when literal options are applied and again when Quote is read at format
 	// time. Escaping uses GoogleSQL backslash rules; not PostgreSQL (#126).
+	//
+	// Deprecated: set quote options through the literal preset constructors
+	// ([LiteralFormatConfigWithOptions], [LiteralFormatConfigWithQuote],
+	// [WithLiteralQuote]); quote options become constructor-captured state of the
+	// literal preset's scalar plugin and this field will be removed from
+	// FormatConfig in the next breaking release (#253, #185).
 	Literal LiteralFormatOptions
 }
 
@@ -300,48 +326,66 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 		}
 	}
 
-	valType := value.Type
-	switch valType.GetCode() {
+	switch value.Type.GetCode() {
 	case sppb.TypeCode_ARRAY:
 		if IsNull(value) {
 			return fc.GetNullString(), nil
 		}
-		listValue, err := getComplexListValue(valType.GetCode(), value.Value)
-		if err != nil {
-			return "", err
-		}
-		elemStrings, err := lo.MapErr(listValue.GetValues(), func(v *structpb.Value, _ int) (string, error) {
-			return fc.FormatColumn(typeValueToGCV(valType.GetArrayElementType(), v), false)
-		})
-		if err != nil {
-			return "", err
-		}
-
-		return fc.FormatArray(valType, toplevel, elemStrings)
+		return formatArrayElems(fc, value, toplevel, fc.FormatArray)
 	case sppb.TypeCode_STRUCT:
 		if IsNull(value) {
 			return fc.GetNullString(), nil
 		}
-		listValue, err := getComplexListValue(valType.GetCode(), value.Value)
-		if err != nil {
-			return "", err
-		}
-		fields := valType.GetStructType().GetFields()
-		fieldValues := listValue.GetValues()
-		if len(fieldValues) != len(fields) {
-			return "", fmt.Errorf("%w: got %d values, want %d", ErrMismatchedFields, len(fieldValues), len(fields))
-		}
-		fieldStrings, err := lo.MapErr(fields, func(field *sppb.StructType_Field, i int) (string, error) {
-			return fc.FormatStruct.FormatStructField(fc, field, fieldValues[i])
-		})
-		if err != nil {
-			return "", err
-		}
-
-		return fc.FormatStruct.FormatStructParen(valType, toplevel, fieldStrings)
+		fs := fc.FormatStruct
+		return formatStructFields(value, toplevel, func(field *sppb.StructType_Field, v *structpb.Value) (string, error) {
+			return fs.FormatStructField(fc, field, v)
+		}, fs.FormatStructParen)
 	default:
 		return fc.formatSimpleColumn(value)
 	}
+}
+
+// formatArrayElems is the non-NULL ARRAY shape shared by the built-in
+// [*FormatConfig.FormatColumn] branch and [PluginForArray]: extract the wire
+// list value (non-list payloads are [ErrUnexpectedComplexValueKind]), recurse
+// into each element with formatter.FormatColumn(elem, false), and hand the
+// element strings to join.
+func formatArrayElems(formatter Formatter, value spanner.GenericColumnValue, toplevel bool, join FormatArrayFunc) (string, error) {
+	listValue, err := getComplexListValue(sppb.TypeCode_ARRAY, value.Value)
+	if err != nil {
+		return "", err
+	}
+	elemStrings, err := lo.MapErr(listValue.GetValues(), func(v *structpb.Value, _ int) (string, error) {
+		return formatter.FormatColumn(typeValueToGCV(value.Type.GetArrayElementType(), v), false)
+	})
+	if err != nil {
+		return "", err
+	}
+	return join(value.Type, toplevel, elemStrings)
+}
+
+// formatStructFields is the non-NULL STRUCT shape shared by the built-in
+// [*FormatConfig.FormatColumn] branch and [PluginForStruct]: extract the wire
+// list value (non-list payloads are [ErrUnexpectedComplexValueKind]), check the
+// value count against the field descriptors ([ErrMismatchedFields]), format
+// each field with the field callback, and hand the field strings to paren.
+func formatStructFields(value spanner.GenericColumnValue, toplevel bool, field func(*sppb.StructType_Field, *structpb.Value) (string, error), paren FormatStructParenFunc) (string, error) {
+	listValue, err := getComplexListValue(sppb.TypeCode_STRUCT, value.Value)
+	if err != nil {
+		return "", err
+	}
+	fields := value.Type.GetStructType().GetFields()
+	fieldValues := listValue.GetValues()
+	if len(fieldValues) != len(fields) {
+		return "", fmt.Errorf("%w: got %d values, want %d", ErrMismatchedFields, len(fieldValues), len(fields))
+	}
+	fieldStrings, err := lo.MapErr(fields, func(f *sppb.StructType_Field, i int) (string, error) {
+		return field(f, fieldValues[i])
+	})
+	if err != nil {
+		return "", err
+	}
+	return paren(value.Type, toplevel, fieldStrings)
 }
 
 func getComplexListValue(code sppb.TypeCode, value *structpb.Value) (*structpb.ListValue, error) {
