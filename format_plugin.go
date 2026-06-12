@@ -147,8 +147,8 @@ func NullableFormatterFor[T NullableValue](f func(T) (string, error)) FormatNull
 	}
 }
 
-// PluginForNullable is the pre-composed
-// [PluginFromNullable]([NullableFormatterFor](f)): a chain plugin that
+// PluginForNullable is the pre-composed combination of [PluginFromNullable]
+// and [NullableFormatterFor]: a chain plugin that
 // formats exactly the scalar values decoding to the [NullableValue] wrapper
 // type T and defers everything else — other scalar types, SQL NULL, ARRAY,
 // STRUCT, and unsupported type codes all fall through ([ErrFallthrough]).
