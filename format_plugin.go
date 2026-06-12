@@ -70,7 +70,7 @@ func PluginSkippingNull(plugin FormatComplexFunc) FormatComplexFunc {
 // expressiveness is exactly what the retired field structurally lacked.
 func PluginForArray(join FormatArrayFunc) FormatComplexFunc {
 	return func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
-		if value.Type.GetCode() != sppb.TypeCode_ARRAY || IsNull(value) {
+		if value.Type == nil || value.Type.GetCode() != sppb.TypeCode_ARRAY || IsNull(value) {
 			return "", ErrFallthrough
 		}
 		return formatArrayElems(formatter, value, toplevel, join)
@@ -97,7 +97,7 @@ func PluginForArray(join FormatArrayFunc) FormatComplexFunc {
 // [PluginForTypeCode](STRUCT, ...) plugin, which receives NULL values.
 func PluginForStruct(field func(formatter Formatter, field *sppb.StructType_Field, value *structpb.Value) (string, error), paren FormatStructParenFunc) FormatComplexFunc {
 	return func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
-		if value.Type.GetCode() != sppb.TypeCode_STRUCT || IsNull(value) {
+		if value.Type == nil || value.Type.GetCode() != sppb.TypeCode_STRUCT || IsNull(value) {
 			return "", ErrFallthrough
 		}
 		return formatStructFields(value, toplevel, func(sf *sppb.StructType_Field, v *structpb.Value) (string, error) {

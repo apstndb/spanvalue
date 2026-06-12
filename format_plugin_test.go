@@ -374,3 +374,28 @@ func TestPluginFromNullableAnnotationDispatch(t *testing.T) {
 		t.Errorf("plain NUMERIC = (%q, %v), want preset wire string", got, err)
 	}
 }
+
+// TestComplexCombinatorsNilType pins that PluginForArray and PluginForStruct
+// fall through on a nil Type (explicitly, not only via nil-safe getters), so
+// the built-in handling classifies the malformed value.
+func TestComplexCombinatorsNilType(t *testing.T) {
+	t.Parallel()
+
+	malformed := spanner.GenericColumnValue{Value: structpb.NewStringValue("x")}
+	plugins := []spanvalue.FormatComplexFunc{
+		spanvalue.PluginForArray(func(*sppb.Type, bool, []string) (string, error) {
+			return "array", nil
+		}),
+		spanvalue.PluginForStruct(
+			func(spanvalue.Formatter, *sppb.StructType_Field, *structpb.Value) (string, error) {
+				return "field", nil
+			},
+			func(*sppb.Type, bool, []string) (string, error) { return "paren", nil },
+		),
+	}
+	for i, p := range plugins {
+		if _, err := pluginConfig(p).FormatToplevelColumn(malformed); err == nil {
+			t.Errorf("plugin %d: nil Type want built-in error, got nil", i)
+		}
+	}
+}
