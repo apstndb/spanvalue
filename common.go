@@ -190,7 +190,7 @@ func protoAsCastPlugin(q LiteralQuoteConfig) FormatComplexFunc {
 }
 
 func formatProtoAsCast(q LiteralQuoteConfig, formatter Formatter, value spanner.GenericColumnValue) (string, error) {
-	if value.Type.GetCode() != sppb.TypeCode_PROTO {
+	if value.Type == nil || value.Type.GetCode() != sppb.TypeCode_PROTO {
 		return "", ErrFallthrough
 	}
 
