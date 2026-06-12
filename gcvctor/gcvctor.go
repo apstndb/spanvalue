@@ -34,8 +34,12 @@ var (
 	ErrNilElementType = errors.New("gcvctor: nil array element type")
 	// ErrNilFieldType is returned by [StructValueOf] when a field's Type is nil.
 	ErrNilFieldType = errors.New("gcvctor: nil struct field type")
-	// ErrNilNumeric is returned by [NumericValueChecked] and [PGNumericValueChecked] when v is nil.
+	// ErrNilNumeric is returned by [NumericValueChecked], [PGNumericValueChecked],
+	// and [PGNumericValueExact] when v is nil.
 	ErrNilNumeric = errors.New("gcvctor: nil numeric input")
+	// ErrInexactNumeric is returned by [PGNumericValueExact] when v has no
+	// finite decimal expansion and therefore cannot be rendered exactly.
+	ErrInexactNumeric = errors.New("gcvctor: numeric input has no finite decimal expansion")
 	// ErrInvalidJSON is returned by [JSONStringValue] when v is not syntactically valid JSON.
 	ErrInvalidJSON = errors.New("gcvctor: invalid JSON input")
 )
@@ -322,6 +326,53 @@ func PGNumericValue(v *big.Rat) spanner.GenericColumnValue {
 		return NullOf(typector.PGNumeric())
 	}
 	return StringBasedValueOf(typector.PGNumeric(), spanner.NumericString(v))
+}
+
+// PGNumericValueExact returns a non-null PostgreSQL-dialect NUMERIC
+// GenericColumnValue ([sppb.TypeAnnotationCode_PG_NUMERIC]) whose wire string
+// is the exact decimal rendering of v. Unlike [PGNumericValue], which formats
+// with the GoogleSQL-scale [cloud.google.com/go/spanner.NumericString]
+// (9 fractional digits, silently rounding), this constructor refuses to lose
+// precision for the wider PostgreSQL-dialect numeric value space: a rational
+// without a finite decimal expansion (a reduced denominator with prime
+// factors other than 2 and 5, such as 1/3) returns [ErrInexactNumeric], and
+// nil returns [ErrNilNumeric]. Callers holding exact decimal wire text can
+// use [StringBasedValueOf] or [PGNumericFromNullable] instead.
+func PGNumericValueExact(v *big.Rat) (spanner.GenericColumnValue, error) {
+	if v == nil {
+		return spanner.GenericColumnValue{}, ErrNilNumeric
+	}
+	scale, ok := finiteDecimalScale(v)
+	if !ok {
+		return spanner.GenericColumnValue{}, fmt.Errorf("%w: %s", ErrInexactNumeric, v.RatString())
+	}
+	return StringBasedValueOf(typector.PGNumeric(), v.FloatString(scale)), nil
+}
+
+// finiteDecimalScale reports the smallest scale that renders v exactly in
+// decimal, or ok == false when v has no finite decimal expansion. big.Rat is
+// always normalized, so the reduced denominator must factor into 2^a * 5^b.
+func finiteDecimalScale(v *big.Rat) (int, bool) {
+	d := new(big.Int).Set(v.Denom())
+	twos := 0
+	for d.Bit(0) == 0 {
+		d.Rsh(d, 1)
+		twos++
+	}
+	five := big.NewInt(5)
+	fives := 0
+	for {
+		q, r := new(big.Int).QuoRem(d, five, new(big.Int))
+		if r.Sign() != 0 {
+			break
+		}
+		d = q
+		fives++
+	}
+	if d.Cmp(big.NewInt(1)) != 0 {
+		return 0, false
+	}
+	return max(twos, fives), true
 }
 
 // PGNumericValueChecked returns a non-null PostgreSQL-dialect NUMERIC GenericColumnValue

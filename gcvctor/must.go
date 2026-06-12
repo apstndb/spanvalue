@@ -147,3 +147,13 @@ func MustPGJSONBValue(v any) spanner.GenericColumnValue {
 	}
 	return gcv
 }
+
+// MustPGNumericValueExact is [PGNumericValueExact] panicking on error, for
+// schema-known fixture data; see the package doc's fixture guidance.
+func MustPGNumericValueExact(v *big.Rat) spanner.GenericColumnValue {
+	gcv, err := PGNumericValueExact(v)
+	if err != nil {
+		panic(err)
+	}
+	return gcv
+}
