@@ -348,6 +348,10 @@ func TestFormatPlugins_onUnresolvedNotInvoked(t *testing.T) {
 				return protofmt.FormatProtoTextValue(protofmt.ProtoTextValueOptions{Resolver: resolver, OnUnresolved: onUnresolved})
 			},
 			gcv: gcvctor.NullOf(&sppb.Type{Code: sppb.TypeCode_PROTO, ProtoTypeFqn: "example.music.Missing"}),
+			// Typed NULL falls through since the PluginSkippingNull rewrite;
+			// the chain still renders GetNullString (pinned by
+			// TestFormatPlugins_typedNullUsesFormatter).
+			wantFallthrough: true,
 		},
 		{
 			name: "proto empty fqn",
@@ -389,6 +393,8 @@ func TestFormatPlugins_onUnresolvedNotInvoked(t *testing.T) {
 				return protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{Resolver: resolver, OnUnresolved: onUnresolved})
 			},
 			gcv: gcvctor.NullOf(&sppb.Type{Code: sppb.TypeCode_ENUM, ProtoTypeFqn: "example.music.Missing"}),
+			// See the proto typed null case.
+			wantFallthrough: true,
 		},
 		{
 			name: "enum empty fqn",

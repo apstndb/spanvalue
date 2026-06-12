@@ -41,7 +41,12 @@
 // Lower-level callbacks and plugin types are intended for custom output formats:
 // [FormatArrayFunc], [FormatStructFieldFunc], [FormatStructParenFunc], [FormatComplexFunc],
 // [ErrFallthrough], [FormatStruct], [FormatTupleStruct], [TypedStructFormat], and
-// [JSONObjectStructFormat]. Customize a [FormatConfig] from a constructor, or
+// [JSONObjectStructFormat]. Plugin authors can lift the usual type and NULL
+// guards with the combinators [PluginForType], [PluginForTypeCode], and
+// [PluginSkippingNull]; [PluginFromNullable] lifts a [FormatNullableFunc]
+// into the chain, and with [NullableFormatterFor] a single scalar type can
+// be overridden while the rest of the chain keeps the preset behavior.
+// Customize a [FormatConfig] from a constructor, or
 // [FormatConfig.Clone] when reusing one. Convenience formatters such as
 // [FormatRowSpannerCLICompatible] use internal singleton configs; call
 // [FormatConfig.FormatRow] on your own config instead of those helpers.
