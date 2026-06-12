@@ -146,3 +146,24 @@ func NullableFormatterFor[T NullableValue](f func(T) (string, error)) FormatNull
 		return "", ErrFallthrough
 	}
 }
+
+// PluginForNullable is the pre-composed
+// [PluginFromNullable]([NullableFormatterFor](f)): a chain plugin that
+// formats exactly the scalar values decoding to the [NullableValue] wrapper
+// type T and defers everything else — other scalar types, SQL NULL, ARRAY,
+// STRUCT, and unsupported type codes all fall through ([ErrFallthrough]).
+// Because the Decode dispatch is annotation-aware, T selects the dialect
+// variant precisely: [cloud.google.com/go/spanner.PGNumeric] matches only
+// PG_NUMERIC-annotated NUMERIC, [cloud.google.com/go/spanner.NullNumeric]
+// only the GoogleSQL form.
+//
+//	cfg := spanvalue.SimpleFormatConfig().WithComplexPlugin(
+//	    spanvalue.PluginForNullable(func(v spanner.NullNumeric) (string, error) {
+//	        return v.Numeric.FloatString(2), nil
+//	    }))
+//
+// Use the two primitives directly when one function should claim several
+// wrapper types.
+func PluginForNullable[T NullableValue](f func(T) (string, error)) FormatComplexFunc {
+	return PluginFromNullable(NullableFormatterFor(f))
+}

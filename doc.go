@@ -48,8 +48,9 @@
 // a prepended plugin runs before the preset handlers, so it can override any
 // type (for tuple STRUCT with Spanner CLI scalars, prepend
 // [PluginForStruct]([FormatSimpleStructField], [FormatTupleStruct]); see the
-// README). For per-scalar-type overrides compose [PluginFromNullable] with
-// [NullableFormatterFor]; values the override defers keep the preset behavior.
+// README). For per-scalar-type overrides use [PluginForNullable] (the
+// pre-composed [PluginFromNullable] + [NullableFormatterFor] form); values
+// the override defers keep the preset behavior.
 // A prepended [PluginFromNullable] with a total formatter replaces preset
 // scalar formatting wholesale.
 //
