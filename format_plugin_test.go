@@ -399,3 +399,32 @@ func TestComplexCombinatorsNilType(t *testing.T) {
 		}
 	}
 }
+
+// TestPluginForNullable pins the pre-composed combinator's equivalence with
+// PluginFromNullable(NullableFormatterFor(f)).
+func TestPluginForNullable(t *testing.T) {
+	t.Parallel()
+
+	fc := pluginConfig(spanvalue.PluginForNullable(func(v spanner.NullNumeric) (string, error) {
+		return "N:" + v.Numeric.FloatString(2), nil
+	}))
+
+	got, err := fc.FormatToplevelColumn(gcvctor.NumericValue(big.NewRat(3, 2)))
+	if err != nil || got != "N:1.50" {
+		t.Errorf("NUMERIC = (%q, %v), want (N:1.50, nil)", got, err)
+	}
+	// PG_NUMERIC decodes to PGNumeric, not NullNumeric: falls through.
+	got, err = fc.FormatToplevelColumn(gcvctor.PGNumericValue(big.NewRat(3, 2)))
+	if err != nil || got != "1.500000000" {
+		t.Errorf("PG_NUMERIC = (%q, %v), want preset wire string", got, err)
+	}
+	// NULL and other scalars keep preset behavior.
+	got, err = fc.FormatToplevelColumn(gcvctor.NullFromCode(sppb.TypeCode_NUMERIC))
+	if err != nil || got != fc.GetNullString() {
+		t.Errorf("NULL = (%q, %v), want (%q, nil)", got, err, fc.GetNullString())
+	}
+	got, err = fc.FormatToplevelColumn(gcvctor.StringValue("s"))
+	if err != nil || got != "s" {
+		t.Errorf("STRING = (%q, %v), want (s, nil)", got, err)
+	}
+}
