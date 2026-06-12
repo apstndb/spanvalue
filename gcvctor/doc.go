@@ -59,7 +59,10 @@
 // [cloud.google.com/go/spanner/apiv1/spannerpb.TypeAnnotationCode_PG_JSONB],
 // [cloud.google.com/go/spanner/apiv1/spannerpb.TypeAnnotationCode_PG_OID]).
 //
-// NUMERIC wire strings: [NumericValue] and [PGNumericValue] store Spanner-canonical decimals.
+// NUMERIC wire strings: [NumericValue] and [PGNumericValue] store Spanner-canonical decimals
+// at the GoogleSQL 9-fractional-digit scale (silently rounding); [PGNumericValueExact]
+// renders the exact decimal for the wider PG-dialect numeric value space, erroring on
+// non-terminating rationals.
 // [StringBasedValueFromCode] does not normalize; callers that build NUMERIC cells by hand must
 // supply the same wire form Spanner returns (see that helper's doc). The [github.com/apstndb/spanvalue]
 // formatters treat NUMERIC string payloads as authoritative and do not parse them again.
