@@ -30,17 +30,28 @@ func FormatColumnLiteral(value spanner.GenericColumnValue) (string, error) {
 // literal expressions with type annotations. ARRAY values use
 // [FormatOptionallyTypedArray]: top-level arrays with scalar elements omit the
 // ARRAY<...> prefix (empty or not); arrays of STRUCT or nested ARRAY include it when
-// toplevel is true (empty or not).
+// toplevel is true (empty or not). The chain is [FormatProtoAsCast],
+// [FormatEnumAsCast], [LiteralValuePlugin] for the remaining scalars,
+// [PluginForArray], and [PluginForStruct] with [FormatSimpleStructField] and
+// [FormatTypedStruct]. Use [LiteralFormatConfigWithQuote] or
+// [LiteralFormatConfigWithOptions] for non-default quote options.
 func LiteralFormatConfig() *FormatConfig {
+	return literalFormatConfigFromOptions(LiteralFormatOptions{})
+}
+
+// literalFormatConfigFromOptions assembles the literal preset chain with
+// quote options captured into the quote-sensitive plugins (scalar literals
+// and PROTO casts).
+func literalFormatConfigFromOptions(opts LiteralFormatOptions) *FormatConfig {
+	opts.Quote = normalizeLiteralQuote(opts.Quote)
 	return &FormatConfig{
-		NullString:     nullStringUpperCase,
-		FormatArray:    FormatOptionallyTypedArray,
-		FormatStruct:   TypedStructFormat(),
-		FormatNullable: formatNullableValueLiteral,
+		NullString: nullStringUpperCase,
 		FormatComplexPlugins: []FormatComplexFunc{
-			FormatProtoAsCast,
+			protoAsCastPlugin(opts.Quote),
 			FormatEnumAsCast,
-			FormatLiteralValue,
+			LiteralValuePlugin(opts),
+			PluginForArray(FormatOptionallyTypedArray),
+			PluginForStruct(FormatSimpleStructField, FormatTypedStruct),
 		},
 	}
 }
@@ -48,9 +59,9 @@ func LiteralFormatConfig() *FormatConfig {
 var _ func() *FormatConfig = LiteralFormatConfig
 
 var (
-	_ FormatStructParenFunc = formatTypedStructParen
+	_ FormatStructParenFunc = FormatTypedStruct
 	_ FormatStructParenFunc = FormatTupleStruct
-	_ FormatStructFieldFunc = formatSimpleStructField
+	_ FormatStructFieldFunc = FormatSimpleStructField
 	_ FormatStructFieldFunc = FormatTypelessStructField
 )
 
@@ -66,8 +77,9 @@ func stringLiteralCast(typ, s string, policy internal.QuotePolicy) string {
 	return fmt.Sprintf("CAST(%s AS %s)", internal.ToStringLiteralPolicy(s, policy), typ)
 }
 
-// formatNullableValueLiteral is the identity sentinel for scalarFastPathActive and
-// formatSimpleColumn dispatch. It must stay equivalent to
+// formatNullableValueLiteral is the default-quote Decode-based literal
+// formatter, kept for parity tests and benchmarks comparing the scalar
+// plugin against the [PluginFromNullable] path. It must stay equivalent to
 // formatNullableValueLiteralWithQuote(LiteralQuoteConfig{}, nv).
 func formatNullableValueLiteral(value NullableValue) (string, error) {
 	return formatNullableValueLiteralWithQuote(LiteralQuoteConfig{}, value)

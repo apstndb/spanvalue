@@ -169,7 +169,10 @@ func TestNewSQLInsertWriterRejectsOutOfRangeKind(t *testing.T) {
 	}
 }
 
-func TestDelimitedWriterFlushAfterLateHeaderEnable(t *testing.T) {
+// TestDelimitedWriterFlushHeaderDisabled pins that with [WithHeader](false)
+// (constructor-only since the field unexport, #221), Flush emits buffered rows
+// without a header and without ErrHeaderAfterData.
+func TestDelimitedWriterFlushHeaderDisabled(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
@@ -178,11 +181,8 @@ func TestDelimitedWriterFlushAfterLateHeaderEnable(t *testing.T) {
 		t.Fatalf("WriteValues() error = %v", err)
 	}
 
-	// The header opportunity has passed; Flush must not return
-	// ErrHeaderAfterData and must not strand the buffered row.
-	w.Header = true
 	if err := w.Flush(); err != nil {
-		t.Fatalf("Flush() after late Header enable error = %v", err)
+		t.Fatalf("Flush() error = %v", err)
 	}
 	want := "Alice\n"
 	if diff := cmp.Diff(want, out.String()); diff != "" {

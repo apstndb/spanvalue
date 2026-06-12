@@ -45,18 +45,21 @@ type LiteralQuoteConfig struct {
 	PreferredQuote PreferredQuote
 }
 
-// LiteralFormatOptions holds settings that apply only to the literal preset ([LiteralFormatConfig]
-// and clones). Other presets ignore this field. A future major release may move literal-specific
-// configuration off [FormatConfig] entirely; callers should set options via literal constructors
-// or [WithLiteralQuote] rather than assuming a stable nested layout.
+// LiteralFormatOptions holds settings that apply only to the literal preset.
+// It is a constructor input ([LiteralFormatConfigWithOptions],
+// [LiteralValuePlugin]): the options are captured into the literal preset's
+// quote-sensitive plugins at construction time, not stored on [FormatConfig].
 type LiteralFormatOptions struct {
 	// Quote selects the outer delimiter policy for string and bytes SQL-style literals.
+	// The zero value is legacy adaptive quoting (QuoteLegacy + PreferredDoubleQuote);
+	// invalid enum values are normalized when options are applied. Escaping uses
+	// GoogleSQL backslash rules; not PostgreSQL (#126).
 	Quote LiteralQuoteConfig
 }
 
 // LiteralOption configures a literal preset returned by [LiteralFormatConfigWithOptions].
 type LiteralOption interface {
-	applyLiteralOption(*FormatConfig)
+	applyLiteralOption(*LiteralFormatOptions)
 }
 
 type literalQuoteOption struct {
@@ -68,22 +71,24 @@ func WithLiteralQuote(cfg LiteralQuoteConfig) LiteralOption {
 	return literalQuoteOption{cfg: cfg}
 }
 
-func (o literalQuoteOption) applyLiteralOption(fc *FormatConfig) {
-	fc.Literal.Quote = normalizeLiteralQuote(o.cfg)
+func (o literalQuoteOption) applyLiteralOption(opts *LiteralFormatOptions) {
+	opts.Quote = normalizeLiteralQuote(o.cfg)
 }
 
-// LiteralFormatConfigWithOptions returns a copy of [LiteralFormatConfig] with the given options applied.
+// LiteralFormatConfigWithOptions returns a [LiteralFormatConfig] preset with the given
+// options captured into its quote-sensitive plugins (string/bytes scalar literals and
+// PROTO casts).
 func LiteralFormatConfigWithOptions(opts ...LiteralOption) *FormatConfig {
-	fc := LiteralFormatConfig()
+	var o LiteralFormatOptions
 	for _, opt := range opts {
 		if opt != nil {
-			opt.applyLiteralOption(fc)
+			opt.applyLiteralOption(&o)
 		}
 	}
-	return fc
+	return literalFormatConfigFromOptions(o)
 }
 
-// LiteralFormatConfigWithQuote returns a copy of [LiteralFormatConfig] with the given quote settings.
+// LiteralFormatConfigWithQuote returns a [LiteralFormatConfig] preset with the given quote settings.
 func LiteralFormatConfigWithQuote(cfg LiteralQuoteConfig) *FormatConfig {
 	return LiteralFormatConfigWithOptions(WithLiteralQuote(cfg))
 }
@@ -153,12 +158,4 @@ func toInternalQuotePolicy(cfg LiteralQuoteConfig) internal.QuotePolicy {
 		p.Preferred = internal.PreferredQuoteDouble
 	}
 	return p
-}
-
-func literalQuoteForFormatter(formatter any) LiteralQuoteConfig {
-	fc, ok := formatter.(*FormatConfig)
-	if !ok || fc == nil {
-		return LiteralQuoteConfig{}
-	}
-	return fc.Literal.Quote
 }

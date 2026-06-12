@@ -5,62 +5,61 @@
 //
 // # Primary API
 //
-// Configure output with [FormatConfig]. Use the constructors [LiteralFormatConfig],
-// [LiteralFormatConfigWithQuote], [LiteralFormatConfigWithSingleQuotedLiterals],
-// [LiteralFormatConfigWithOptions], [SimpleFormatConfig], [SpannerCLICompatibleFormatConfig],
-// and [JSONFormatConfig] to pick a preset. [WithLiteralQuote] sets [FormatConfig].Literal.Quote
-// on the literal preset (string/bytes delimiter policy for SQL-style literals).
-// After hand-assembling a [FormatConfig], call [*FormatConfig.Validate] at construction
-// time (or immediately after [*FormatConfig.Clone] and mutation) to catch nil callbacks
-// or an empty [FormatConfig.NullString] before the first [*FormatConfig.FormatRow] call.
-// [FormatConfigWithoutScalarPlugins] and edits to [FormatConfig.FormatComplexPlugins]
-// can remove preset scalar plugins; re-validate after such changes. Validate cannot
-// prove that a plugin chain covers every type (see its doc for the nil-field
-// relaxation when plugins are present). Package writer does not call
-// Validate on [writer.WithFormatter] configs; validate hand-built formatters before
+// Configure output with [FormatConfig], which holds exactly two fields: the
+// NULL rendering ([FormatConfig.NullString]) and the ordered plugin chain
+// ([FormatConfig.FormatComplexPlugins]). Use the constructors
+// [LiteralFormatConfig], [LiteralFormatConfigWithQuote],
+// [LiteralFormatConfigWithSingleQuotedLiterals], [LiteralFormatConfigWithOptions],
+// [SimpleFormatConfig], [SpannerCLICompatibleFormatConfig], and
+// [JSONFormatConfig] to pick a preset. Literal quote options
+// ([LiteralQuoteConfig], [WithLiteralQuote]) are captured into the literal
+// preset's plugins at construction time.
+//
+// [FormatConfig.FormatColumn] tries each [FormatComplexFunc] plugin in order;
+// a plugin returns [ErrFallthrough] to defer. When every plugin defers, NULL
+// values of any type render as [FormatConfig.NullString], and non-NULL values
+// fail with [ErrUnhandledValue] — chain coverage is a runtime property.
+// Constructors return a new [FormatConfig]; call [FormatConfig.Clone] or
+// [FormatConfig.WithComplexPlugin] (prepends a plugin, so the most recent
+// addition runs first) before mutating a config you may reuse. After
+// hand-assembling a config, call [FormatConfig.Validate] to catch an empty
+// [FormatConfig.NullString], an empty chain, or nil plugins before the first
+// [FormatConfig.FormatRow] call. Package writer does not call Validate on
+// [writer.WithFormatter] configs; validate hand-built formatters before
 // passing them to writers.
-// Scalar plugins ([FormatSimpleValue], [FormatLiteralValue],
-// [FormatSpannerCLIValue], [FormatJSONSimpleValue]) format GenericColumnValue directly
-// without Decode; remove them with [FormatConfigWithoutScalarPlugins] or from
-// [FormatConfig.FormatComplexPlugins] to use Decode + [FormatConfig.FormatNullable]
-// (set FormatNullable on the clone; nil returns [ErrFormatNullableRequired]).
-// Scalar plugins fall through to that path when [FormatConfig.FormatNullable] is set.
-// Constructors return a new [FormatConfig]; call [*FormatConfig.Clone] or
-// [*FormatConfig.WithComplexPlugin] (prepends plugins) before mutating a config
-// you may reuse ([*FormatConfig.Clone] copies [FormatConfig.FormatComplexPlugins]).
-// For tuple STRUCT with Spanner CLI scalars, clone [SpannerCLICompatibleFormatConfig]
-// and set [FormatTupleStruct] (see README).
-// [FormatConfig.FormatColumn] runs [FormatComplexFunc] plugins first, then built-in
-// ARRAY, STRUCT, and scalar formatting.
+//
 // Convenience entry points include [FormatRowLiteral], [FormatColumnLiteral],
-// [FormatRowJSONObject], and [FormatRowSpannerCLICompatible]. Identifier quoting helpers are
-// [QuoteIdentifier] and [QuoteQualifiedIdentifier].
+// [FormatRowJSONObject], and [FormatRowSpannerCLICompatible]; they use internal
+// singleton configs, so call [FormatConfig.FormatRow] on your own config when
+// customizing. Identifier quoting helpers are [QuoteIdentifier] and
+// [QuoteQualifiedIdentifier].
 //
-// # Advanced extension API
+// # Customization: builder and plugins
 //
-// Lower-level callbacks and plugin types are intended for custom output formats:
-// [FormatArrayFunc], [FormatStructFieldFunc], [FormatStructParenFunc], [FormatComplexFunc],
-// [ErrFallthrough], [FormatStruct], [FormatTupleStruct], [TypedStructFormat], and
-// [JSONObjectStructFormat]. Plugin authors can lift the usual type and NULL
-// guards with the combinators [PluginForType], [PluginForTypeCode], and
-// [PluginSkippingNull]; [PluginFromNullable] lifts a [FormatNullableFunc]
-// into the chain, and with [NullableFormatterFor] a single scalar type can
-// be overridden while the rest of the chain keeps the preset behavior.
-// [PluginForArray] and [PluginForStruct] lift ARRAY join and STRUCT
-// field/paren callbacks into the chain with the built-in branches' exact
-// non-NULL semantics.
+// [NewFormatConfig] assembles a config from canonical handlers with
+// build-time validation: [WithPlugin] overrides (most recent first), then
+// [WithArrayFormat] ([PluginForArray]), [WithStructFormat]
+// ([PluginForStruct]), and the [WithScalarFormatter] tail
+// ([PluginFromNullable]). Missing handlers fail at construction
+// ([ErrScalarFormatterRequired], [ErrArrayFormatRequired],
+// [ErrStructFormatRequired]) instead of on the first row.
 //
-// [NewFormatConfig] assembles a config from those combinators in canonical
-// order — [WithPlugin] overrides (most recent first), then [WithArrayFormat],
-// [WithStructFormat], and the [WithScalarFormatter] tail — validating at build
-// time instead of on the first row; the resulting config uses only
-// [FormatConfig.NullString] and [FormatConfig.FormatComplexPlugins], the shape
-// the deprecated FormatArray, FormatStruct, FormatNullable, and Literal fields
-// are retired toward.
-// Customize a [FormatConfig] from a constructor, or
-// [FormatConfig.Clone] when reusing one. Convenience formatters such as
-// [FormatRowSpannerCLICompatible] use internal singleton configs; call
-// [FormatConfig.FormatRow] on your own config instead of those helpers.
+// To customize a preset, prepend plugins with [FormatConfig.WithComplexPlugin]:
+// a prepended plugin runs before the preset handlers, so it can override any
+// type (for tuple STRUCT with Spanner CLI scalars, prepend
+// [PluginForStruct]([FormatSimpleStructField], [FormatTupleStruct]); see the
+// README). For per-scalar-type overrides compose [PluginFromNullable] with
+// [NullableFormatterFor]; values the override defers keep the preset behavior.
+// A prepended [PluginFromNullable] with a total formatter replaces preset
+// scalar formatting wholesale.
+//
+// Plugin authors lift the usual type and NULL guards with [PluginForType],
+// [PluginForTypeCode], and [PluginSkippingNull]. Callback types are
+// [FormatArrayFunc], [FormatStructFieldFunc] (Formatter-based),
+// [FormatStructParenFunc], [FormatNullableFunc], and [FormatComplexFunc];
+// exported building blocks include [FormatTupleStruct], [FormatTypedStruct],
+// [FormatBracketStruct], [FormatUntypedArray], [FormatOptionallyTypedArray],
+// [FormatCompactArray], and [NewJSONObjectStructFormatter].
 //
 // # Related packages
 //

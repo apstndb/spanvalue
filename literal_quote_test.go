@@ -70,10 +70,6 @@ func TestLiteralFormatConfigWithOptions(t *testing.T) {
 			PreferredQuote: PreferredSingleQuote,
 		}),
 	)
-	want := LiteralQuoteConfig{Strategy: QuoteMinEscape, PreferredQuote: PreferredSingleQuote}
-	if fc.Literal.Quote != want {
-		t.Fatalf("Literal.Quote = %+v, want %+v", fc.Literal.Quote, want)
-	}
 
 	got, err := fc.FormatToplevelColumn(gcvctor.StringValue("plain"))
 	if err != nil {
@@ -147,10 +143,6 @@ func TestLiteralFormatConfigWithSingleQuotedLiterals(t *testing.T) {
 	t.Parallel()
 
 	fc := LiteralFormatConfigWithSingleQuotedLiterals()
-	want := LiteralQuoteConfig{Strategy: QuoteAlways, PreferredQuote: PreferredSingleQuote}
-	if fc.Literal.Quote != want {
-		t.Fatalf("Literal.Quote = %+v, want %+v", fc.Literal.Quote, want)
-	}
 
 	got, err := fc.FormatToplevelColumn(gcvctor.DateValue(civil.Date{Year: 2014, Month: 9, Day: 27}))
 	if err != nil {
@@ -352,24 +344,26 @@ func TestFormatNullableValueLiteralMatchesWithQuoteZero(t *testing.T) {
 func TestLiteralQuoteFastPathMatchesSlowPath(t *testing.T) {
 	t.Parallel()
 
-	presets := []struct {
+	quotes := []struct {
 		name string
-		fc   *FormatConfig
+		q    LiteralQuoteConfig
 	}{
-		{name: "legacy default", fc: LiteralFormatConfig()},
-		{name: "single always", fc: LiteralFormatConfigWithSingleQuotedLiterals()},
-		{name: "legacy preferred single", fc: LiteralFormatConfigWithQuote(LiteralQuoteConfig{
+		{name: "legacy default", q: LiteralQuoteConfig{}},
+		{name: "single always", q: LiteralQuoteConfig{
+			Strategy: QuoteAlways, PreferredQuote: PreferredSingleQuote,
+		}},
+		{name: "legacy preferred single", q: LiteralQuoteConfig{
 			Strategy: QuoteLegacy, PreferredQuote: PreferredSingleQuote,
-		})},
-		{name: "min escape single tie", fc: LiteralFormatConfigWithQuote(LiteralQuoteConfig{
+		}},
+		{name: "min escape single tie", q: LiteralQuoteConfig{
 			Strategy: QuoteMinEscape, PreferredQuote: PreferredSingleQuote,
-		})},
-		{name: "min escape double tie", fc: LiteralFormatConfigWithQuote(LiteralQuoteConfig{
+		}},
+		{name: "min escape double tie", q: LiteralQuoteConfig{
 			Strategy: QuoteMinEscape, PreferredQuote: PreferredDoubleQuote,
-		})},
-		{name: "always double", fc: LiteralFormatConfigWithQuote(LiteralQuoteConfig{
+		}},
+		{name: "always double", q: LiteralQuoteConfig{
 			Strategy: QuoteAlways, PreferredQuote: PreferredDoubleQuote,
-		})},
+		}},
 	}
 
 	scalars := []spanner.GenericColumnValue{
@@ -381,12 +375,13 @@ func TestLiteralQuoteFastPathMatchesSlowPath(t *testing.T) {
 		gcvctor.Float32Value(float32(math.Inf(-1))),
 	}
 
-	for _, preset := range presets {
+	for _, preset := range quotes {
 		t.Run(preset.name, func(t *testing.T) {
 			t.Parallel()
-			legacy := formatConfigNullableOnly(preset.fc)
+			fc := LiteralFormatConfigWithQuote(preset.q)
+			legacy := literalNullablePathConfig(preset.q)
 			for i, gcv := range scalars {
-				got, err := preset.fc.FormatToplevelColumn(gcv)
+				got, err := fc.FormatToplevelColumn(gcv)
 				if err != nil {
 					t.Fatalf("scalar[%d] direct: %v", i, err)
 				}
@@ -402,14 +397,13 @@ func TestLiteralQuoteFastPathMatchesSlowPath(t *testing.T) {
 	}
 }
 
-func TestLiteralQuoteNormalizeAtFormatTime(t *testing.T) {
+func TestLiteralQuoteNormalizeAtConstruction(t *testing.T) {
 	t.Parallel()
 
-	fc := LiteralFormatConfig()
-	fc.Literal.Quote = LiteralQuoteConfig{
+	fc := LiteralFormatConfigWithQuote(LiteralQuoteConfig{
 		Strategy:       QuoteStrategy(99),
 		PreferredQuote: PreferredSingleQuote,
-	}
+	})
 	got, err := fc.FormatToplevelColumn(gcvctor.StringValue("plain"))
 	if err != nil {
 		t.Fatal(err)
@@ -524,19 +518,6 @@ func TestFormatProtoAsCastLiteralQuote(t *testing.T) {
 	}
 	if single != "CAST(b'deadbeef' AS `package.ProtoType`)" {
 		t.Fatalf("single-quoted proto = %q", single)
-	}
-}
-
-func TestLiteralQuoteForFormatterNonFormatConfig(t *testing.T) {
-	t.Parallel()
-
-	if got := literalQuoteForFormatter(struct{}{}); got != (LiteralQuoteConfig{}) {
-		t.Fatalf("non-FormatConfig formatter: got %+v, want zero", got)
-	}
-
-	var nilFC *FormatConfig
-	if got := literalQuoteForFormatter(nilFC); got != (LiteralQuoteConfig{}) {
-		t.Fatalf("typed nil *FormatConfig: got %+v, want zero", got)
 	}
 }
 

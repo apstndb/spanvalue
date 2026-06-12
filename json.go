@@ -26,23 +26,28 @@ import (
 //
 // INT64 and ENUM emit unquoted JSON numbers. Values beyond 2^53 lose precision in
 // float64-based consumers (JavaScript, encoding/json into any). For lossless export,
-// customize the [FormatConfig] FormatComplexPlugins field to quote INT64/ENUM wire strings.
+// prepend a [FormatComplexFunc] plugin ([*FormatConfig.WithComplexPlugin]) that quotes
+// INT64/ENUM wire strings.
 //   - STRING, BYTES, TIMESTAMP, DATE, NUMERIC, PROTO, INTERVAL, UUID → "quoted string"
 //   - JSON column → raw JSON value (passed through)
 //   - ARRAY → [elem1,elem2,...]
 //   - STRUCT → {"field1":val1,"field2":val2,...}
+//
+// NULL of any type renders as the JSON literal null via
+// [FormatConfig.NullString] ("null"); keep NullString JSON-valid when cloning.
+// Scalar type codes outside the supported set fall through the whole chain and
+// fail with [ErrUnhandledValue] rather than silently emitting non-JSON output;
+// add a plugin (most easily with [*FormatConfig.WithComplexPlugin], or appended
+// after [FormatJSONSimpleValue] on a clone) to support additional codes — the
+// plugin must emit standalone JSON values to keep the output contract.
 func JSONFormatConfig() *FormatConfig {
 	return &FormatConfig{
-		NullString:  "null",
-		FormatArray: FormatCompactArray,
-		FormatStruct: FormatStruct{
-			FormatStructField: FormatSimpleStructField,
-			FormatStructParen: JSONObjectStructFormat(nil),
-		},
+		NullString: "null",
 		FormatComplexPlugins: []FormatComplexFunc{
 			FormatJSONSimpleValue,
+			PluginForArray(FormatCompactArray),
+			PluginForStruct(FormatSimpleStructField, NewJSONObjectStructFormatter(nil)),
 		},
-		FormatNullable: FormatNullableSpannerCLICompatible,
 	}
 }
 
@@ -126,37 +131,59 @@ func NewJSONObjectStructFormatter(namer UnnamedFieldNamer) FormatStructParenFunc
 	}
 }
 
-// FormatJSONSimpleValue is a FormatComplexFunc that formats non-ARRAY, non-STRUCT
-// types as valid JSON values. It returns ErrFallthrough for ARRAY and STRUCT so
-// that the built-in handlers format them.
+// FormatJSONSimpleValue is a [FormatComplexFunc] that formats scalar types as
+// standalone JSON values. It returns [ErrFallthrough] for ARRAY, STRUCT, and
+// type codes outside the supported scalar set (the same set as the other
+// preset scalar plugins: BOOL, INT64/ENUM, FLOAT32/64, STRING, BYTES/PROTO,
+// TIMESTAMP, DATE, NUMERIC, JSON, INTERVAL, UUID), so later plugins in the
+// chain can claim unknown codes; with no such plugin, unhandled non-NULL
+// values fail with [ErrUnhandledValue] instead of emitting invalid JSON.
+// Wire payloads whose kind does not match the type code are rejected
+// ([ErrMalformedWire]) rather than marshaled blindly.
 //
 // For most types, structpb.Value.MarshalJSON() produces the correct JSON representation
-// (BOOL→true/false, FLOAT→number, STRING→"quoted", NULL→null, NaN/Inf→"NaN"/"Infinity").
+// (BOOL→true/false, FLOAT→number, STRING→"quoted", NaN/Inf→"NaN"/"Infinity").
 // Only INT64, ENUM, and JSON (including PostgreSQL PG_JSONB-annotated JSON) columns need special handling:
 //   - INT64: Spanner encodes as StringValue("42"), MarshalJSON() would produce "42" (quoted),
 //     but we want 42 (unquoted number).
 //   - ENUM: Spanner stores proto enum values as INT64; same handling as INT64.
 //   - JSON / PG_JSONB: Spanner encodes as StringValue('{"key":"value"}'), MarshalJSON() would produce
 //     escaped quoted string, but we want the raw JSON value passed through.
+//
+// JSON columns pass the wire string through as-is after validity checking,
+// without re-marshaling — the same wire-as-is contract as NUMERIC (real
+// Spanner wire is already normalized; hand-built GCVs keep their formatting,
+// so key order and whitespace are preserved).
 func FormatJSONSimpleValue(formatter Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
-	switch value.Type.GetCode() {
+	code, ok := scalarTypeCode(value)
+	if !ok {
+		return "", ErrFallthrough
+	}
+	switch code {
 	case sppb.TypeCode_ARRAY, sppb.TypeCode_STRUCT:
 		return "", ErrFallthrough
 	}
-
-	val := value.Value
+	if !isScalarFastPathTypeCode(code) {
+		return "", ErrFallthrough
+	}
 
 	if IsNull(value) {
 		return formatter.GetNullString(), nil
 	}
 
-	switch value.Type.GetCode() {
+	switch code {
 	case sppb.TypeCode_INT64, sppb.TypeCode_ENUM, sppb.TypeCode_JSON:
-		return validateRawJSONValue(value.Type.GetCode(), val)
+		// validateRawJSONValue checks the wire kind and the JSON lexical form
+		// itself; validateScalarWire would duplicate the kind check with a
+		// different error message.
+		return validateRawJSONValue(code, value.Value)
 
 	default:
+		if err := validateScalarWire(value); err != nil {
+			return "", err
+		}
 		// For all other types, structpb.Value's JSON marshaling matches our needs
-		b, err := val.MarshalJSON()
+		b, err := value.Value.MarshalJSON()
 		if err != nil {
 			return "", err
 		}

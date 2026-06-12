@@ -416,12 +416,12 @@ func WithUnnamedFieldNamer(namer spanvalue.UnnamedFieldNamer) NameOption {
 }
 
 func (o unnamedFieldNamerOption) applyDelimitedOption(w *DelimitedWriter) error {
-	w.UnnamedFieldNamer = o.namer
+	w.unnamedFieldNamer = o.namer
 	return nil
 }
 
 func (o unnamedFieldNamerOption) applyJSONLOption(w *JSONLWriter) error {
-	w.UnnamedFieldNamer = o.namer
+	w.unnamedFieldNamer = o.namer
 	return nil
 }
 
@@ -438,9 +438,10 @@ func WithFlushEachRow() DelimitedOption {
 // WithHeader sets whether [DelimitedWriter] emits a CSV/TSV header (default true).
 // The header is written before the first data row, or on [DelimitedWriter.Flush] if only
 // names were registered. See [DelimitedWriter.WriteHeader] to emit it earlier.
+// Header emission is constructor-only configuration.
 func WithHeader(header bool) DelimitedOption {
 	return delimitedOptionFunc(func(w *DelimitedWriter) error {
-		w.Header = header
+		w.header = header
 		return nil
 	})
 }
@@ -470,18 +471,19 @@ func (s *columnSchema) applyNamesOnly(names []string) {
 
 // DelimitedWriter writes rows as CSV-style delimited text. By default, call Flush after the
 // final write; [WithFlushEachRow] flushes encoding/csv after each data row instead.
-// Header controls automatic header output; see [WithHeader] and [DelimitedWriter.WriteHeader].
+// [WithHeader] controls automatic header output; see also [DelimitedWriter.WriteHeader].
+// Configuration is constructor-only ([NewDelimitedWriter] / [NewCSVWriter] options).
 // After the first output write failure, every later Write*/Flush call returns that error;
 // discard the writer (see package doc "Write errors").
 type DelimitedWriter struct {
 	stickyWriteError
 	formatter *spanvalue.FormatConfig
-	// Header enables a header line before the first data row when true (default).
+	// header enables a header line before the first data row when true (default).
 	// See [WithHeader].
-	Header bool
-	// Set before the first write. Once names have been resolved for the current
-	// schema, later changes do not retroactively rewrite cached header names.
-	UnnamedFieldNamer spanvalue.UnnamedFieldNamer
+	header bool
+	// unnamedFieldNamer resolves empty column names for the header.
+	// See [WithUnnamedFieldNamer].
+	unnamedFieldNamer spanvalue.UnnamedFieldNamer
 
 	schema              columnSchema
 	resolvedColumnNames []string
@@ -502,8 +504,8 @@ func NewCSVWriter(out io.Writer, opts ...DelimitedOption) (*DelimitedWriter, err
 func newDelimitedWriter(out io.Writer) *DelimitedWriter {
 	return &DelimitedWriter{
 		formatter:         spanvalue.SimpleFormatConfig(),
-		Header:            true,
-		UnnamedFieldNamer: spanvalue.IndexedUnnamedFieldNamer,
+		header:            true,
+		unnamedFieldNamer: spanvalue.IndexedUnnamedFieldNamer,
 		out:               out,
 	}
 }
@@ -590,8 +592,9 @@ func (w *DelimitedWriter) prepareColumnNames(names []string) error {
 
 // WriteHeader writes the CSV/TSV header once; a column schema must already be registered.
 // With zero registered column names (empty row type), WriteHeader succeeds without writing.
-// With no registered schema, it returns [ErrMissingColumnNames].
-// When [DelimitedWriter.Header] is true, [DelimitedWriter.Flush] also writes a pending header.
+// With no registered schema, it returns [ErrMissingColumnNames]; after a data row was
+// written with the header disabled ([WithHeader](false)), it returns [ErrHeaderAfterData].
+// When the header is enabled (the default), [DelimitedWriter.Flush] also writes a pending header.
 func (w *DelimitedWriter) WriteHeader() error {
 	if w.writeErr != nil {
 		return w.writeErr
@@ -660,7 +663,7 @@ func (w *DelimitedWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 		return err
 	}
 
-	if w.Header {
+	if w.header {
 		if err := w.WriteHeader(); err != nil {
 			return err
 		}
@@ -757,21 +760,23 @@ func validDelimiter(delimiter rune) bool {
 		delimiter != utf8.RuneError
 }
 
-// Flush flushes buffered delimited data to the underlying writer. When [DelimitedWriter.Header]
-// is true, a schema is registered, len(column names) > 0, no header was written yet, and no
-// data row was written yet, Flush writes the header first (including zero-row SELECT exports).
-// When data rows were already written without a header (for example [DelimitedWriter.Header]
-// was enabled only after the first row), the header opportunity has passed: Flush skips the
-// header and still flushes buffered rows. With a registered zero-column schema, Flush succeeds
-// without writing. With no registered schema, no written data, and [DelimitedWriter.Header]
-// true, Flush returns [ErrMissingColumnNames]. After a write failure, Flush returns the latched
-// error without flushing (see package doc "Write errors"). Flush does not close the underlying
-// writer.
+// Flush flushes buffered delimited data to the underlying writer. When the header is
+// enabled ([WithHeader], default true), a schema is registered, len(column names) > 0,
+// and no header was written yet, Flush writes the header first (this covers zero-row
+// SELECT exports; with data rows present the header was already written by the first
+// row). With a registered zero-column schema, Flush succeeds without writing. With no
+// registered schema, no written data, and the header enabled, Flush returns
+// [ErrMissingColumnNames]. After a write failure, Flush returns the latched error
+// without flushing (see package doc "Write errors"). Flush does not close the
+// underlying writer.
 func (w *DelimitedWriter) Flush() error {
 	if w.writeErr != nil {
 		return w.writeErr
 	}
-	if w.Header && !w.wroteHeader && !w.wroteData {
+	if w.header && !w.wroteHeader {
+		// Header configuration is constructor-only, so data rows imply the
+		// header was already written; this branch only runs for zero-row
+		// exports (and zero-column schemas, where WriteHeader writes nothing).
 		if !w.schema.registered {
 			return ErrMissingColumnNames
 		}
@@ -790,10 +795,10 @@ func (w *DelimitedWriter) resolvedNames() ([]string, error) {
 	if len(w.resolvedColumnNames) != 0 || len(w.schema.names) == 0 {
 		return w.resolvedColumnNames, nil
 	}
-	if w.UnnamedFieldNamer == nil {
+	if w.unnamedFieldNamer == nil {
 		return w.schema.names, nil
 	}
-	resolvedNames, err := internal.ResolveColumnNames(w.schema.names, w.UnnamedFieldNamer)
+	resolvedNames, err := internal.ResolveColumnNames(w.schema.names, w.unnamedFieldNamer)
 	if err != nil {
 		return nil, err
 	}
@@ -807,9 +812,9 @@ func (w *DelimitedWriter) resolvedNames() ([]string, error) {
 type JSONLWriter struct {
 	stickyWriteError
 	formatter *spanvalue.FormatConfig
-	// Set before the first write. Once names have been resolved for the current
-	// schema, later changes do not retroactively rewrite cached object keys.
-	UnnamedFieldNamer spanvalue.UnnamedFieldNamer
+	// unnamedFieldNamer resolves empty column names for object keys.
+	// See [WithUnnamedFieldNamer].
+	unnamedFieldNamer spanvalue.UnnamedFieldNamer
 
 	schema              columnSchema
 	resolvedColumnNames []string
@@ -839,7 +844,7 @@ func NewJSONLWriterWithOptions(out io.Writer, options ...JSONLOption) (*JSONLWri
 func newJSONLWriter(out io.Writer) *JSONLWriter {
 	return &JSONLWriter{
 		formatter:         spanvalue.JSONFormatConfig(),
-		UnnamedFieldNamer: spanvalue.IndexedUnnamedFieldNamer,
+		unnamedFieldNamer: spanvalue.IndexedUnnamedFieldNamer,
 		out:               out,
 	}
 }
@@ -1009,10 +1014,10 @@ func (w *JSONLWriter) resolvedNames() ([]string, error) {
 	if len(w.resolvedColumnNames) != 0 || len(w.schema.names) == 0 {
 		return w.resolvedColumnNames, nil
 	}
-	if w.UnnamedFieldNamer == nil {
+	if w.unnamedFieldNamer == nil {
 		return w.schema.names, nil
 	}
-	resolvedNames, err := internal.ResolveColumnNames(w.schema.names, w.UnnamedFieldNamer)
+	resolvedNames, err := internal.ResolveColumnNames(w.schema.names, w.unnamedFieldNamer)
 	if err != nil {
 		return nil, err
 	}

@@ -174,14 +174,14 @@ func TestPluginFromNullable(t *testing.T) {
 		t.Errorf("ARRAY<NUMERIC> = (%q, %v), want ([N:1.50], nil)", got, err)
 	}
 
-	// Unknown type codes fall through to the built-in coverage error
+	// Unknown type codes fall through to the chain's coverage error
 	// instead of becoming this plugin's error.
 	_, err = fc.FormatToplevelColumn(spanner.GenericColumnValue{
 		Type:  &sppb.Type{Code: sppb.TypeCode(9999)},
 		Value: structpb.NewStringValue("x"),
 	})
-	if !errors.Is(err, spanvalue.ErrUnknownType) {
-		t.Errorf("unknown code error = %v, want ErrUnknownType from built-ins", err)
+	if !errors.Is(err, spanvalue.ErrUnhandledValue) {
+		t.Errorf("unknown code error = %v, want ErrUnhandledValue from the chain", err)
 	}
 }
 

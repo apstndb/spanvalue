@@ -5,7 +5,6 @@ import (
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // PluginForType restricts plugin to values whose [sppb.Type] satisfies match;
@@ -54,20 +53,17 @@ func PluginSkippingNull(plugin FormatComplexFunc) FormatComplexFunc {
 	}
 }
 
-// PluginForArray lifts a [FormatArrayFunc] into the plugin chain: non-NULL
-// ARRAY values are formatted exactly like the built-in ARRAY branch — the wire
-// list value is extracted (non-list payloads are [ErrUnexpectedComplexValueKind]),
-// each element is recursively formatted with formatter.FormatColumn(elem, false)
-// so the whole chain applies per element, and the element strings are handed
-// to join. join must be non-nil.
+// PluginForArray lifts a [FormatArrayFunc] into the plugin chain: for
+// non-NULL ARRAY values the wire list value is extracted (non-list payloads
+// are [ErrUnexpectedComplexValueKind]), each element is recursively formatted
+// with formatter.FormatColumn(elem, false) so the whole chain applies per
+// element, and the element strings are handed to join. join must be non-nil.
 //
 // A nil Type, a non-ARRAY type code, and SQL NULL fall through
 // ([ErrFallthrough]); NULL deferral lets the built-in handling render
-// [Formatter.GetNullString], matching the [FormatConfig.FormatArray] field
-// semantics byte for byte. Plugin authors who want typed NULL arrays — for
+// [Formatter.GetNullString]. Plugin authors who want typed NULL arrays — for
 // example rendering CAST(NULL AS bigint[]) — should instead write a plain
-// [PluginForTypeCode](ARRAY, ...) plugin, which receives NULL values; that
-// expressiveness is exactly what the retired field structurally lacked.
+// [PluginForTypeCode](ARRAY, ...) plugin, which receives NULL values.
 func PluginForArray(join FormatArrayFunc) FormatComplexFunc {
 	return func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
 		if value.Type == nil || value.Type.GetCode() != sppb.TypeCode_ARRAY || IsNull(value) {
@@ -77,38 +73,29 @@ func PluginForArray(join FormatArrayFunc) FormatComplexFunc {
 	}
 }
 
-// PluginForStruct lifts STRUCT formatting into the plugin chain: non-NULL
-// STRUCT values are formatted exactly like the built-in STRUCT branch — the
-// wire list value is extracted (non-list payloads are
+// PluginForStruct lifts STRUCT formatting into the plugin chain: for non-NULL
+// STRUCT values the wire list value is extracted (non-list payloads are
 // [ErrUnexpectedComplexValueKind]), the value count is checked against the
 // field descriptors ([ErrMismatchedFields]), each field is formatted with the
-// field callback, and the field strings are handed to paren. Both callbacks
-// must be non-nil.
-//
-// The field callback receives the [Formatter] (use
-// formatter.FormatColumn(elementGCV, false) to recurse into the field value)
-// instead of the *FormatConfig that the legacy [FormatStructFieldFunc] takes;
-// this is the signature the next breaking release aligns
-// [FormatStructFieldFunc] itself to.
+// [FormatStructFieldFunc] callback (use formatter.FormatColumn(fieldGCV, false)
+// to recurse into the field value), and the field strings are handed to paren.
+// Both callbacks must be non-nil.
 //
 // A nil Type, a non-STRUCT type code, and SQL NULL fall through
 // ([ErrFallthrough]); NULL deferral lets the built-in handling render
 // [Formatter.GetNullString]. For typed NULL STRUCT rendering write a plain
 // [PluginForTypeCode](STRUCT, ...) plugin, which receives NULL values.
-func PluginForStruct(field func(formatter Formatter, field *sppb.StructType_Field, value *structpb.Value) (string, error), paren FormatStructParenFunc) FormatComplexFunc {
+func PluginForStruct(field FormatStructFieldFunc, paren FormatStructParenFunc) FormatComplexFunc {
 	return func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
 		if value.Type == nil || value.Type.GetCode() != sppb.TypeCode_STRUCT || IsNull(value) {
 			return "", ErrFallthrough
 		}
-		return formatStructFields(value, toplevel, func(sf *sppb.StructType_Field, v *structpb.Value) (string, error) {
-			return field(formatter, sf, v)
-		}, paren)
+		return formatStructFields(formatter, value, toplevel, field, paren)
 	}
 }
 
 // PluginFromNullable lifts a [FormatNullableFunc] into the plugin chain:
-// non-NULL scalar values are decoded to their [NullableValue] wrapper — the
-// same Decode-based dispatch as the [FormatConfig.FormatNullable] slow path,
+// non-NULL scalar values are decoded to their [NullableValue] wrapper —
 // including the PG-annotated wrappers ([cloud.google.com/go/spanner.PGNumeric],
 // [cloud.google.com/go/spanner.PGJsonB]) — and formatted with f. ARRAY and
 // STRUCT values, SQL NULLs, and type codes outside the scalar set fall
@@ -116,9 +103,8 @@ func PluginForStruct(field func(formatter Formatter, field *sppb.StructType_Fiel
 //
 // f itself may return [ErrFallthrough] to defer values it does not claim,
 // so per-type overrides compose with [NullableFormatterFor] and the rest of
-// the chain (preset scalar plugins, built-ins) keeps formatting everything
-// the override leaves alone — no access to a preset's own FormatNullable
-// function is needed:
+// the chain (preset scalar plugins included) keeps formatting everything
+// the override leaves alone:
 //
 //	cfg := spanvalue.SimpleFormatConfig().WithComplexPlugin(
 //	    spanvalue.PluginFromNullable(spanvalue.NullableFormatterFor(
@@ -150,9 +136,8 @@ func PluginFromNullable(f FormatNullableFunc) FormatComplexFunc {
 // NullableFormatterFor restricts a typed formatter to the single
 // [NullableValue] wrapper type T, deferring every other value with
 // [ErrFallthrough]. It is meant for composition through
-// [PluginFromNullable]; assigned directly to [FormatConfig.FormatNullable]
-// the deferral surfaces as an error, because only the plugin chain
-// interprets [ErrFallthrough].
+// [PluginFromNullable], which lets the deferral reach the rest of the
+// plugin chain.
 func NullableFormatterFor[T NullableValue](f func(T) (string, error)) FormatNullableFunc {
 	return func(v NullableValue) (string, error) {
 		if tv, ok := v.(T); ok {

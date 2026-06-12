@@ -2,9 +2,6 @@ package spanvalue
 
 import (
 	"errors"
-
-	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 var (
@@ -25,7 +22,7 @@ type formatConfigBuilder struct {
 	// plugins is the override region, most recent registration first.
 	plugins     []FormatComplexFunc
 	arrayJoin   FormatArrayFunc
-	structField func(formatter Formatter, field *sppb.StructType_Field, value *structpb.Value) (string, error)
+	structField FormatStructFieldFunc
 	structParen FormatStructParenFunc
 	scalar      FormatNullableFunc
 }
@@ -72,7 +69,7 @@ func WithArrayFormat(join FormatArrayFunc) FormatConfigOption {
 // STRUCT values render as the [WithNullString] value unless an override
 // claims them. Required; a nil field or paren is treated as unset
 // ([ErrStructFormatRequired]).
-func WithStructFormat(field func(formatter Formatter, field *sppb.StructType_Field, value *structpb.Value) (string, error), paren FormatStructParenFunc) FormatConfigOption {
+func WithStructFormat(field FormatStructFieldFunc, paren FormatStructParenFunc) FormatConfigOption {
 	return func(b *formatConfigBuilder) {
 		b.structField = field
 		b.structParen = paren
@@ -87,21 +84,16 @@ func WithScalarFormatter(f FormatNullableFunc) FormatConfigOption {
 	return func(b *formatConfigBuilder) { b.scalar = f }
 }
 
-// NewFormatConfig assembles a [FormatConfig] whose behavior lives entirely in
-// [FormatConfig.NullString] and [FormatConfig.FormatComplexPlugins] — the
-// shape the next breaking release reduces FormatConfig to (#253). The chain
-// is built in canonical order:
+// NewFormatConfig assembles a [FormatConfig] from the plugin combinators with
+// build-time validation. The chain is built in canonical order:
 //
 //  1. [WithPlugin] overrides, most recent registration first,
 //  2. [PluginForArray] from [WithArrayFormat],
 //  3. [PluginForStruct] from [WithStructFormat],
 //  4. [PluginFromNullable] from [WithScalarFormatter] as the tail.
 //
-// The deprecated FormatArray / FormatStruct / FormatNullable / Literal fields
-// are left at their zero values and are never invoked: non-NULL ARRAY, STRUCT,
-// and scalar values are claimed by the installed plugins, and NULL values fall
-// through to the built-in NULL handling ([FormatConfig.NullString]) before any
-// field would run. The returned config passes [*FormatConfig.Validate].
+// NULL values that no override claims render as the [WithNullString] value.
+// The returned config passes [*FormatConfig.Validate].
 //
 // Build-time validation: [ErrScalarFormatterRequired], [ErrArrayFormatRequired],
 // and [ErrStructFormatRequired] when the respective handler option is missing;
@@ -109,9 +101,7 @@ func WithScalarFormatter(f FormatNullableFunc) FormatConfigOption {
 // [ErrNilFormatComplexPlugin] when a [WithPlugin] override is nil. Validation
 // does not prove total coverage: a scalar type code outside the
 // [PluginFromNullable] domain that no override claims surfaces
-// [ErrFormatNullableRequired] at format time (the runtime successor of the
-// nil-field check), where presets with a FormatNullable field report
-// [ErrUnknownType]. Nil options are ignored.
+// [ErrUnhandledValue] at format time. Nil options are ignored.
 func NewFormatConfig(opts ...FormatConfigOption) (*FormatConfig, error) {
 	var b formatConfigBuilder
 	for _, opt := range opts {

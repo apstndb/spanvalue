@@ -41,7 +41,7 @@ func BenchmarkFormatColumnSimple_Direct(b *testing.B) {
 }
 
 func BenchmarkFormatColumnSimple_NullablePath(b *testing.B) {
-	benchmarkFormatColumn(b, formatConfigNullableOnly(SimpleFormatConfig()), benchmarkScalars())
+	benchmarkFormatColumn(b, simpleNullablePathConfig(), benchmarkScalars())
 }
 
 func BenchmarkFormatColumnLiteral_Direct(b *testing.B) {
@@ -49,7 +49,7 @@ func BenchmarkFormatColumnLiteral_Direct(b *testing.B) {
 }
 
 func BenchmarkFormatColumnLiteral_NullablePath(b *testing.B) {
-	benchmarkFormatColumn(b, formatConfigNullableOnly(LiteralFormatConfig()), benchmarkScalars())
+	benchmarkFormatColumn(b, literalNullablePathConfig(LiteralQuoteConfig{}), benchmarkScalars())
 }
 
 func BenchmarkFormatColumnSpannerCLI_Direct(b *testing.B) {
@@ -57,5 +57,5 @@ func BenchmarkFormatColumnSpannerCLI_Direct(b *testing.B) {
 }
 
 func BenchmarkFormatColumnSpannerCLI_NullablePath(b *testing.B) {
-	benchmarkFormatColumn(b, formatConfigNullableOnly(SpannerCLICompatibleFormatConfig()), benchmarkScalars())
+	benchmarkFormatColumn(b, spannerCLINullablePathConfig(), benchmarkScalars())
 }

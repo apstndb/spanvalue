@@ -1,6 +1,7 @@
 package spanvalue
 
 import (
+	"errors"
 	"math"
 	"strconv"
 	"strings"
@@ -153,6 +154,70 @@ func TestJSONFormatConfig_InvalidRawPayload(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestJSONFormatConfig_ScalarContract pins the #205 fixes: the JSON scalar
+// plugin gates on the supported scalar set (unknown codes fall through to
+// ErrUnhandledValue or a user plugin instead of silently emitting non-JSON),
+// validates wire payloads, and passes JSON wire strings through as-is
+// (wire-as-is contract, like NUMERIC).
+func TestJSONFormatConfig_ScalarContract(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unknown code is ErrUnhandledValue", func(t *testing.T) {
+		t.Parallel()
+		_, err := JSONFormatConfig().FormatToplevelColumn(spanner.GenericColumnValue{
+			Type:  &sppb.Type{Code: sppb.TypeCode(9999)},
+			Value: structpb.NewStringValue("x"),
+		})
+		if !errors.Is(err, ErrUnhandledValue) {
+			t.Fatalf("error = %v, want ErrUnhandledValue", err)
+		}
+	})
+
+	t.Run("unknown code falls through to user plugin", func(t *testing.T) {
+		t.Parallel()
+		fc := JSONFormatConfig().Clone()
+		fc.FormatComplexPlugins = append(fc.FormatComplexPlugins,
+			func(_ Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
+				if value.Type.GetCode() != sppb.TypeCode(9999) {
+					return "", ErrFallthrough
+				}
+				return `"custom"`, nil
+			})
+		got, err := fc.FormatToplevelColumn(spanner.GenericColumnValue{
+			Type:  &sppb.Type{Code: sppb.TypeCode(9999)},
+			Value: structpb.NewStringValue("x"),
+		})
+		if err != nil || got != `"custom"` {
+			t.Fatalf("got (%q, %v), want (\"custom\", nil)", got, err)
+		}
+	})
+
+	t.Run("malformed wire is rejected", func(t *testing.T) {
+		t.Parallel()
+		// TIMESTAMP with a bool wire used to marshal blindly to `true`.
+		_, err := JSONFormatConfig().FormatToplevelColumn(spanner.GenericColumnValue{
+			Type:  typector.CodeToSimpleType(sppb.TypeCode_TIMESTAMP),
+			Value: structpb.NewBoolValue(true),
+		})
+		if !errors.Is(err, ErrMalformedWire) {
+			t.Fatalf("error = %v, want ErrMalformedWire", err)
+		}
+	})
+
+	t.Run("JSON wire passes through as-is", func(t *testing.T) {
+		t.Parallel()
+		// Denormalized but valid JSON wire keeps its key order and spacing.
+		wire := `{"b": 1, "a": 2}`
+		got, err := JSONFormatConfig().FormatToplevelColumn(spanner.GenericColumnValue{
+			Type:  typector.CodeToSimpleType(sppb.TypeCode_JSON),
+			Value: structpb.NewStringValue(wire),
+		})
+		if err != nil || got != wire {
+			t.Fatalf("got (%q, %v), want (%q, nil)", got, err, wire)
+		}
+	})
 }
 
 func TestFormatRowJSONObject(t *testing.T) {
