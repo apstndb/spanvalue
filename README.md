@@ -335,7 +335,8 @@ SQL INSERT output uses Spanner GoogleSQL quoting by default. Use
 `writer.WithSQLDialect` controls identifier quoting and insert-kind validation,
 not value literal formatting. For PostgreSQL-dialect value literals, pass a
 PostgreSQL-aware formatter with `writer.WithFormatter` (for example
-[`spanpg.PostgreSQLLiteralFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanpg#PostgreSQLLiteralFormatConfig)).
+[`spanpg.PostgreSQLLiteralFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanpg#PostgreSQLLiteralFormatConfig))
+together with `writer.WithSQLDialect`.
 
 ```go
 func writeInserts(out io.Writer, table string, rows []*spanner.Row) error {
