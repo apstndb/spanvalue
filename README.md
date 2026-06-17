@@ -329,9 +329,13 @@ func writeJSONL(out io.Writer, rows []*spanner.Row) error {
 }
 ```
 
-SQL INSERT output uses Spanner GoogleSQL quoting. Use
+SQL INSERT output uses Spanner GoogleSQL quoting by default. Use
 `writer.WithSQLInsertKind` for `INSERT OR IGNORE` or `INSERT OR UPDATE`; see
 [INSERT DML syntax](https://cloud.google.com/spanner/docs/reference/standard-sql/dml-syntax).
+`writer.WithSQLDialect` controls identifier quoting and insert-kind validation,
+not value literal formatting. For PostgreSQL-dialect value literals, pass a
+PostgreSQL-aware formatter with `writer.WithFormatter` (for example
+[`spanpg.PostgreSQLLiteralFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanpg#PostgreSQLLiteralFormatConfig)).
 
 ```go
 func writeInserts(out io.Writer, table string, rows []*spanner.Row) error {
