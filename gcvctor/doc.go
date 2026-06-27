@@ -27,8 +27,10 @@
 // [NullOf], [NullArrayOf], and [EmptyArrayOf] normalize a nil Type pointer input to
 // TYPE_CODE_UNSPECIFIED so they never fabricate malformed nil Type pointers.
 // [WithType] applies the same nil-type normalization when retyping; use
-// [WithEquivalentType] or [WithExactType] when the destination type must be
-// validated. For NULL detection on existing values, see [github.com/apstndb/spanvalue.IsNull].
+// [WithEquivalentType] or [WithExactType] when the source and destination type
+// metadata must be checked. Those helpers validate Type only; Value is preserved
+// unchanged and not validated or canonicalized. For NULL detection on existing
+// values, see [github.com/apstndb/spanvalue.IsNull].
 // Neither encodes a non-null STRUCT whose fields are all null; use [StructValueOf] with
 // per-field nulls when you need that shape.
 //

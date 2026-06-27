@@ -38,9 +38,12 @@ func TestWithTypeNilDestinationNormalizesUnspecified(t *testing.T) {
 
 	src := gcvctor.Int64Value(1)
 	got := gcvctor.WithType(nil, src)
+	if got.Type == nil {
+		t.Fatal("Type is nil, want TYPE_CODE_UNSPECIFIED Type")
+	}
 	wantType := typector.CodeToSimpleType(sppb.TypeCode_TYPE_CODE_UNSPECIFIED)
-	if got.Type.GetCode() != wantType.GetCode() {
-		t.Fatalf("Type code = %v, want %v", got.Type.GetCode(), wantType.GetCode())
+	if diff := cmp.Diff(wantType, got.Type, protocmp.Transform()); diff != "" {
+		t.Fatalf("Type (-want +got):\n%s", diff)
 	}
 	if diff := cmp.Diff(src.Value, got.Value, protocmp.Transform()); diff != "" {
 		t.Fatalf("Value changed (-want +got):\n%s", diff)
@@ -66,12 +69,13 @@ func TestWithEquivalentTypeScalar(t *testing.T) {
 func TestWithEquivalentTypeArray(t *testing.T) {
 	t.Parallel()
 
-	elemType := typector.CodeToSimpleType(sppb.TypeCode_INT64)
-	src, err := gcvctor.ArrayValueOf(elemType, gcvctor.Int64Value(1), gcvctor.Int64Value(2))
+	srcElemType := typector.CodeToSimpleType(sppb.TypeCode_INT64)
+	src, err := gcvctor.ArrayValueOf(srcElemType, gcvctor.Int64Value(1), gcvctor.Int64Value(2))
 	if err != nil {
 		t.Fatalf("ArrayValueOf: %v", err)
 	}
-	destArrayType := typector.ElemTypeToArrayType(elemType)
+	destElemType := typector.CodeToSimpleType(sppb.TypeCode_INT64)
+	destArrayType := typector.ElemTypeToArrayType(destElemType)
 
 	got, err := gcvctor.WithEquivalentType(destArrayType, src)
 	if err != nil {
@@ -189,4 +193,74 @@ func TestWithExactTypeNilSourceType(t *testing.T) {
 	if !errors.Is(err, gcvctor.ErrTypeMismatch) {
 		t.Fatalf("error = %v, want ErrTypeMismatch", err)
 	}
+}
+
+func TestWithExactTypeScalarMismatch(t *testing.T) {
+	t.Parallel()
+
+	src := gcvctor.Int64Value(1)
+	destType := typector.CodeToSimpleType(sppb.TypeCode_STRING)
+
+	_, err := gcvctor.WithExactType(destType, src)
+	if !errors.Is(err, gcvctor.ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+}
+
+func TestWithEquivalentTypeMalformedTypesDoNotPanic(t *testing.T) {
+	t.Parallel()
+
+	t.Run("array without element type", func(t *testing.T) {
+		t.Parallel()
+
+		malformed := &sppb.Type{Code: sppb.TypeCode_ARRAY}
+		_, err := gcvctor.WithEquivalentType(typector.Int64(), spanner.GenericColumnValue{Type: malformed})
+		if !errors.Is(err, gcvctor.ErrTypeMismatch) {
+			t.Fatalf("error = %v, want ErrTypeMismatch", err)
+		}
+	})
+
+	t.Run("struct field with nil type", func(t *testing.T) {
+		t.Parallel()
+
+		malformed := &sppb.Type{
+			Code: sppb.TypeCode_STRUCT,
+			StructType: &sppb.StructType{
+				Fields: []*sppb.StructType_Field{{Name: "f"}},
+			},
+		}
+		_, err := gcvctor.WithEquivalentType(typector.Int64(), spanner.GenericColumnValue{Type: malformed})
+		if !errors.Is(err, gcvctor.ErrTypeMismatch) {
+			t.Fatalf("error = %v, want ErrTypeMismatch", err)
+		}
+	})
+}
+
+func TestWithExactTypeMalformedTypesDoNotPanic(t *testing.T) {
+	t.Parallel()
+
+	t.Run("array without element type", func(t *testing.T) {
+		t.Parallel()
+
+		malformed := &sppb.Type{Code: sppb.TypeCode_ARRAY}
+		_, err := gcvctor.WithExactType(typector.Int64(), spanner.GenericColumnValue{Type: malformed})
+		if !errors.Is(err, gcvctor.ErrTypeMismatch) {
+			t.Fatalf("error = %v, want ErrTypeMismatch", err)
+		}
+	})
+
+	t.Run("struct field with nil type", func(t *testing.T) {
+		t.Parallel()
+
+		malformed := &sppb.Type{
+			Code: sppb.TypeCode_STRUCT,
+			StructType: &sppb.StructType{
+				Fields: []*sppb.StructType_Field{{Name: "f"}},
+			},
+		}
+		_, err := gcvctor.WithExactType(typector.Int64(), spanner.GenericColumnValue{Type: malformed})
+		if !errors.Is(err, gcvctor.ErrTypeMismatch) {
+			t.Fatalf("error = %v, want ErrTypeMismatch", err)
+		}
+	})
 }

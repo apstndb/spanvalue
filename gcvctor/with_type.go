@@ -14,7 +14,7 @@ import (
 // when typ is nil.
 var ErrNilDestinationType = errors.New("gcvctor: nil destination type")
 
-// WithType returns a copy of gcv with Type replaced by typ and Value unchanged.
+// WithType returns a shallow copy of gcv with Type replaced by typ and Value unchanged.
 // A nil typ is normalized to TYPE_CODE_UNSPECIFIED, matching [NullOf].
 // For validation, use [WithEquivalentType] or [WithExactType].
 func WithType(typ *sppb.Type, gcv spanner.GenericColumnValue) spanner.GenericColumnValue {
@@ -26,6 +26,7 @@ func WithType(typ *sppb.Type, gcv spanner.GenericColumnValue) spanner.GenericCol
 
 // WithEquivalentType returns gcv retyped to typ when [github.com/apstndb/spantype.EquivalentTypes]
 // reports the source and destination types are Spanner-equivalent.
+// It only validates Type metadata; Value is preserved unchanged and not validated or canonicalized.
 func WithEquivalentType(typ *sppb.Type, gcv spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if typ == nil {
 		return spanner.GenericColumnValue{}, ErrNilDestinationType
@@ -47,6 +48,7 @@ func WithEquivalentType(typ *sppb.Type, gcv spanner.GenericColumnValue) (spanner
 // WithExactType returns gcv retyped to typ when proto.Equal(gcv.Type, typ).
 // Use this when expected-type coercion requires identical type metadata, not
 // merely Spanner equivalence.
+// It only validates Type metadata; Value is preserved unchanged and not validated or canonicalized.
 func WithExactType(typ *sppb.Type, gcv spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if typ == nil {
 		return spanner.GenericColumnValue{}, ErrNilDestinationType
