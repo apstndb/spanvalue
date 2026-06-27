@@ -26,6 +26,11 @@
 // scalar type codes only—it cannot express STRUCT field layouts or ARRAY element types.
 // [NullOf], [NullArrayOf], and [EmptyArrayOf] normalize a nil Type pointer input to
 // TYPE_CODE_UNSPECIFIED so they never fabricate malformed nil Type pointers.
+// [WithType] applies the same nil-type normalization when retyping; use
+// [WithEquivalentType] or [WithExactType] when the source and destination type
+// metadata must be checked. Those helpers validate Type only; Value is preserved
+// unchanged and not validated or canonicalized. For NULL detection on existing
+// values, see [github.com/apstndb/spanvalue.IsNull].
 // Neither encodes a non-null STRUCT whose fields are all null; use [StructValueOf] with
 // per-field nulls when you need that shape.
 //
@@ -89,6 +94,14 @@
 // [MustJSONStringValue], and [MustJSONValue] for inline nesting. Typed Go inputs ([DateValue] with
 // [cloud.google.com/go/civil.Date], [TimestampValue] with [time.Time], and so on) avoid parse errors
 // when you already hold the native value.
+//
+// Literal evaluation (preserve the parsed wire as-is) vs CAST/coercion (validate and canonicalize):
+//
+//   - Literal paths — [StringBasedValueFromCode] or [StringBasedValueOf] when the SQL literal's
+//     wire form must round-trip unchanged (for example DATE "1970-01-01" from a parser).
+//   - CAST/coercion paths — validated helpers such as [DateStringValue], [TimestampStringValue],
+//     [IntervalStringValue], [UUIDStringValue], and [NumericValueChecked] when semantics require
+//     Spanner-canonical wire.
 //
 // See ExampleStringBasedValueFromCode_validatedDate and ExampleNormalizeArrayElements.
 package gcvctor
