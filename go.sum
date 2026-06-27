@@ -636,6 +636,8 @@ github.com/apstndb/spantype v0.3.13-0.20260627180028-689f405fef1d h1:Sb5WliFi0f7
 github.com/apstndb/spantype v0.3.13-0.20260627180028-689f405fef1d/go.mod h1:9eHowE7LcJ155ukCYUyuNzVAw9Ne0GXPXpHmu+iaMyk=
 github.com/apstndb/spantype v0.3.13-0.20260627182227-474d762afcab h1:DLazJd/98BJja7n9HveeRy6rD4opoK1QwFdwddDmdG8=
 github.com/apstndb/spantype v0.3.13-0.20260627182227-474d762afcab/go.mod h1:9eHowE7LcJ155ukCYUyuNzVAw9Ne0GXPXpHmu+iaMyk=
+github.com/apstndb/spantype v0.3.13-0.20260627183148-91cc5f096e09 h1:IXE6mQPirDmi9smtV0+pUPescIwZh5ssxAOoQxwTjfA=
+github.com/apstndb/spantype v0.3.13-0.20260627183148-91cc5f096e09/go.mod h1:9eHowE7LcJ155ukCYUyuNzVAw9Ne0GXPXpHmu+iaMyk=
 github.com/boombuler/barcode v1.0.0/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl3JlRe0mD8=
 github.com/boombuler/barcode v1.0.1/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl3JlRe0mD8=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=

@@ -30,6 +30,9 @@ func WithEquivalentType(typ *sppb.Type, gcv spanner.GenericColumnValue) (spanner
 	if typ == nil {
 		return spanner.GenericColumnValue{}, ErrNilDestinationType
 	}
+	if gcv.Type == nil {
+		return spanner.GenericColumnValue{}, fmt.Errorf("%w: source type is nil", ErrTypeMismatch)
+	}
 	if !spantype.EquivalentTypes(gcv.Type, typ) {
 		return spanner.GenericColumnValue{}, fmt.Errorf(
 			"%w: %v is not equivalent to %v",
@@ -47,6 +50,9 @@ func WithEquivalentType(typ *sppb.Type, gcv spanner.GenericColumnValue) (spanner
 func WithExactType(typ *sppb.Type, gcv spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if typ == nil {
 		return spanner.GenericColumnValue{}, ErrNilDestinationType
+	}
+	if gcv.Type == nil {
+		return spanner.GenericColumnValue{}, fmt.Errorf("%w: source type is nil", ErrTypeMismatch)
 	}
 	if !proto.Equal(gcv.Type, typ) {
 		return spanner.GenericColumnValue{}, fmt.Errorf(

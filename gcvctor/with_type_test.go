@@ -126,6 +126,17 @@ func TestWithEquivalentTypeNilDestination(t *testing.T) {
 	}
 }
 
+func TestWithEquivalentTypeNilSourceType(t *testing.T) {
+	t.Parallel()
+
+	_, err := gcvctor.WithEquivalentType(typector.Int64(), spanner.GenericColumnValue{
+		Value: structpb.NewStringValue("1"),
+	})
+	if !errors.Is(err, gcvctor.ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
+	}
+}
+
 func TestWithExactTypeMatch(t *testing.T) {
 	t.Parallel()
 
@@ -166,5 +177,16 @@ func TestWithExactTypeNilDestination(t *testing.T) {
 	_, err := gcvctor.WithExactType(nil, gcvctor.Int64Value(1))
 	if !errors.Is(err, gcvctor.ErrNilDestinationType) {
 		t.Fatalf("error = %v, want ErrNilDestinationType", err)
+	}
+}
+
+func TestWithExactTypeNilSourceType(t *testing.T) {
+	t.Parallel()
+
+	_, err := gcvctor.WithExactType(typector.Int64(), spanner.GenericColumnValue{
+		Value: structpb.NewStringValue("1"),
+	})
+	if !errors.Is(err, gcvctor.ErrTypeMismatch) {
+		t.Fatalf("error = %v, want ErrTypeMismatch", err)
 	}
 }
