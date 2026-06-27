@@ -56,9 +56,10 @@ func WithExactType(typ *sppb.Type, gcv spanner.GenericColumnValue) (spanner.Gene
 	}
 	if !proto.Equal(gcv.Type, typ) {
 		return spanner.GenericColumnValue{}, fmt.Errorf(
-			"%w: destination type metadata differs from %v",
+			"%w: %v is not exactly equal to %v",
 			ErrTypeMismatch,
 			spantype.FormatTypeMoreVerbose(gcv.Type),
+			spantype.FormatTypeMoreVerbose(typ),
 		)
 	}
 	return WithType(typ, gcv), nil
