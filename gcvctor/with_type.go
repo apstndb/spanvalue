@@ -24,16 +24,13 @@ func WithType(typ *sppb.Type, gcv spanner.GenericColumnValue) spanner.GenericCol
 	}
 }
 
-// WithEquivalentType returns gcv retyped to typ when the source and destination
-// types are Spanner-equivalent: scalar types require proto.Equal metadata;
-// ARRAY types require equivalent element types; STRUCT types require the same
-// number of fields with pairwise equivalent field types (field names are not
-// compared). This mirrors identity CAST and ARRAY cast paths in semantic layers.
+// WithEquivalentType returns gcv retyped to typ when [github.com/apstndb/spantype.EquivalentTypes]
+// reports the source and destination types are Spanner-equivalent.
 func WithEquivalentType(typ *sppb.Type, gcv spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if typ == nil {
 		return spanner.GenericColumnValue{}, ErrNilDestinationType
 	}
-	if !equivalentTypes(gcv.Type, typ) {
+	if !spantype.EquivalentTypes(gcv.Type, typ) {
 		return spanner.GenericColumnValue{}, fmt.Errorf(
 			"%w: %v is not equivalent to %v",
 			ErrTypeMismatch,
@@ -59,42 +56,4 @@ func WithExactType(typ *sppb.Type, gcv spanner.GenericColumnValue) (spanner.Gene
 		)
 	}
 	return WithType(typ, gcv), nil
-}
-
-func equivalentTypes(a, b *sppb.Type) bool {
-	if a == nil || b == nil {
-		return a == nil && b == nil
-	}
-	if a.GetCode() != b.GetCode() {
-		return false
-	}
-	switch a.GetCode() {
-	case sppb.TypeCode_ARRAY:
-		return equivalentTypes(a.GetArrayElementType(), b.GetArrayElementType())
-	case sppb.TypeCode_STRUCT:
-		aStruct := a.GetStructType()
-		bStruct := b.GetStructType()
-		if aStruct == nil || bStruct == nil {
-			return aStruct == nil && bStruct == nil
-		}
-		aFields := aStruct.GetFields()
-		bFields := bStruct.GetFields()
-		if len(aFields) != len(bFields) {
-			return false
-		}
-		for i := range aFields {
-			if aFields[i] == nil || bFields[i] == nil {
-				if aFields[i] != bFields[i] {
-					return false
-				}
-				continue
-			}
-			if !equivalentTypes(aFields[i].GetType(), bFields[i].GetType()) {
-				return false
-			}
-		}
-		return true
-	default:
-		return proto.Equal(a, b)
-	}
 }
