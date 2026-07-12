@@ -170,6 +170,33 @@ func IsNull(gcv spanner.GenericColumnValue) bool {
 	return internal.IsNullGenericColumnValue(gcv)
 }
 
+// WireValue returns gcv's protobuf wire value for low-level ARRAY or STRUCT
+// assembly. When gcv.Value is nil, it returns a fresh explicit protobuf NULL,
+// so the result is never nil. Otherwise it returns gcv.Value without cloning;
+// callers must treat the returned value as read-only.
+//
+// WireValue does not validate that gcv.Type and gcv.Value form a valid Spanner
+// wire value. Use it when the caller already owns type validation and needs to
+// preserve the encoded value as-is.
+func WireValue(gcv spanner.GenericColumnValue) *structpb.Value {
+	if gcv.Value == nil {
+		return structpb.NewNullValue()
+	}
+	return gcv.Value
+}
+
+// WireValues maps [WireValue] over gcvs for low-level ARRAY or STRUCT
+// assembly. It always returns a newly allocated, non-nil slice, including for
+// nil or empty input. Non-nil element values are borrowed from gcvs and must
+// be treated as read-only.
+func WireValues(gcvs []spanner.GenericColumnValue) []*structpb.Value {
+	values := make([]*structpb.Value, len(gcvs))
+	for i, gcv := range gcvs {
+		values[i] = WireValue(gcv)
+	}
+	return values
+}
+
 // FormatProtoAsCast formats PROTO values as CAST(b"..." AS `fqn`) with the
 // default (legacy double-quote) bytes-literal quoting. The literal preset
 // constructors install a quote-aware equivalent that follows the
