@@ -6,6 +6,7 @@ import (
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/apstndb/spanvalue"
 	"github.com/apstndb/spanvalue/gcvctor"
@@ -71,4 +72,20 @@ func ExampleNewFormatConfig() {
 	fmt.Println(out)
 	// Output:
 	// [1.50, NULL]
+}
+
+// Materialize nil cells as explicit protobuf NULL values before low-level
+// ARRAY or STRUCT wire assembly.
+func ExampleWireValues() {
+	wireValues := spanvalue.WireValues([]spanner.GenericColumnValue{
+		gcvctor.Int64Value(7),
+		{Type: &sppb.Type{Code: sppb.TypeCode_INT64}},
+	})
+	arrayWire := structpb.NewListValue(&structpb.ListValue{Values: wireValues})
+
+	fmt.Println(arrayWire.GetListValue().GetValues()[0].GetStringValue())
+	fmt.Println(arrayWire.GetListValue().GetValues()[1].GetNullValue())
+	// Output:
+	// 7
+	// NULL_VALUE
 }
