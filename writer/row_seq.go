@@ -10,8 +10,8 @@ import (
 	"github.com/apstndb/spanvalue"
 )
 
-// ErrNilRowSeq reports that [RunRowSeq] or [WriteRowSeq] was called with a nil
-// row sequence. It is the same sentinel as [spanvalue.ErrNilRowSeq].
+// ErrNilRowSeq reports that a row-sequence helper was called with a nil row
+// sequence. It is the same sentinel as [spanvalue.ErrNilRowSeq].
 var ErrNilRowSeq = spanvalue.ErrNilRowSeq
 
 // RowSeq adapts already-built rows to the fallible sequence shape consumed by
@@ -20,6 +20,9 @@ var ErrNilRowSeq = spanvalue.ErrNilRowSeq
 //
 // Row sources that can fail per row (for example lazy encoders) should
 // produce their own [iter.Seq2] instead of pre-building a slice for RowSeq.
+// Applications that already use github.com/apstndb/spaniter can use
+// spaniter.Rows instead; RowSeq keeps writer usable without that additional
+// module dependency.
 func RowSeq(rows ...*spanner.Row) iter.Seq2[*spanner.Row, error] {
 	return func(yield func(*spanner.Row, error) bool) {
 		for _, row := range rows {
@@ -93,6 +96,21 @@ func WriteRowSeq(md *sppb.ResultSetMetadata, rows iter.Seq2[*spanner.Row, error]
 		return nil, ErrNilWriter
 	}
 	return RunRowSeq(md, rows, RowIteratorHooksFromWriter(w))
+}
+
+// WriteRowSeqDeferredMetadata is [WriteRowSeq] for producers that publish the
+// row type only after producing begins. metadata is evaluated on the
+// [RunRowSeqDeferredMetadata] schedule, and rows are streamed into w through
+// [RowIteratorHooksFromWriter]. A nil metadata func is treated as always-nil
+// metadata.
+func WriteRowSeqDeferredMetadata(metadata func() *sppb.ResultSetMetadata, rows iter.Seq2[*spanner.Row, error], w RowIteratorWriter) (*RowIteratorResult, error) {
+	if rows == nil {
+		return nil, ErrNilRowSeq
+	}
+	if w == nil {
+		return nil, ErrNilWriter
+	}
+	return RunRowSeqDeferredMetadata(metadata, rows, RowIteratorHooksFromWriter(w))
 }
 
 // seqRowFacade adapts (metadata, pulled iter.Seq2) to rowIteratorFacade so

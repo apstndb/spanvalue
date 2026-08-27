@@ -253,8 +253,9 @@ prototext, nested ARRAY/STRUCT cells and delimited-output fields can contain
 embedded newlines.
 Delimited, JSONL, and SQL encodings differ after
 spanvalue formats each column; see [writer/README.md](writer/README.md). For
-non-streaming paths, use
-`writer.RowData`, `writer.FormatDelimitedRow`, or `writer.FormatJSONLRow`
+value-oriented paths, use
+`writer.RowData`, `writer.FormatDelimitedRow`, `writer.FormatJSONLRow`, or
+`writer.FormatJSONLRowSeq`
 directly. Pass the JSON field-name policy explicitly, for example:
 
 ```go

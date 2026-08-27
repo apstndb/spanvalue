@@ -31,9 +31,10 @@
 // constructed rows — go through [WriteRowSeq] and [RunRowSeq], which take explicit metadata
 // plus a fallible row sequence ([RowSeq] adapts pre-built rows) and share the
 // [RunRowIterator] hook contract. When the row type is only known after producing begins
-// (merged concurrent sources such as partitioned-query fan-in), [RunRowSeqDeferredMetadata]
-// accepts a metadata func evaluated after the first pull, so producers publish the row type
-// before their first yield instead of holding rows back.
+// (merged concurrent sources such as partitioned-query fan-in),
+// [RunRowSeqDeferredMetadata] and [WriteRowSeqDeferredMetadata] accept a metadata func
+// evaluated after the first pull, so producers publish the row type before their first
+// yield instead of holding rows back.
 //
 // # Direct writers vs hooks
 //
