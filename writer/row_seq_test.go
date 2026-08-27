@@ -49,6 +49,17 @@ func TestWriteRowSeq_nilArguments(t *testing.T) {
 	}
 }
 
+func TestWriteRowSeqDeferredMetadata_nilArguments(t *testing.T) {
+	t.Parallel()
+
+	if _, err := WriteRowSeqDeferredMetadata(nil, nil, mustNewDelimitedWriter(t, &bytes.Buffer{}, ',')); !errors.Is(err, ErrNilRowSeq) {
+		t.Fatalf("error = %v, want ErrNilRowSeq", err)
+	}
+	if _, err := WriteRowSeqDeferredMetadata(nil, RowSeq(), nil); !errors.Is(err, ErrNilWriter) {
+		t.Fatalf("error = %v, want ErrNilWriter", err)
+	}
+}
+
 func TestWriteRowSeq_csv(t *testing.T) {
 	t.Parallel()
 
@@ -242,12 +253,12 @@ func TestRunRowSeq_nilRowRejected(t *testing.T) {
 	}
 }
 
-// TestRunRowSeqDeferredMetadata_publishedBeforeFirstYield models a merged
+// TestWriteRowSeqDeferredMetadata_publishedBeforeFirstYield models a merged
 // concurrent source (e.g. partitioned query fan-in): the row type is unknown
 // at call time and published by the producer just before its first yield.
 // Because metadata is evaluated only after the first pull, PrepareMetadata
 // must still observe it — no first-row holdback needed on the producer side.
-func TestRunRowSeqDeferredMetadata_publishedBeforeFirstYield(t *testing.T) {
+func TestWriteRowSeqDeferredMetadata_publishedBeforeFirstYield(t *testing.T) {
 	t.Parallel()
 
 	var published *sppb.ResultSetMetadata
@@ -261,7 +272,7 @@ func TestRunRowSeqDeferredMetadata_publishedBeforeFirstYield(t *testing.T) {
 
 	var out bytes.Buffer
 	w := mustNewDelimitedWriter(t, &out, ',', WithHeader(true))
-	got, err := RunRowSeqDeferredMetadata(func() *sppb.ResultSetMetadata { return published }, rows, RowIteratorHooksFromWriter(w))
+	got, err := WriteRowSeqDeferredMetadata(func() *sppb.ResultSetMetadata { return published }, rows, w)
 	if err != nil {
 		t.Fatal(err)
 	}
