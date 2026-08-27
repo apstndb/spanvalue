@@ -1,17 +1,18 @@
 package writer
 
 import (
-	"errors"
 	"iter"
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"google.golang.org/api/iterator"
+
+	"github.com/apstndb/spanvalue"
 )
 
 // ErrNilRowSeq reports that [RunRowSeq] or [WriteRowSeq] was called with a nil
-// row sequence.
-var ErrNilRowSeq = errors.New("nil row sequence")
+// row sequence. It is the same sentinel as [spanvalue.ErrNilRowSeq].
+var ErrNilRowSeq = spanvalue.ErrNilRowSeq
 
 // RowSeq adapts already-built rows to the fallible sequence shape consumed by
 // [RunRowSeq] and [WriteRowSeq]. Every pair it yields has a nil error; a nil

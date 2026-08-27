@@ -10,7 +10,31 @@ import (
 
 	"github.com/apstndb/spanvalue"
 	"github.com/apstndb/spanvalue/gcvctor"
+	"github.com/apstndb/spanvalue/writer"
 )
+
+// Lazily format rows when the caller needs cell slices rather than serialized
+// CSV, JSONL, or SQL output.
+func ExampleFormatConfig_FormatRowSeq() {
+	row1, err := spanner.NewRow([]string{"id", "name"}, []any{int64(1), "Alice"})
+	if err != nil {
+		panic(err)
+	}
+	row2, err := spanner.NewRow([]string{"id", "name"}, []any{int64(2), "Bob"})
+	if err != nil {
+		panic(err)
+	}
+
+	for values, err := range spanvalue.SimpleFormatConfig().FormatRowSeq(writer.RowSeq(row1, row2)) {
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(values)
+	}
+	// Output:
+	// [1 Alice]
+	// [2 Bob]
+}
 
 // Tuple-style STRUCT in `ARRAY<STRUCT<...>>` while keeping Spanner CLI scalar formatting.
 // The prepended PluginForStruct override runs before the preset's STRUCT handler.

@@ -31,8 +31,9 @@
 // Convenience entry points include [FormatRowLiteral], [FormatColumnLiteral],
 // [FormatRowJSONObject], and [FormatRowSpannerCLICompatible]; they use internal
 // singleton configs, so call [FormatConfig.FormatRow] on your own config when
-// customizing. Identifier quoting helpers are [QuoteIdentifier] and
-// [QuoteQualifiedIdentifier].
+// customizing. To lazily transform a fallible row sequence into formatted cell
+// slices, use [FormatConfig.FormatRowSeq]. Identifier quoting helpers are
+// [QuoteIdentifier] and [QuoteQualifiedIdentifier].
 //
 // # Customization: builder and plugins
 //

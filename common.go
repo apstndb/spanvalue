@@ -38,7 +38,8 @@ var (
 	ErrMismatchedFields           = errors.New("mismatched struct value/field count")
 	ErrUnexpectedComplexValueKind = errors.New("unexpected complex value kind")
 	ErrEmptyTypeFQN               = errors.New("empty type FQN")
-	// ErrNilFormatConfig is returned by [*FormatConfig.Validate] when the receiver is nil.
+	// ErrNilFormatConfig is returned by [*FormatConfig.Validate] and
+	// [*FormatConfig.FormatRowSeq] when the receiver is nil.
 	ErrNilFormatConfig = errors.New("nil format config")
 	// ErrEmptyNullString is returned by [*FormatConfig.Validate] when [FormatConfig.NullString] is empty.
 	ErrEmptyNullString = errors.New("empty null string")

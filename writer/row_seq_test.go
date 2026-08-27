@@ -7,9 +7,19 @@ import (
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+
+	"github.com/apstndb/spanvalue"
 )
 
 var _ rowIteratorFacade = (*seqRowFacade)(nil)
+
+func TestErrNilRowSeqMatchesRoot(t *testing.T) {
+	t.Parallel()
+
+	if !errors.Is(ErrNilRowSeq, spanvalue.ErrNilRowSeq) {
+		t.Fatal("writer.ErrNilRowSeq does not match spanvalue.ErrNilRowSeq")
+	}
+}
 
 func mustNewSpannerRow(t *testing.T, names []string, values []any) *spanner.Row {
 	t.Helper()
