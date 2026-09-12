@@ -182,6 +182,9 @@ func Float32ToLiteralPolicy(v float32, policy QuotePolicy) string {
 		return sqlCastQuotedString("inf", "FLOAT32", quoteForPayload(policy, "inf"))
 	case math.IsInf(float64(v), -1):
 		return sqlCastQuotedString("-inf", "FLOAT32", quoteForPayload(policy, "-inf"))
+	case v == 0 && math.Signbit(float64(v)):
+		// An integer -0 operand loses its sign before the FLOAT32 cast.
+		return "CAST(-0.0 AS FLOAT32)"
 	default:
 		return fmt.Sprintf("CAST(%v AS FLOAT32)", strconv.FormatFloat(float64(v), 'g', -1, 32))
 	}

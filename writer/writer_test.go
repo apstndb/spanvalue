@@ -3,6 +3,7 @@ package writer
 import (
 	"bytes"
 	"errors"
+	"math"
 	"strings"
 	"testing"
 
@@ -2009,5 +2010,39 @@ func TestWithRowTypeConsistentAcrossWriters(t *testing.T) {
 	}
 	if want := "{\"id\":2,\"name\":\"b\"}\n"; jsonl.String() != want {
 		t.Fatalf("jsonl = %q, want %q", jsonl.String(), want)
+	}
+}
+
+func TestSQLInsertWriterFloat32NegativeZero(t *testing.T) {
+	t.Parallel()
+	for _, kind := range []SQLInsertKind{SQLInsert, SQLInsertOrIgnore, SQLInsertOrUpdate} {
+		t.Run(kind.String(), func(t *testing.T) {
+			t.Parallel()
+			for _, batchSize := range []int{1, 2} {
+				var out bytes.Buffer
+				w := mustNewSQLInsertWriter(t, &out, "values", WithSQLInsertKind(kind), WithSQLBatchSize(batchSize))
+				values := []spanner.GenericColumnValue{
+					gcvctor.Float32Value(float32(math.Copysign(0, -1))),
+					gcvctor.StringValue("CAST(-0 AS FLOAT32)"),
+				}
+				if err := w.WriteValues([]string{"f", "text"}, values); err != nil {
+					t.Fatal(err)
+				}
+				if err := w.Flush(); err != nil {
+					t.Fatal(err)
+				}
+				// Matching text is untouched; only the typed numeric operand changes.
+				want := kind.String() + " INTO `values` (`f`, `text`) VALUES"
+				if batchSize == 1 {
+					want += " "
+				} else {
+					want += "\n  "
+				}
+				want += "(CAST(-0.0 AS FLOAT32), \"CAST(-0 AS FLOAT32)\");\n"
+				if diff := cmp.Diff(want, out.String()); diff != "" {
+					t.Errorf("batch size %d mismatch (-want +got):\n%s", batchSize, diff)
+				}
+			}
+		})
 	}
 }
