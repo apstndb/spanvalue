@@ -108,21 +108,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      # golang.org/x/vuln v1.2.0+ requires Go 1.25 to install. Other jobs use
-      # go.mod's minimum (1.24); this job tracks the latest patched 1.25.x so
-      # stdlib findings stay current without manual pin bumps. Dependency
-      # reachability is the main signal for this library module.
+      # The scanner tracks @latest, so use the current Go release for its
+      # installation requirements and current stdlib vulnerability coverage.
+      # The other root jobs continue to verify go.mod's minimum version.
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25'
-          # Without check-latest, setup-go may resolve a stale preinstalled
-          # 1.25 patch release whose stdlib still carries fixed advisories
-          # (GO-2026-5037/5039), making this job flap across runners.
+          go-version: stable
           check-latest: true
           cache: false
 
       - name: Run govulncheck
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+        run: make vulncheck

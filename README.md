@@ -4,7 +4,7 @@
 
 Helpers for working with Cloud Spanner’s [`spanner.GenericColumnValue`](https://pkg.go.dev/cloud.google.com/go/spanner#GenericColumnValue) and related client types: **format** values to text (literals, JSON, CLI-style output) and **construct** values from Go types.
 
-Requires **Go 1.24** or later (see [`go.mod`](go.mod)).
+Requires **Go 1.25** or later (see [`go.mod`](go.mod)).
 
 | Package | Role |
 |--------|------|
