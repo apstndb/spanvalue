@@ -44,3 +44,39 @@ func ExampleWriteRowSeq() {
 	// AUTOCOMMIT,TRUE
 	// READONLY,FALSE
 }
+
+// ExampleRunRowSeqWithStats processes a retained result, including its DML
+// count, without constructing a Spanner client or RowIterator.
+func ExampleRunRowSeqWithStats() {
+	row, err := spanner.NewRow([]string{"id"}, []any{int64(7)})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	var stats writer.RowIteratorStats
+	rows := func(yield func(*spanner.Row, error) bool) {
+		if !yield(row, nil) {
+			return
+		}
+		stats.RowCount = 1
+	}
+	hooks := writer.NewRowIteratorHooks().
+		WithWriteRow(func(row *spanner.Row) error {
+			var id int64
+			if err := row.Column(0, &id); err != nil {
+				return err
+			}
+			fmt.Println("id:", id)
+			return nil
+		}).
+		WithFinish(func(result *writer.RowIteratorResult) error {
+			fmt.Println("affected:", result.Stats.RowCount)
+			return nil
+		})
+	if _, err := writer.RunRowSeqWithStats(nil, rows, func() writer.RowIteratorStats { return stats }, hooks); err != nil {
+		fmt.Println(err)
+	}
+	// Output:
+	// id: 7
+	// affected: 1
+}

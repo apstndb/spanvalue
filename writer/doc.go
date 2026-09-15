@@ -34,7 +34,9 @@
 // (merged concurrent sources such as partitioned-query fan-in),
 // [RunRowSeqDeferredMetadata] and [WriteRowSeqDeferredMetadata] accept a metadata func
 // evaluated after the first pull, so producers publish the row type before their first
-// yield instead of holding rows back.
+// yield instead of holding rows back. [RunRowSeqWithStats] additionally accepts
+// producer-supplied statistics, read after sequence cleanup and before Finish.
+// Use [RowIteratorHooksFromWriter] to stream such a source into a built-in writer.
 //
 // # Direct writers vs hooks
 //

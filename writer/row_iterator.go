@@ -14,8 +14,8 @@ var ErrNilRowIterator = errors.New("nil row iterator")
 // ErrNilWriter reports that [WriteRowIterator] was called with a nil writer.
 var ErrNilWriter = errors.New("nil row iterator writer")
 
-// RowIteratorStats holds execution information populated on a
-// [cloud.google.com/go/spanner.RowIterator] after iteration completes.
+// RowIteratorStats holds execution information from a
+// [cloud.google.com/go/spanner.RowIterator] or a [RunRowSeqWithStats] producer.
 // QueryPlan and QueryStats are set when the query used QueryWithStats.
 // RowCount is set for DML after iterator.Done.
 type RowIteratorStats struct {
@@ -24,11 +24,11 @@ type RowIteratorStats struct {
 	RowCount   int64
 }
 
-// RowIteratorResult is the metadata and stats available from a
-// [cloud.google.com/go/spanner.RowIterator] after [RunRowIterator] returns.
+// RowIteratorResult is the metadata, stats, and successful write count returned
+// by [RunRowIterator] and the RunRowSeq helpers.
 //
-// Application code should use the value returned by [RunRowIterator] or
-// [WriteRowIterator] rather than constructing RowIteratorResult manually. When a
+// Application code should use the value returned by a run or write helper
+// rather than constructing RowIteratorResult manually. When a
 // value must be built outside this package (for example in tests), use keyed
 // composite literals so added exported fields do not break positional literals.
 // On the error path, stats fields reflect whatever the iterator had populated at
