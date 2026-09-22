@@ -26,8 +26,14 @@ func FormatColumnLiteral(value spanner.GenericColumnValue) (string, error) {
 	return literalFormatConfig.FormatToplevelColumn(value)
 }
 
-// LiteralFormatConfig returns a new FormatConfig that produces parseable SQL
-// literal expressions with type annotations. ARRAY values use
+// LiteralFormatConfig returns a new FormatConfig that produces SQL-style
+// literals with type annotations and compact STRUCT-like display. Nested STRUCTs
+// use parentheses even for zero or one field, so their output is not always a
+// GoogleSQL STRUCT expression. For constructor syntax, prepend [PluginForStruct]
+// with [FormatSimpleStructField] and [FormatTupleStructFormal]. That override
+// omits STRUCT field names and declared types; it does not promise type-preserving
+// round trips (for example, NULL and empty arrays may require type context).
+// ARRAY values use
 // [FormatOptionallyTypedArray]: top-level arrays with scalar elements omit the
 // ARRAY<...> prefix (empty or not); arrays of STRUCT or nested ARRAY include it when
 // toplevel is true (empty or not). The chain is [FormatProtoAsCast],
@@ -61,6 +67,7 @@ var _ func() *FormatConfig = LiteralFormatConfig
 var (
 	_ FormatStructParenFunc = FormatTypedStruct
 	_ FormatStructParenFunc = FormatTupleStruct
+	_ FormatStructParenFunc = FormatTupleStructFormal
 	_ FormatStructFieldFunc = FormatSimpleStructField
 	_ FormatStructFieldFunc = FormatTypelessStructField
 )
