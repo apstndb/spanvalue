@@ -1070,6 +1070,12 @@ type SQLInsertWriter struct {
 // table must be non-empty after trimming whitespace (per strings.TrimSpace); otherwise [NewSQLInsertWriter]
 // returns [ErrEmptyTableName]. Qualified names with empty segments (for example "db..users")
 // are rejected at the first write via [ErrEmptyTableName].
+//
+// To emit statements before the destination table is known, pass an intentional
+// identifier such as __TABLE_NAME__. The writer quotes that name for the dialect
+// like any other table; it does not treat it as a template, substitute text, or
+// change the table later. Replace the placeholder in the output, or construct a
+// new writer with the real name, before executing the SQL. There is no default table.
 func NewSQLInsertWriter(out io.Writer, table string, options ...SQLInsertOption) (*SQLInsertWriter, error) {
 	if out == nil {
 		return nil, ErrNilOutputWriter
@@ -1110,6 +1116,7 @@ func newSQLInsertWriter(out io.Writer, table string) *SQLInsertWriter {
 
 // TableName returns the qualified table name used in INSERT statements.
 // Configure it only via [NewSQLInsertWriter]; create a new writer to use a different table.
+// A placeholder name is still a fixed identifier, not a mutable target.
 func (w *SQLInsertWriter) TableName() string {
 	return w.table
 }
