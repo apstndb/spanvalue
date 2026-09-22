@@ -492,6 +492,7 @@ func NormalizeArrayElements(elemType *sppb.Type, elems ...spanner.GenericColumnV
 // Each element's Type must match elemType (no coercion). A nil elemType returns [ErrNilElementType].
 // Per-element failures are wrapped in [ArrayElementError]. To accept SQL NULL elements regardless of
 // their current Type metadata, normalize them first with [NormalizeArrayElements].
+// Nil element Values become explicit protobuf NULLs; non-nil Values are borrowed.
 func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if elemType == nil {
 		return spanner.GenericColumnValue{}, ErrNilElementType
@@ -507,7 +508,7 @@ func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spa
 		if !proto.Equal(elemType, v.Type) {
 			return spanner.GenericColumnValue{}, wrapArrayElementError(i, fmt.Errorf("%w: %v is not %v", ErrTypeMismatch, spantype.FormatTypeMoreVerbose(v.Type), spantype.FormatTypeMoreVerbose(elemType)))
 		}
-		values[i] = v.Value
+		values[i] = internal.WireValue(v)
 	}
 	return spanner.GenericColumnValue{
 		Type:  typector.ElemTypeToArrayType(elemType),
@@ -546,6 +547,7 @@ func StructValueOfFields(fields ...StructFieldKV) (spanner.GenericColumnValue, e
 
 // StructValueOf constructs STRUCT GenericColumnValue.
 // A nil field Type returns [ErrNilFieldType] wrapped in [StructFieldError].
+// Nil field Values become explicit protobuf NULLs; non-nil Values are borrowed.
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
 func StructValueOf(names []string, gcvs []spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if len(names) != len(gcvs) {
@@ -559,7 +561,7 @@ func StructValueOf(names []string, gcvs []spanner.GenericColumnValue) (spanner.G
 			return spanner.GenericColumnValue{}, wrapStructFieldError(i, names[i], ErrNilFieldType)
 		}
 		types[i] = gcv.Type
-		values[i] = gcv.Value
+		values[i] = internal.WireValue(gcv)
 	}
 
 	typ, err := typector.NameTypeSlicesToStructType(names, types)
