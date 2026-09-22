@@ -113,3 +113,24 @@ func ExampleWireValues() {
 	// 7
 	// NULL_VALUE
 }
+
+// Opt into GoogleSQL STRUCT constructor syntax while retaining SQL scalar quoting.
+func ExampleFormatTupleStructFormal() {
+	fc := spanvalue.LiteralFormatConfig().WithComplexPlugin(
+		spanvalue.PluginForStruct(spanvalue.FormatSimpleStructField, spanvalue.FormatTupleStructFormal))
+	child, err := gcvctor.StructValueOf([]string{"name"}, []spanner.GenericColumnValue{gcvctor.StringValue("east")})
+	if err != nil {
+		panic(err)
+	}
+	array, err := gcvctor.ArrayValue(child)
+	if err != nil {
+		panic(err)
+	}
+	out, err := fc.FormatToplevelColumn(array)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(out)
+	// Output:
+	// ARRAY<STRUCT<name STRING>>[STRUCT("east")]
+}
