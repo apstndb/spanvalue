@@ -18,6 +18,16 @@ import (
 
 var ErrMismatchedJSONObjectFields = errors.New("mismatched JSON object key/value count")
 
+// WireValue materializes nil as a fresh protobuf NULL and borrows non-nil values.
+// A nil list element becomes an empty, kind-less Value after protobuf transport,
+// so composite assembly must encode NULL explicitly. Type validation is the caller's responsibility.
+func WireValue(gcv spanner.GenericColumnValue) *structpb.Value {
+	if gcv.Value == nil {
+		return structpb.NewNullValue()
+	}
+	return gcv.Value
+}
+
 // IsNullGenericColumnValue reports whether gcv represents SQL NULL.
 // A nil gcv.Value is treated as NULL.
 func IsNullGenericColumnValue(gcv spanner.GenericColumnValue) bool {
