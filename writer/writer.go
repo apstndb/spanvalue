@@ -3,6 +3,7 @@ package writer
 import (
 	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -956,6 +957,10 @@ func (w *JSONLWriter) WriteGCVs(values []spanner.GenericColumnValue) error {
 	if err != nil {
 		return err
 	}
+	s, err = singleLineJSONRecord(s)
+	if err != nil {
+		return err
+	}
 	_, err = fmt.Fprintln(w.out, s)
 	return w.latchWriteErr(err)
 }
@@ -1437,7 +1442,7 @@ func FormatDelimitedValues(fc *spanvalue.FormatConfig, columnNames []string, val
 }
 
 // FormatJSONLRow formats one row as a JSON object string without a trailing
-// newline. Callers writing JSONL streams should add the newline at the stream
+// newline. Records containing CR or LF are compacted. Callers writing JSONL streams should add the newline at the stream
 // boundary.
 func FormatJSONLRow(fc *spanvalue.FormatConfig, row *spanner.Row, namer spanvalue.UnnamedFieldNamer) (string, error) {
 	columnNames, values, err := RowData(row)
@@ -1449,9 +1454,28 @@ func FormatJSONLRow(fc *spanvalue.FormatConfig, row *spanner.Row, namer spanvalu
 
 // FormatJSONLValues formats one row represented as column names plus GCV values
 // as a JSON object string without a trailing newline. Callers writing JSONL
-// streams should add the newline at the stream boundary.
+// streams should add the newline at the stream boundary. Records containing CR
+// or LF are compacted; already single-line records retain their whitespace.
 func FormatJSONLValues(fc *spanvalue.FormatConfig, columnNames []string, values []spanner.GenericColumnValue, namer spanvalue.UnnamedFieldNamer) (string, error) {
-	return spanvalue.FormatRowJSONObjectFromColumns(jsonFormatter(fc), columnNames, values, namer)
+	s, err := spanvalue.FormatRowJSONObjectFromColumns(jsonFormatter(fc), columnNames, values, namer)
+	if err != nil {
+		return "", err
+	}
+	return singleLineJSONRecord(s)
+}
+
+// Keep wire-preserving JSON formatters usable in JSONL without changing their
+// output outside this boundary. Compact preserves numbers, key order, and
+// duplicate keys; decoding into generic Go values would not.
+func singleLineJSONRecord(s string) (string, error) {
+	if !strings.ContainsAny(s, "\r\n") {
+		return s, nil
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, []byte(s)); err != nil {
+		return "", fmt.Errorf("compact JSONL record: %w", err)
+	}
+	return compact.String(), nil
 }
 
 // RowData extracts column names and GenericColumnValue cells from row.
