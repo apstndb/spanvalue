@@ -194,21 +194,21 @@ func FormatJSONSimpleValue(formatter Formatter, value spanner.GenericColumnValue
 func validateRawJSONValue(code sppb.TypeCode, value *structpb.Value) (string, error) {
 	stringValue, ok := value.GetKind().(*structpb.Value_StringValue)
 	if !ok {
-		return "", fmt.Errorf("invalid %s JSON payload kind %T: want string value", code, value.GetKind())
+		return "", fmt.Errorf("%w: invalid %s JSON payload kind %T: want string value", ErrMalformedWire, code, value.GetKind())
 	}
 
 	switch code {
 	case sppb.TypeCode_INT64, sppb.TypeCode_ENUM:
 		trimmed := strings.TrimSpace(stringValue.StringValue)
 		if !json.Valid([]byte(stringValue.StringValue)) {
-			return "", fmt.Errorf("invalid %s JSON payload %q", code, stringValue.StringValue)
+			return "", fmt.Errorf("%w: invalid %s JSON payload %q", ErrMalformedWire, code, stringValue.StringValue)
 		}
 		if _, err := strconv.ParseInt(trimmed, 10, 64); err != nil {
-			return "", fmt.Errorf("invalid %s JSON payload %q: %w", code, stringValue.StringValue, err)
+			return "", fmt.Errorf("%w: invalid %s JSON payload %q: %w", ErrMalformedWire, code, stringValue.StringValue, err)
 		}
 	case sppb.TypeCode_JSON:
 		if !json.Valid([]byte(stringValue.StringValue)) {
-			return "", fmt.Errorf("invalid %s JSON payload %q", code, stringValue.StringValue)
+			return "", fmt.Errorf("%w: invalid %s JSON payload %q", ErrMalformedWire, code, stringValue.StringValue)
 		}
 	}
 
