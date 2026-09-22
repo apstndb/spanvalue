@@ -21,6 +21,9 @@
 // [RowIteratorResult] (metadata, stats, [RowIteratorResult.RowsRead]). Prefer passing a
 // newly created iterator directly (for example txn.Query(ctx, stmt)); do not defer Stop at
 // the call site. Use the returned result for post-run metadata and stats.
+// [RowIteratorResult.StatsProto] rebuilds protobuf ResultSetStats from the decoded
+// Go stats. It does not import spaniter. Pass [StatsEncodingDMLExact] only when
+// RowCount came from executed standard DML.
 //
 // For manual [*cloud.google.com/go/spanner.RowIterator.Next] loops, bind the iterator,
 // defer Stop, register [RowIteratorWriter.PrepareRowType] after the first Next when results
