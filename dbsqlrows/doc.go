@@ -73,7 +73,10 @@
 //   - [github.com/apstndb/spanvalue/writer.RowIteratorResult] ↔ [SQLRowsResult]
 //
 // [SQLRowsResult] carries Metadata when known on error paths (partial-result contract
-// matching [github.com/apstndb/spanvalue/writer.RowIteratorResult]). Stats are not
+// matching [github.com/apstndb/spanvalue/writer.RowIteratorResult]). Failures before
+// metadata is known return a nil result; [github.com/apstndb/spanvalue/writer.RunRowIterator]
+// always returns a non-nil result, so only this side needs a nil check.
+// Stats are not
 // consumed unless [SQLRowsConfig.ReadResultSetStats] is true; the iterator then
 // advances with NextResultSet for multi-statement batches. [SQLRowsResult.RowsRead]
 // follows [github.com/apstndb/spanvalue/writer.RowIteratorResult] RowsRead

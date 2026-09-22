@@ -76,7 +76,10 @@ func SQLRowsHooksFromGCVWriter(w GCVStreamWriter) SQLRowsHooks {
 }
 
 // RunRows streams an open *sql.Rows positioned at the metadata pseudo-row using
-// hooks. See [WriteRows] for driver conventions, ownership, and stats behavior.
+// hooks. A missing metadata pseudo-row is [ErrMissingMetadataRow].
+// [ReadMetadataAndAdvanceToData] uses the other policy: the same absence is
+// end of input, returned as ok=false and a nil error.
+// See [WriteRows] for driver conventions, ownership, and stats behavior.
 func RunRows(rows *sql.Rows, hooks SQLRowsHooks, cfg SQLRowsConfig) (*SQLRowsResult, error) {
 	if rows == nil {
 		return nil, ErrNilRows
@@ -88,8 +91,9 @@ func RunRows(rows *sql.Rows, hooks SQLRowsHooks, cfg SQLRowsConfig) (*SQLRowsRes
 }
 
 // RunRowsAtData streams rows already positioned on the data result set using hooks.
-// metadata must be non-nil. See [WriteRowsAtData] for stats and partial-result
-// semantics.
+// metadata must be non-nil. Its field count must match [*sql.Rows.Columns];
+// otherwise the error is [ErrMetadataColumnCount].
+// See [WriteRowsAtData] for stats and partial-result semantics.
 func RunRowsAtData(
 	rows *sql.Rows,
 	metadata *sppb.ResultSetMetadata,

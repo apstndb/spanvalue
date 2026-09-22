@@ -165,6 +165,23 @@ func TestWriteRows_nilWriter(t *testing.T) {
 	}
 }
 
+func TestRunRowsAtData_metadataColumnCount(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubSQLRows{columns: []string{"id"}}
+	_, err := RunRowsAtData(nil, metadataWithNames("id", "name"), SQLRowsHooks{}, SQLRowsConfig{})
+	if !errors.Is(err, ErrNilRows) {
+		t.Fatalf("nil rows error = %v, want ErrNilRows", err)
+	}
+	_, err = runRows(stub, SQLRowsHooks{}, sqlRowsRunConfig{
+		metadata:              metadataWithNames("id", "name"),
+		readMetadataPseudoRow: false,
+	})
+	if !errors.Is(err, ErrMetadataColumnCount) {
+		t.Fatalf("error = %v, want ErrMetadataColumnCount", err)
+	}
+}
+
 func TestWriteRowsAtData_nilMetadata(t *testing.T) {
 	t.Parallel()
 
