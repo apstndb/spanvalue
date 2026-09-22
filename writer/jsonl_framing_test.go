@@ -99,3 +99,23 @@ func TestJSONLNestedMultilineValue(t *testing.T) {
 		t.Errorf("(-want +got):\n%s", diff)
 	}
 }
+
+func TestJSONLRejectsMalformedMultilineRecord(t *testing.T) {
+	t.Parallel()
+	fc := spanvalue.JSONFormatConfig().WithComplexPlugin(func(spanvalue.Formatter, spanner.GenericColumnValue, bool) (string, error) { return "{\ninvalid}", nil })
+	values := []spanner.GenericColumnValue{gcvctor.Int64Value(1)}
+	if got, err := FormatJSONLValues(fc, []string{"j"}, values, nil); err == nil || got != "" {
+		t.Errorf("got %q, error %v; want compaction failure", got, err)
+	}
+	var out bytes.Buffer
+	w, err := NewJSONLWriter(&out, WithColumnNames([]string{"j"}), WithFormatter(fc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.WriteGCVs(values); err == nil {
+		t.Fatal("want compaction failure")
+	}
+	if out.Len() != 0 {
+		t.Errorf("wrote malformed record: %q", out.String())
+	}
+}
