@@ -426,8 +426,7 @@ func ProtoValue(fqn string, b []byte) spanner.GenericColumnValue {
 
 // EnumValue returns a non-null ENUM GenericColumnValue for the fully qualified enum name fqn.
 // The structpb value is the enum number as a decimal string; delimited export prints that
-// decimal string on the wire. It does not check that v is a declared enum member, and a
-// formatter preset does not gain ENUM support just because this value exists.
+// decimal string on the wire.
 func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.FQNToEnumType(fqn),

@@ -32,7 +32,7 @@ func ExampleNullOf_nilType() {
 }
 
 func ExampleStringBasedValueOf_callerWire() {
-	typ := &sppb.Type{Code: sppb.TypeCode_TYPE_CODE_UNSPECIFIED}
+	typ := &sppb.Type{Code: sppb.TypeCode(9999)}
 	gcv := gcvctor.StringBasedValueOf(typ, "raw")
 	fmt.Println(gcv.Value.GetStringValue())
 	// Output:
