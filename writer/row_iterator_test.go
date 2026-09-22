@@ -8,7 +8,6 @@ import (
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/api/iterator"
 )
 
 var (
@@ -36,7 +35,7 @@ func (s *stubRowIterator) next() (*spanner.Row, error) {
 		s.i++
 		return row, nil
 	}
-	return nil, iterator.Done
+	return nil, errRowSourceDone
 }
 
 func (s *stubRowIterator) stop() {
