@@ -152,6 +152,9 @@ func TestJSONFormatConfig_InvalidRawPayload(t *testing.T) {
 			if !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("error = %q, want substring %q", err, tt.wantErr)
 			}
+			if !errors.Is(err, ErrMalformedWire) {
+				t.Fatalf("error = %v, want ErrMalformedWire", err)
+			}
 		})
 	}
 }
