@@ -74,8 +74,10 @@
 //
 // [SQLRowsResult] carries Metadata when known on error paths (partial-result contract
 // matching [github.com/apstndb/spanvalue/writer.RowIteratorResult]). Failures before
-// metadata is known return a nil result; [github.com/apstndb/spanvalue/writer.RunRowIterator]
-// always returns a non-nil result, so only this side needs a nil check.
+// metadata is known can return a nil result. For a non-nil iterator,
+// [github.com/apstndb/spanvalue/writer.RunRowIterator] still returns a result on later
+// errors; a nil iterator or nil writer returns a nil result there too. Nil-check this
+// side on pre-metadata failures, and nil-check the writer side on invalid input.
 // Stats are not
 // consumed unless [SQLRowsConfig.ReadResultSetStats] is true; the iterator then
 // advances with NextResultSet for multi-statement batches. [SQLRowsResult.RowsRead]
