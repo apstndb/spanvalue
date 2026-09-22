@@ -180,10 +180,7 @@ func IsNull(gcv spanner.GenericColumnValue) bool {
 // wire value. Use it when the caller already owns type validation and needs to
 // preserve the encoded value as-is.
 func WireValue(gcv spanner.GenericColumnValue) *structpb.Value {
-	if gcv.Value == nil {
-		return structpb.NewNullValue()
-	}
-	return gcv.Value
+	return internal.WireValue(gcv)
 }
 
 // WireValues maps [WireValue] over gcvs for low-level ARRAY or STRUCT

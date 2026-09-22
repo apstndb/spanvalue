@@ -5,7 +5,6 @@ import (
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-	"google.golang.org/api/iterator"
 
 	"github.com/apstndb/spanvalue"
 )
@@ -50,6 +49,8 @@ func RowSeq(rows ...*spanner.Row) iter.Seq2[*spanner.Row, error] {
 // A non-nil error yielded by rows aborts the run and is returned; the row
 // paired with it is ignored and the sequence is not consumed further. A nil
 // row yielded with a nil error aborts the run with [ErrNilRow].
+// Yielding [google.golang.org/api/iterator.Done], directly or wrapped, is also
+// an error; only returning from the sequence indicates successful exhaustion.
 func RunRowSeq(md *sppb.ResultSetMetadata, rows iter.Seq2[*spanner.Row, error], hooks RowIteratorHooks) (*RowIteratorResult, error) {
 	if rows == nil {
 		return nil, ErrNilRowSeq
@@ -126,7 +127,7 @@ type seqRowFacade struct {
 func (f *seqRowFacade) next() (*spanner.Row, error) {
 	row, err, ok := f.nextPair()
 	if !ok {
-		return nil, iterator.Done
+		return nil, errRowSourceDone
 	}
 	if err != nil {
 		return nil, err

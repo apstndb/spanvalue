@@ -208,6 +208,10 @@ func WriteRowIterator(iter *spanner.RowIterator, w RowIteratorWriter) (*RowItera
 	return RunRowIterator(iter, RowIteratorHooksFromWriter(w))
 }
 
+// errRowSourceDone is private so a yielded public iterator.Done cannot be
+// mistaken for exhaustion. Facades return it only when their source ends.
+var errRowSourceDone = errors.New("row source exhausted")
+
 type rowIteratorFacade interface {
 	next() (*spanner.Row, error)
 	stop()
@@ -220,7 +224,11 @@ type spannerRowIteratorFacade struct {
 }
 
 func (f spannerRowIteratorFacade) next() (*spanner.Row, error) {
-	return f.Next()
+	row, err := f.Next()
+	if err == iterator.Done { //nolint:errorlint // Wrapped or joined Done can carry a real failure.
+		return nil, errRowSourceDone
+	}
+	return row, err
 }
 
 func (f spannerRowIteratorFacade) stop() {
@@ -269,7 +277,7 @@ func runRowIterator(fac rowIteratorFacade, hooks RowIteratorHooks) (*RowIterator
 	first := true
 	for {
 		row, err := fac.next()
-		if err != nil && !errors.Is(err, iterator.Done) {
+		if err != nil && err != errRowSourceDone { //nolint:errorlint // Only the private, exact exhaustion sentinel ends successfully.
 			return abort(err)
 		}
 		if first {
@@ -280,7 +288,7 @@ func runRowIterator(fac rowIteratorFacade, hooks RowIteratorHooks) (*RowIterator
 				}
 			}
 		}
-		if errors.Is(err, iterator.Done) {
+		if err == errRowSourceDone { //nolint:errorlint // Wrapped errors are failures, not exhaustion.
 			break
 		}
 		if hooks.WriteRow != nil {
