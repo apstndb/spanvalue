@@ -59,7 +59,7 @@
 // [PluginForTypeCode], and [PluginSkippingNull]. Callback types are
 // [FormatArrayFunc], [FormatStructFieldFunc] (Formatter-based),
 // [FormatStructParenFunc], [FormatNullableFunc], and [FormatComplexFunc];
-// exported building blocks include [FormatTupleStruct], [FormatTypedStruct],
+// exported building blocks include [FormatTupleStruct], [FormatTupleStructFormal], [FormatTypedStruct],
 // [FormatBracketStruct], [FormatUntypedArray], [FormatOptionallyTypedArray],
 // [FormatCompactArray], and [NewJSONObjectStructFormatter].
 //
