@@ -1074,8 +1074,10 @@ type SQLInsertWriter struct {
 // To emit statements before the destination table is known, pass an intentional
 // identifier such as __TABLE_NAME__. The writer quotes that name for the dialect
 // like any other table; it does not treat it as a template, substitute text, or
-// change the table later. Replace the placeholder in the output, or construct a
-// new writer with the real name, before executing the SQL. There is no default table.
+// change the table later. Before execution, either construct a new writer with
+// the real table name and export again, or edit only that quoted INSERT target
+// using the dialect's identifier quoting. Do not replace the marker everywhere:
+// a literal value can contain the same text. There is no default table.
 func NewSQLInsertWriter(out io.Writer, table string, options ...SQLInsertOption) (*SQLInsertWriter, error) {
 	if out == nil {
 		return nil, ErrNilOutputWriter
