@@ -9,6 +9,31 @@ import (
 	"github.com/apstndb/spanvalue/writer"
 )
 
+// ExampleRowIteratorResult_StatsProto rebuilds protobuf stats after a
+// successful export. Check that error before calling StatsProto: a failed
+// run can leave RowCount at zero, and StatsEncodingDMLExact would still emit
+// row_count_exact:0.
+func ExampleRowIteratorResult_StatsProto() {
+	query, err := writer.RowIteratorResult{Stats: writer.RowIteratorStats{
+		QueryStats: map[string]any{"elapsed_time": "1 ms"},
+	}}.StatsProto(writer.StatsEncodingDefault)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("query count present: %v\n", query.GetRowCount() != nil)
+
+	dml, err := writer.RowIteratorResult{Stats: writer.RowIteratorStats{}}.StatsProto(writer.StatsEncodingDMLExact)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("dml exact: %d\n", dml.GetRowCountExact())
+	// Output:
+	// query count present: false
+	// dml exact: 0
+}
+
 // ExampleWriteRowSeq streams a client-side (virtual) result set — rows that
 // do not come from a *spanner.RowIterator — through a CSV writer, with
 // explicit metadata supplying the header.

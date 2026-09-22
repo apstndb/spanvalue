@@ -73,13 +73,30 @@ func TestRowIteratorResultStatsProto(t *testing.T) {
 		}
 	})
 
+	t.Run("query stats with zero row count omit the count", func(t *testing.T) {
+		t.Parallel()
+		got, err := (RowIteratorResult{Stats: RowIteratorStats{
+			QueryPlan:  &sppb.QueryPlan{},
+			QueryStats: map[string]any{"elapsed_time": "1 ms"},
+		}}).StatsProto(StatsEncodingDefault)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.GetQueryStats() == nil || got.GetQueryPlan() == nil {
+			t.Fatalf("StatsProto = %v, want plan and query stats", got)
+		}
+		if got.GetRowCount() != nil {
+			t.Fatalf("RowCount = %#v, want absent", got.GetRowCount())
+		}
+	})
+
 	t.Run("query stats encoding error", func(t *testing.T) {
 		t.Parallel()
-		_, err := (RowIteratorResult{Stats: RowIteratorStats{
+		got, err := (RowIteratorResult{Stats: RowIteratorStats{
 			QueryStats: map[string]any{"unsupported": func() {}},
 		}}).StatsProto(StatsEncodingDefault)
-		if err == nil || !strings.Contains(err.Error(), "encode query stats") {
-			t.Fatalf("error = %v, want encode query stats", err)
+		if got != nil || err == nil || !strings.Contains(err.Error(), "encode query stats") {
+			t.Fatalf("StatsProto = (%v, %v), want nil result and encode query stats", got, err)
 		}
 	})
 }
