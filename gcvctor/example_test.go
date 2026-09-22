@@ -24,6 +24,21 @@ func ExampleNullOf() {
 	// ARRAY DATE true
 }
 
+func ExampleNullOf_nilType() {
+	gcv := gcvctor.NullOf(nil)
+	fmt.Println(gcv.Type.Code.String(), spanvalue.IsNull(gcv))
+	// Output:
+	// TYPE_CODE_UNSPECIFIED true
+}
+
+func ExampleStringBasedValueOf_callerWire() {
+	typ := &sppb.Type{Code: sppb.TypeCode_TYPE_CODE_UNSPECIFIED}
+	gcv := gcvctor.StringBasedValueOf(typ, "raw")
+	fmt.Println(gcv.Value.GetStringValue())
+	// Output:
+	// raw
+}
+
 func ExampleNormalizeArrayElements() {
 	elemType := typector.CodeToSimpleType(sppb.TypeCode_DATE)
 	elems := []spanner.GenericColumnValue{

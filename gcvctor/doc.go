@@ -85,6 +85,24 @@
 // [MustPGNumericValueChecked] panic on nil input instead of returning a typed NULL.
 // They wrap the error-returning constructors and are intended for schema-known fixture data, not production paths.
 //
+// Three different questions are easy to mix:
+//
+//   - Protobuf-known: the type code exists on [cloud.google.com/go/spanner/apiv1/spannerpb.TypeCode].
+//     That does not mean spanvalue constructs or formats it.
+//   - Constructible here: [StringBasedValueOf] stores the caller's wire string unchanged
+//     for whatever Type the caller supplies, including codes this module does not
+//     special-case. The caller owns validation. [NullOf] with a nil Type becomes
+//     TYPE_CODE_UNSPECIFIED rather than a nil Type pointer; Spanner rejects that code.
+//   - Formatter coverage: a preset may still return [github.com/apstndb/spanvalue.ErrFallthrough]
+//     or [github.com/apstndb/spanvalue.ErrUnhandledValue]. [EnumValue] records an enum
+//     number as a decimal string and does not check that the number is a declared member.
+//     The literal preset formats ENUM only because it installs a cast plugin; membership
+//     in an enum descriptor is not a formatting guarantee.
+//
+// There is no KnownTypeCode predicate in this module. Type-code lists live with
+// [github.com/apstndb/spantype/typector]. A boolean here would only duplicate those lists
+// and would still not answer formatter coverage.
+//
 // String payloads: [StringBasedValueOf] and [StringBasedValueFromCode] store the wire string as-is
 // with no validation (no extra imports beyond typector). Use [StringBasedValueOf] when the Type
 // carries annotations (for example PG-dialect NUMERIC). When the test cares about canonical wire
