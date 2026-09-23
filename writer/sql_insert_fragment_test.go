@@ -16,7 +16,7 @@ func TestFormatSQLInsertFragmentsGolden(t *testing.T) {
 	pg := databasepb.DatabaseDialect_POSTGRESQL
 	unspec := databasepb.DatabaseDialect_DATABASE_DIALECT_UNSPECIFIED
 
-	prefix := func(kind SQLInsertKind, dialect databasepb.DatabaseDialect, table string, cols []string) string {
+	prefix := func(t *testing.T, kind SQLInsertKind, dialect databasepb.DatabaseDialect, table string, cols []string) string {
 		t.Helper()
 		got, err := FormatSQLInsertPrefix(kind, dialect, table, cols)
 		if err != nil {
@@ -27,7 +27,7 @@ func TestFormatSQLInsertFragmentsGolden(t *testing.T) {
 
 	t.Run("single row", func(t *testing.T) {
 		t.Parallel()
-		p := prefix(SQLInsert, gs, "users", []string{"id", "name"})
+		p := prefix(t, SQLInsert, gs, "users", []string{"id", "name"})
 		got := FormatSQLInsertStatement(p, []string{"1", `"a"`})
 		want := "INSERT INTO `users` (`id`, `name`) VALUES (1, \"a\");\n"
 		if diff := cmp.Diff(want, got); diff != "" {
@@ -37,7 +37,7 @@ func TestFormatSQLInsertFragmentsGolden(t *testing.T) {
 
 	t.Run("caller assembled batch and remainder", func(t *testing.T) {
 		t.Parallel()
-		p := prefix(SQLInsert, gs, "users", []string{"id", "name"})
+		p := prefix(t, SQLInsert, gs, "users", []string{"id", "name"})
 		row := func(id, name string) string {
 			return FormatSQLInsertValuesTuple([]string{id, name})
 		}
@@ -56,7 +56,7 @@ func TestFormatSQLInsertFragmentsGolden(t *testing.T) {
 
 	t.Run("postgresql literals stay caller text", func(t *testing.T) {
 		t.Parallel()
-		p := prefix(SQLInsert, pg, "users", []string{"id", "name"})
+		p := prefix(t, SQLInsert, pg, "users", []string{"id", "name"})
 		got := FormatSQLInsertStatement(p, []string{"1", "'a'"})
 		want := "INSERT INTO \"users\" (\"id\", \"name\") VALUES (1, 'a');\n"
 		if diff := cmp.Diff(want, got); diff != "" {
@@ -66,7 +66,7 @@ func TestFormatSQLInsertFragmentsGolden(t *testing.T) {
 
 	t.Run("qualified and escaped identifiers", func(t *testing.T) {
 		t.Parallel()
-		got := prefix(SQLInsert, gs, "db.users", []string{"a`b"})
+		got := prefix(t, SQLInsert, gs, "db.users", []string{"a`b"})
 		want := "INSERT INTO `db`.`users` (`a\\`b`) VALUES"
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Fatal(diff)
@@ -84,7 +84,7 @@ func TestFormatSQLInsertFragmentsGolden(t *testing.T) {
 			{SQLInsertOrUpdate, "INSERT OR UPDATE INTO `users` (`id`) VALUES"},
 		}
 		for _, tt := range cases {
-			got := prefix(tt.kind, gs, "users", []string{"id"})
+			got := prefix(t, tt.kind, gs, "users", []string{"id"})
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Fatal(diff)
 			}
@@ -93,7 +93,16 @@ func TestFormatSQLInsertFragmentsGolden(t *testing.T) {
 
 	t.Run("unspecified dialect matches GoogleSQL quoting", func(t *testing.T) {
 		t.Parallel()
-		got := prefix(SQLInsert, unspec, "users", []string{"id"})
+		got := prefix(t, SQLInsert, unspec, "users", []string{"id"})
+		want := "INSERT INTO `users` (`id`) VALUES"
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Fatal(diff)
+		}
+	})
+
+	t.Run("unknown numeric dialect matches GoogleSQL quoting", func(t *testing.T) {
+		t.Parallel()
+		got := prefix(t, SQLInsert, databasepb.DatabaseDialect(99), "users", []string{"id"})
 		want := "INSERT INTO `users` (`id`) VALUES"
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Fatal(diff)

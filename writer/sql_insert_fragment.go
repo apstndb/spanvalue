@@ -16,8 +16,9 @@ import (
 // sibling helper per kind. The same dialect rules as [SQLInsertWriter] apply:
 // an unknown kind is [ErrInvalidSQLInsertKind], and INSERT OR IGNORE or
 // INSERT OR UPDATE with PostgreSQL is [ErrInvalidSQLInsertKindForDialect].
-// DATABASE_DIALECT_UNSPECIFIED uses GoogleSQL identifier quoting, matching
-// [spanvalue.QuoteIdentifier].
+// DATABASE_DIALECT_UNSPECIFIED and any other non-PostgreSQL dialect use
+// GoogleSQL identifier quoting, matching
+// [github.com/apstndb/spanvalue.QuoteIdentifier].
 //
 // A blank table name, including whitespace only, is [ErrEmptyTableName].
 // A qualified name with an empty segment, such as "db..users", is also
