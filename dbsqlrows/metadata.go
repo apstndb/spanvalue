@@ -11,6 +11,8 @@ import (
 // metadata is consumed outside export.
 //
 // If there is no metadata row, returns ok=false and err=rows.Err() (nil on clean EOF).
+// That is end-of-batch detection. [RunRows] and [WriteRows] treat the same
+// absence as [ErrMissingMetadataRow] because they require a metadata pseudo-row.
 func ReadMetadataAndAdvanceToData(rows *sql.Rows) (*sppb.ResultSetMetadata, bool, error) {
 	if rows == nil {
 		return nil, false, ErrNilRows

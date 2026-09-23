@@ -96,6 +96,8 @@ func (h RowIteratorHooks) WithPrepareMetadata(fn func(*sppb.ResultSetMetadata) e
 }
 
 // WithWriteRow sets WriteRow and returns h.
+// It does not clear [RowIteratorHooks.MarkOmitRowsRead]. A later WithWriteRow
+// on hooks that already omit row counts still omits them.
 func (h RowIteratorHooks) WithWriteRow(fn func(*spanner.Row) error) RowIteratorHooks {
 	h.WriteRow = fn
 	return h
@@ -110,6 +112,11 @@ func (h RowIteratorHooks) WithFinish(fn func(*RowIteratorResult) error) RowItera
 // MarkOmitRowsRead configures the hooks so successful WriteRow calls do not
 // increment [RowIteratorResult.RowsRead]. Use when WriteRow exists only for
 // side effects (for example a custom decorator) and should not count as exported rows.
+//
+// The flag stays set for later copies. [WithRowOrdinal], [ObserveWriteRow], and
+// [AfterEachSuccessfulWriteRow] set it when the wrapped WriteRow is nil.
+// Calling [RowIteratorHooks.WithWriteRow] afterward does not turn counting back on.
+// Install the counting WriteRow before those decorators.
 func (h RowIteratorHooks) MarkOmitRowsRead() RowIteratorHooks {
 	h.omitRowsRead = true
 	return h

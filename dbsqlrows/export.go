@@ -3,6 +3,7 @@ package dbsqlrows
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
@@ -20,8 +21,15 @@ var (
 	// (for example [WriteRowsAtData] or [RunRowsAtData]).
 	ErrNilMetadata = errors.New("nil result set metadata")
 	// ErrMissingMetadataRow reports that the iterator produced no metadata
-	// pseudo-row when WriteRows expected one.
-	ErrMissingMetadataRow = errors.New("missing result set metadata row")
+	// pseudo-row when [WriteRows] or [RunRows] expected one. The usual cause
+	// is a driver connection that did not request a metadata result set
+	// (go-sql-spanner: ReturnResultSetMetadata and proto decode).
+	// [ReadMetadataAndAdvanceToData] treats the same absence as end of input
+	// and returns ok=false with a nil error.
+	ErrMissingMetadataRow = errors.New("missing result set metadata row: enable driver metadata (go-sql-spanner ReturnResultSetMetadata and proto decode)")
+	// ErrMetadataColumnCount reports that metadata field count does not match
+	// [*sql.Rows.Columns] at prepare time.
+	ErrMetadataColumnCount = errors.New("result set metadata field count does not match column count")
 	// ErrMissingDataResultSet reports that NextResultSet did not advance to the
 	// data rows result set after the metadata pseudo-row.
 	ErrMissingDataResultSet = errors.New("missing data rows result set after metadata")
@@ -35,9 +43,10 @@ var (
 )
 
 // GCVStreamWriter is the subset of [github.com/apstndb/spanvalue/writer] types
-// that dbsqlrows drives. Built-in writers also implement PrepareRowType or
-// Prepare for metadata registration; [SQLRowsHooksFromGCVWriter] calls those when
-// present after reading the metadata pseudo-row.
+// that dbsqlrows drives. Built-in writers register metadata with PrepareRowType.
+// A Prepare(*ResultSetMetadata) method is a legacy fallback only; new writers
+// should implement PrepareRowType. [SQLRowsHooksFromGCVWriter] calls those
+// methods when present after reading the metadata pseudo-row.
 type GCVStreamWriter interface {
 	WriteGCVs([]spanner.GenericColumnValue) error
 	Flush() error
@@ -170,6 +179,9 @@ func runRows(fac rowsFacade, hooks SQLRowsHooks, run sqlRowsRunConfig) (*SQLRows
 		return nil, ErrNilMetadata
 	}
 
+	if err := checkMetadataColumnCount(fac, run.metadata); err != nil {
+		return abort(err)
+	}
 	if err := callPrepareMetadata(hooks, run.metadata); err != nil {
 		return abort(err)
 	}
@@ -277,6 +289,21 @@ func finishRun(result *SQLRowsResult, hooks SQLRowsHooks) (*SQLRowsResult, error
 	return result, nil
 }
 
+func checkMetadataColumnCount(fac rowsFacade, md *sppb.ResultSetMetadata) error {
+	if md == nil {
+		return nil
+	}
+	n, err := fac.columnCount()
+	if err != nil {
+		return err
+	}
+	fields := len(md.GetRowType().GetFields())
+	if fields != n {
+		return fmt.Errorf("%w: metadata fields %d, columns %d", ErrMetadataColumnCount, fields, n)
+	}
+	return nil
+}
+
 func prepareWriterMetadata(w GCVStreamWriter, md *sppb.ResultSetMetadata) error {
 	if md == nil {
 		return nil
@@ -286,6 +313,7 @@ func prepareWriterMetadata(w GCVStreamWriter, md *sppb.ResultSetMetadata) error 
 	}); ok {
 		return p.PrepareRowType(md.GetRowType())
 	}
+	// Legacy fallback. Built-in writers deprecate Prepare in favor of PrepareRowType.
 	if p, ok := w.(interface {
 		Prepare(*sppb.ResultSetMetadata) error
 	}); ok {

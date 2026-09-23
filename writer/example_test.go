@@ -1,15 +1,62 @@
 package writer_test
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 
 	"cloud.google.com/go/spanner"
 	databasepb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
-
+	"github.com/apstndb/spanvalue/gcvctor"
 	"github.com/apstndb/spanvalue/writer"
 )
+
+// ExampleRowIteratorResult_StatsProto rebuilds protobuf stats after a
+// successful export. Check that error before calling StatsProto: a failed
+// run can leave RowCount at zero, and StatsEncodingDMLExact would still emit
+// row_count_exact:0.
+func ExampleRowIteratorResult_StatsProto() {
+	query, err := writer.RowIteratorResult{Stats: writer.RowIteratorStats{
+		QueryStats: map[string]any{"elapsed_time": "1 ms"},
+	}}.StatsProto(writer.StatsEncodingDefault)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("query count present: %v\n", query.GetRowCount() != nil)
+
+	dml, err := writer.RowIteratorResult{Stats: writer.RowIteratorStats{}}.StatsProto(writer.StatsEncodingDMLExact)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("dml exact: %d\n", dml.GetRowCountExact())
+	// Output:
+	// query count present: false
+	// dml exact: 0
+}
+
+func ExampleNewSQLInsertWriter_placeholderTable() {
+	var buf bytes.Buffer
+	w, err := writer.NewSQLInsertWriter(&buf, "__TABLE_NAME__")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	err = w.WriteValues([]string{"id"}, []spanner.GenericColumnValue{gcvctor.Int64Value(1)})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	if err := w.Flush(); err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Print(buf.String())
+	// Output:
+	// INSERT INTO `__TABLE_NAME__` (`id`) VALUES (1);
+}
 
 func ExampleFormatSQLInsertPrefix() {
 	prefix, err := writer.FormatSQLInsertPrefix(

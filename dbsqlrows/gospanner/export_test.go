@@ -1,6 +1,7 @@
 package gospanner
 
 import (
+	"database/sql"
 	"errors"
 	"testing"
 
@@ -28,7 +29,17 @@ func TestQueryExport_nilDB(t *testing.T) {
 	t.Parallel()
 
 	_, err := QueryExport(t.Context(), nil, "SELECT 1", nil, nil, dbsqlrows.SQLRowsConfig{})
-	if !errors.Is(err, errNilDB) {
-		t.Fatalf("error = %v, want %v", err, errNilDB)
+	if !errors.Is(err, ErrNilDB) {
+		t.Fatalf("error = %v, want %v", err, ErrNilDB)
+	}
+}
+
+func TestQueryExport_nilWriter(t *testing.T) {
+	t.Parallel()
+
+	db := &sql.DB{}
+	_, err := QueryExport(t.Context(), db, "SELECT 1", nil, nil, dbsqlrows.SQLRowsConfig{})
+	if !errors.Is(err, dbsqlrows.ErrNilWriter) {
+		t.Fatalf("error = %v, want ErrNilWriter", err)
 	}
 }

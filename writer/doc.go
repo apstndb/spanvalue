@@ -21,6 +21,9 @@
 // [RowIteratorResult] (metadata, stats, [RowIteratorResult.RowsRead]). Prefer passing a
 // newly created iterator directly (for example txn.Query(ctx, stmt)); do not defer Stop at
 // the call site. Use the returned result for post-run metadata and stats.
+// [RowIteratorResult.StatsProto] rebuilds protobuf ResultSetStats from the decoded
+// Go stats. It does not import spaniter and does not know whether the run
+// completed. Check the returned error before using [StatsEncodingDMLExact].
 //
 // For manual [*cloud.google.com/go/spanner.RowIterator.Next] loops, bind the iterator,
 // defer Stop, register [RowIteratorWriter.PrepareRowType] after the first Next when results
@@ -60,7 +63,10 @@
 // per call. Writers distinguish missing schema from registered zero-column schema; see
 // [ErrMissingColumnNames]. [WithMetadata] from a [cloud.google.com/go/spanner.RowIterator]
 // before the first Next registers an empty schema—use [RowIteratorWriter.PrepareRowType] after
-// the first Next or [WriteRowIterator] instead.
+// the first Next or [WriteRowIterator] instead. A later write then fails with
+// [ErrColumnNamesMismatch] and mentions nil metadata registered before the first Next.
+// Quoted TSV uses [Tab] with [NewDelimitedWriter]; that is still encoding/csv, not raw tabs.
+// Deprecated New*WithOptions and Prepare forwarders have no scheduled removal version.
 //
 // # Write errors
 //
@@ -79,7 +85,8 @@
 // and an out-of-range [SQLInsertKind] with [ErrInvalidSQLInsertKind]. Qualified names with empty
 // segments are rejected on the first write with [ErrEmptyTableName].
 // Each statement is emitted with a single Write; batched rows are buffered until the multi-row
-// statement completes. After any write error from [SQLInsertWriter], discard the writer; later
+// statement completes. Delimited output is buffered by encoding/csv until Flush.
+// After any write error from [SQLInsertWriter], discard the writer; later
 // calls return the latched error (see "Write errors"). [*SQLInsertWriter.Flush]
 // closes a partial batch when batching.
 package writer
