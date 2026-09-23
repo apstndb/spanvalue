@@ -8,6 +8,7 @@ type rowsFacade interface {
 	next() bool
 	nextResultSet() bool
 	scan(dest ...any) error
+	columnNames() ([]string, error)
 	columnCount() (int, error)
 	err() error
 }
@@ -28,8 +29,12 @@ func (f sqlRowsFacade) scan(dest ...any) error {
 	return f.Scan(dest...)
 }
 
+func (f sqlRowsFacade) columnNames() ([]string, error) {
+	return f.Columns()
+}
+
 func (f sqlRowsFacade) columnCount() (int, error) {
-	cols, err := f.Columns()
+	cols, err := f.columnNames()
 	if err != nil {
 		return 0, err
 	}

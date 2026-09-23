@@ -28,7 +28,8 @@ var (
 	// and returns ok=false with a nil error.
 	ErrMissingMetadataRow = errors.New("missing result set metadata row: enable driver metadata (go-sql-spanner ReturnResultSetMetadata and proto decode)")
 	// ErrMetadataColumnCount reports that metadata field count does not match
-	// [*sql.Rows.Columns] at prepare time.
+	// [*sql.Rows.Columns] at prepare time, except for an empty affected_rows
+	// result set produced by go-sql-spanner for a statement without query rows.
 	ErrMetadataColumnCount = errors.New("result set metadata field count does not match column count")
 	// ErrMissingDataResultSet reports that NextResultSet did not advance to the
 	// data rows result set after the metadata pseudo-row.
@@ -179,15 +180,18 @@ func runRows(fac rowsFacade, hooks SQLRowsHooks, run sqlRowsRunConfig) (*SQLRows
 		return nil, ErrNilMetadata
 	}
 
-	if err := checkMetadataColumnCount(fac, run.metadata); err != nil {
+	skipDataRows, err := checkMetadataColumnCount(fac, run.metadata)
+	if err != nil {
 		return abort(err)
 	}
 	if err := callPrepareMetadata(hooks, run.metadata); err != nil {
 		return abort(err)
 	}
 
-	if err := processDataRows(fac, hooks, result); err != nil {
-		return abort(err)
+	if !skipDataRows {
+		if err := processDataRows(fac, hooks, result); err != nil {
+			return abort(err)
+		}
 	}
 	if err := fac.err(); err != nil {
 		return abort(err)
@@ -289,19 +293,32 @@ func finishRun(result *SQLRowsResult, hooks SQLRowsHooks) (*SQLRowsResult, error
 	return result, nil
 }
 
-func checkMetadataColumnCount(fac rowsFacade, md *sppb.ResultSetMetadata) error {
+// The driver's no-row result uses a synthetic affected_rows column even though
+// its metadata row type is empty. Probe only this exact shape: an actual data
+// row remains a mismatch, and clean EOF must not be read a second time.
+func checkMetadataColumnCount(fac rowsFacade, md *sppb.ResultSetMetadata) (skipDataRows bool, err error) {
 	if md == nil {
-		return nil
+		return false, nil
 	}
-	n, err := fac.columnCount()
+	columns, err := fac.columnNames()
 	if err != nil {
-		return err
+		return false, err
 	}
 	fields := len(md.GetRowType().GetFields())
-	if fields != n {
-		return fmt.Errorf("%w: metadata fields %d, columns %d", ErrMetadataColumnCount, fields, n)
+	if fields == len(columns) {
+		return false, nil
 	}
-	return nil
+	mismatch := fmt.Errorf("%w: metadata fields %d, columns %d", ErrMetadataColumnCount, fields, len(columns))
+	if fields != 0 || len(columns) != 1 || columns[0] != "affected_rows" {
+		return false, mismatch
+	}
+	if fac.next() {
+		return false, mismatch
+	}
+	if err := fac.err(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func prepareWriterMetadata(w GCVStreamWriter, md *sppb.ResultSetMetadata) error {

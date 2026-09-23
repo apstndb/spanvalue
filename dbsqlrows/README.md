@@ -21,7 +21,7 @@ rows, err := db.QueryContext(ctx, q, opts) // ExecOptions is the first query arg
 result, err := dbsqlrows.WriteRows(rows, w, dbsqlrows.SQLRowsConfig{})
 ```
 
-`WriteRows` and `RunRows` return `ErrMissingMetadataRow` when that pseudo-row is absent. `ReadMetadataAndAdvanceToData` uses the other policy: the same absence is end of batch (`ok == false`, nil error). `RunRowsAtData` rejects metadata whose field count does not match `Rows.Columns`.
+`WriteRows` and `RunRows` return `ErrMissingMetadataRow` when that pseudo-row is absent. `ReadMetadataAndAdvanceToData` uses the other policy: the same absence is end of batch (`ok == false`, nil error). `RunRowsAtData` rejects metadata whose field count does not match `Rows.Columns`, except the go-sql-spanner no-row result: zero metadata fields, one `affected_rows` column, and no data rows.
 
 Option B: nested module [`gospanner/`](gospanner/README.md) provides `DefaultExecOptions` and `QueryExport` for one-shot query → csv/jsonl export when the app already depends on go-sql-spanner. It is a thin reference integration (`ExecOptions` + `QueryContext` + `WriteRows`); root `go.mod` still has no go-sql-spanner. Interactive shells, metadata-first batches, EXPLAIN, and per-query driver options (`QueryMode`, `DirectExecuteQuery`) should use Option A with app-owned `ExecOptions` instead — validated by [spannersh](https://github.com/apstndb/spannersh).
 
