@@ -1,11 +1,13 @@
 package writer_test
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"github.com/apstndb/spanvalue/gcvctor"
 	"github.com/apstndb/spanvalue/writer"
 )
 
@@ -32,6 +34,27 @@ func ExampleRowIteratorResult_StatsProto() {
 	// Output:
 	// query count present: false
 	// dml exact: 0
+}
+
+func ExampleNewSQLInsertWriter_placeholderTable() {
+	var buf bytes.Buffer
+	w, err := writer.NewSQLInsertWriter(&buf, "__TABLE_NAME__")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	err = w.WriteValues([]string{"id"}, []spanner.GenericColumnValue{gcvctor.Int64Value(1)})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	if err := w.Flush(); err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Print(buf.String())
+	// Output:
+	// INSERT INTO `__TABLE_NAME__` (`id`) VALUES (1);
 }
 
 // ExampleWriteRowSeq streams a client-side (virtual) result set — rows that
