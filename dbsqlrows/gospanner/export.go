@@ -10,7 +10,9 @@ import (
 	"github.com/apstndb/spanvalue/dbsqlrows"
 )
 
-var errNilDB = errors.New("nil *sql.DB")
+// ErrNilDB reports that [QueryExport] or [QueryExportWithOptions] was called
+// with a nil *sql.DB.
+var ErrNilDB = errors.New("nil *sql.DB")
 
 // DefaultExecOptions returns the recommended go-sql-spanner configuration for
 // proto-decoded GCV export with a leading metadata pseudo result set
@@ -27,6 +29,10 @@ func DefaultExecOptions() spannerdriver.ExecOptions {
 
 // QueryExport runs db.QueryContext with [DefaultExecOptions] and exports the
 // result via [dbsqlrows.WriteRows]. It closes rows before returning.
+//
+// The driver [spannerdriver.ExecOptions] value is prepended as the first
+// query argument, before args. That is the go-sql-spanner convention; an
+// argument-count error often means that leading value was forgotten or duplicated.
 func QueryExport(
 	ctx context.Context,
 	db *sql.DB,
@@ -49,7 +55,10 @@ func QueryExportWithOptions(
 	opts spannerdriver.ExecOptions,
 ) (*dbsqlrows.SQLRowsResult, error) {
 	if db == nil {
-		return nil, errNilDB
+		return nil, ErrNilDB
+	}
+	if w == nil {
+		return nil, dbsqlrows.ErrNilWriter
 	}
 	queryArgs := make([]any, 0, len(args)+1)
 	queryArgs = append(queryArgs, opts)
