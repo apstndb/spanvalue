@@ -19,20 +19,21 @@ import (
 var _ rowsFacade = (*stubSQLRows)(nil)
 
 type stubSQLRows struct {
-	resultSets  [][]stubRow
-	set         int
-	row         int
-	scanErr     error
-	nextErr     error
-	nextErrOn   int
-	nextCalls   int
-	nextRSErr   error
-	nextRSErrOn int
-	nextRSCalls int
-	lastErr     error
-	nextRSOK    bool
-	columns     []string
-	columnErr   error
+	resultSets   [][]stubRow
+	set          int
+	row          int
+	scanErr      error
+	nextErr      error
+	nextErrOn    int
+	nextCalls    int
+	nextRSErr    error
+	nextRSErrOn  int
+	nextRSCalls  int
+	lastErr      error
+	nextRSOK     bool
+	columns      []string
+	columnErr    error
+	nextAttempts int
 }
 
 type stubRow struct {
@@ -40,6 +41,7 @@ type stubRow struct {
 }
 
 func (s *stubSQLRows) next() bool {
+	s.nextAttempts++
 	if s.scanErr != nil {
 		return false
 	}
@@ -118,16 +120,21 @@ func (s *stubSQLRows) scan(dest ...any) error {
 }
 
 func (s *stubSQLRows) columnCount() (int, error) {
+	cols, err := s.columnNames()
+	return len(cols), err
+}
+
+func (s *stubSQLRows) columnNames() ([]string, error) {
 	if s.columnErr != nil {
-		return 0, s.columnErr
+		return nil, s.columnErr
 	}
 	if len(s.columns) > 0 {
-		return len(s.columns), nil
+		return s.columns, nil
 	}
 	if s.set >= len(s.resultSets) || len(s.resultSets[s.set]) == 0 {
-		return 0, nil
+		return nil, nil
 	}
-	return len(s.resultSets[s.set][0].values), nil
+	return make([]string, len(s.resultSets[s.set][0].values)), nil
 }
 
 func (s *stubSQLRows) err() error {
@@ -221,6 +228,63 @@ func TestMetadataColumnCount(t *testing.T) {
 		}
 		if prepared != 1 || finished != 1 || got.RowsRead != 0 {
 			t.Fatalf("prepared=%d finished=%d rows=%d", prepared, finished, got.RowsRead)
+		}
+	})
+
+	t.Run("DDL affected_rows placeholder has no data", func(t *testing.T) {
+		t.Parallel()
+		stub := &stubSQLRows{columns: []string{"affected_rows"}, resultSets: [][]stubRow{{}}}
+		var prepared, written, finished int
+		got, err := runRows(stub, SQLRowsHooks{
+			PrepareMetadata: func(*sppb.ResultSetMetadata) error { prepared++; return nil },
+			WriteDataRow:    func([]spanner.GenericColumnValue) error { written++; return nil },
+			Finish:          func(*SQLRowsResult) error { finished++; return nil },
+		}, sqlRowsRunConfig{metadata: metadataWithNames()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.RowsRead != 0 || prepared != 1 || written != 0 || finished != 1 || stub.nextAttempts != 1 {
+			t.Fatalf("result=%#v prepared=%d written=%d finished=%d nextAttempts=%d", got, prepared, written, finished, stub.nextAttempts)
+		}
+	})
+
+	t.Run("affected_rows with an actual row is a mismatch", func(t *testing.T) {
+		t.Parallel()
+		stub := &stubSQLRows{
+			columns:    []string{"affected_rows"},
+			resultSets: [][]stubRow{{{values: []any{gcvctor.Int64Value(1)}}}},
+		}
+		var prepared, written, finished int
+		got, err := runRows(stub, SQLRowsHooks{
+			PrepareMetadata: func(*sppb.ResultSetMetadata) error { prepared++; return nil },
+			WriteDataRow:    func([]spanner.GenericColumnValue) error { written++; return nil },
+			Finish:          func(*SQLRowsResult) error { finished++; return nil },
+		}, sqlRowsRunConfig{metadata: metadataWithNames()})
+		if !errors.Is(err, ErrMetadataColumnCount) || got == nil || got.RowsRead != 0 || prepared != 0 || written != 0 || finished != 0 || stub.nextCalls != 1 {
+			t.Fatalf("result=%#v err=%v prepared=%d written=%d finished=%d nextCalls=%d", got, err, prepared, written, finished, stub.nextCalls)
+		}
+	})
+
+	t.Run("different empty one-column result is a mismatch", func(t *testing.T) {
+		t.Parallel()
+		stub := &stubSQLRows{columns: []string{"id"}, resultSets: [][]stubRow{{}}}
+		assertColumnMismatch(t, stub, sqlRowsRunConfig{metadata: metadataWithNames()}, metadataWithNames(), 0)
+		if stub.nextAttempts != 0 {
+			t.Fatalf("Next attempts = %d, want zero", stub.nextAttempts)
+		}
+	})
+
+	t.Run("placeholder read error is retained", func(t *testing.T) {
+		t.Parallel()
+		readErr := errors.New("next failed")
+		stub := &stubSQLRows{columns: []string{"affected_rows"}, resultSets: [][]stubRow{{}}, lastErr: readErr}
+		var prepared, finished int
+		got, err := runRows(stub, SQLRowsHooks{
+			PrepareMetadata: func(*sppb.ResultSetMetadata) error { prepared++; return nil },
+			Finish:          func(*SQLRowsResult) error { finished++; return nil },
+		}, sqlRowsRunConfig{metadata: metadataWithNames()})
+		if !errors.Is(err, readErr) || got == nil || got.RowsRead != 0 || prepared != 0 || finished != 0 {
+			t.Fatalf("result=%#v err=%v prepared=%d finished=%d", got, err, prepared, finished)
 		}
 	})
 

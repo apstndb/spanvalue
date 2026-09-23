@@ -92,7 +92,9 @@ func RunRows(rows *sql.Rows, hooks SQLRowsHooks, cfg SQLRowsConfig) (*SQLRowsRes
 
 // RunRowsAtData streams rows already positioned on the data result set using hooks.
 // metadata must be non-nil. Its field count must match [*sql.Rows.Columns];
-// otherwise the error is [ErrMetadataColumnCount].
+// otherwise the error is [ErrMetadataColumnCount]. The one exception is a
+// zero-field metadata result with a single affected_rows column and no data
+// rows, as returned by go-sql-spanner for statements without query rows.
 // See [WriteRowsAtData] for stats and partial-result semantics.
 func RunRowsAtData(
 	rows *sql.Rows,

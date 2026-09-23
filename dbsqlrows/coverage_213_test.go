@@ -26,6 +26,9 @@ func (f *scanFailFacade) scan(...any) error   { return errScan }
 func (f *scanFailFacade) columnCount() (int, error) {
 	return f.columns, nil
 }
+func (f *scanFailFacade) columnNames() ([]string, error) {
+	return make([]string, f.columns), nil
+}
 func (f *scanFailFacade) err() error { return nil }
 
 func TestErrMissingMetadataRow(t *testing.T) {
