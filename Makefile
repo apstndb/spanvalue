@@ -1,4 +1,4 @@
-.PHONY: build check fmt fmt-check lint test test-v vet
+.PHONY: build check fmt fmt-check lint test test-v vet vulncheck
 
 build:
 	go build ./...
@@ -26,3 +26,9 @@ test-v:
 
 vet:
 	go vet ./...
+
+# Mirrors the CI govulncheck job for local parity. Deliberately not part of
+# `check`: it needs network access (vuln DB + @latest scanner) and would slow
+# the inner loop.
+vulncheck:
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...

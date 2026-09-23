@@ -85,19 +85,19 @@ func BenchmarkFormatThroughput(b *testing.B) {
 				benchmarkFormatThroughput(b, SimpleFormatConfig(), values)
 			})
 			b.Run("Simple/Nullable", func(b *testing.B) {
-				benchmarkFormatThroughput(b, formatConfigNullableOnly(SimpleFormatConfig()), values)
+				benchmarkFormatThroughput(b, simpleNullablePathConfig(), values)
 			})
 			b.Run("Literal/Direct", func(b *testing.B) {
 				benchmarkFormatThroughput(b, LiteralFormatConfig(), values)
 			})
 			b.Run("Literal/Nullable", func(b *testing.B) {
-				benchmarkFormatThroughput(b, formatConfigNullableOnly(LiteralFormatConfig()), values)
+				benchmarkFormatThroughput(b, literalNullablePathConfig(LiteralQuoteConfig{}), values)
 			})
 			b.Run("SpannerCLI/Direct", func(b *testing.B) {
 				benchmarkFormatThroughput(b, SpannerCLICompatibleFormatConfig(), values)
 			})
 			b.Run("SpannerCLI/Nullable", func(b *testing.B) {
-				benchmarkFormatThroughput(b, formatConfigNullableOnly(SpannerCLICompatibleFormatConfig()), values)
+				benchmarkFormatThroughput(b, spannerCLINullablePathConfig(), values)
 			})
 		})
 	}

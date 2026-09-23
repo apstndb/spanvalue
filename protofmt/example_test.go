@@ -3,6 +3,7 @@ package protofmt_test
 import (
 	"fmt"
 
+	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/apstndb/spanvalue"
 	"github.com/apstndb/spanvalue/gcvctor"
 	"github.com/apstndb/spanvalue/protofmt"
@@ -44,4 +45,34 @@ func Example_spannerCLICompatibleFormatConfigWithProto() {
 	fmt.Println(out)
 	// Output:
 	// TYPE_STRING
+}
+
+// Strict mode: when a resolver is configured but a non-NULL PROTO or ENUM
+// value cannot be resolved, a one-line OnUnresolved handler turns the silent
+// wire-form fallthrough into an error surfaced to the formatter caller.
+func ExampleProtoTextValueOptions_onUnresolved() {
+	// An empty resolver stands in for a misconfigured descriptor set (for
+	// example a missing import or a type FQN typo).
+	resolver, err := protofmt.ProtoEnumResolverFromFileDescriptorSet(nil)
+	if err != nil {
+		panic(err)
+	}
+
+	strict := func(typeFQN string, code sppb.TypeCode) error {
+		return fmt.Errorf("protofmt: unresolved %v type %q", code, typeFQN)
+	}
+
+	fc := spanvalue.SpannerCLICompatibleFormatConfig().Clone()
+	fc.FormatComplexPlugins = append(
+		[]spanvalue.FormatComplexFunc{
+			protofmt.FormatProtoTextValue(protofmt.ProtoTextValueOptions{Resolver: resolver, OnUnresolved: strict}),
+			protofmt.FormatEnumNameValue(protofmt.EnumNameValueOptions{Resolver: resolver, OnUnresolved: strict}),
+		},
+		fc.FormatComplexPlugins...,
+	)
+
+	_, err = fc.FormatToplevelColumn(gcvctor.ProtoValue("example.music.SingerInfo", nil))
+	fmt.Println(err)
+	// Output:
+	// protofmt: unresolved PROTO type "example.music.SingerInfo"
 }

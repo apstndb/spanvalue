@@ -26,6 +26,16 @@ Only if it helps readers beyond what lint already covers:
 
 Frame optional notes as **reader / pkg.go.dev clarity**, not “lint failed” or “run make lint.”
 
+### Doc links: methods vs pointer types
+
+Bracketed doc links (`[...]`) follow [go.dev/doc/comment#doc-links](https://go.dev/doc/comment#doc-links):
+
+- **Methods** (pointer receiver or value receiver): prefer `[Type.Method]` — e.g. `[Buffer.ReadFrom]` for `func (b *Buffer) ReadFrom(...)`. The standard library and pkg.go.dev use this form.
+- `[*Type.Method]` also resolves (the parser strips a leading `*` from the type name) but is **optional**, not required.
+- Use `[*Type]` **only** when linking to a **pointer type** itself — e.g. `[*bytes.Buffer]` — not when naming a method.
+
+This repo’s `godoclint` config does not enforce a `*` prefix on method links.
+
 ### Common model mistakes (Go doc)
 
 Avoid these false review threads:
@@ -38,3 +48,4 @@ Avoid these false review threads:
 | Demanding godoc fixes in `*_test.go` | Test files are outside godoc lint in `.golangci.yml`. |
 | Applying godoc rules to `README.md` | Markdown is separate from Go comment lint. |
 | Copying lint diagnostic text into the review | Already on the PR from CI. |
+| Requiring `[*Type.Method]` for pointer-receiver methods | `[Type.Method]` is canonical; `[*Type.Method]` is optional. Leading `*` is for pointer **types** (`[*bytes.Buffer]`), not methods. Not enforced by godoclint. |

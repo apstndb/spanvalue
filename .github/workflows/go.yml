@@ -1,5 +1,6 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+# CI mirrors local `make check` (fmt-check, vet, build, test, lint) plus
+# race detection, Example tests, and govulncheck (PR-blocking; also scheduled
+# weekly to catch newly published advisories without a code change).
 
 name: Go
 
@@ -8,10 +9,16 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  schedule:
+  # Weekly vulnerability scan (Sunday 00:00 UTC).
+  - cron: "0 0 * * 0"
+
+permissions:
+  contents: read
 
 jobs:
-
-  build:
+  check:
+    name: make check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -27,5 +34,89 @@ jobs:
       - name: Clear Go caches
         run: go clean -cache -testcache
 
-      - name: Test
-        run: go test -v ./...
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.11.4
+          install-only: true
+
+      - name: make check
+        run: make check
+
+  race:
+    name: race detector
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Clear Go caches
+        run: go clean -cache -testcache
+
+      - name: Test with race detector
+        run: go test -race ./...
+
+  examples:
+    name: example tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Clear Go caches
+        run: go clean -cache -testcache
+
+      - name: Run Example tests
+        run: go test -run '^Example' ./...
+
+  gospanner:
+    name: dbsqlrows/gospanner (go 1.25)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: dbsqlrows/gospanner/go.mod
+          cache: false
+
+      - name: Clear Go caches
+        run: go clean -cache -testcache
+
+      - name: Test gospanner nested module
+        working-directory: dbsqlrows/gospanner
+        run: go test ./...
+
+  govulncheck:
+    name: govulncheck
+    # Runs on every trigger (push, pull_request, schedule) and is PR-blocking:
+    # the baseline is clean at the symbol level (#177), so any reachable
+    # finding is a regression. The weekly schedule still catches advisories
+    # published between merges.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # The scanner tracks @latest, so use the current Go release for its
+      # installation requirements and current stdlib vulnerability coverage.
+      # The other root jobs continue to verify go.mod's minimum version.
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          check-latest: true
+          cache: false
+
+      - name: Run govulncheck
+        run: make vulncheck

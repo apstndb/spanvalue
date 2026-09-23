@@ -2,17 +2,45 @@ package spanvalue_test
 
 import (
 	"fmt"
+	"math/big"
 
 	"cloud.google.com/go/spanner"
+	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/apstndb/spanvalue"
 	"github.com/apstndb/spanvalue/gcvctor"
+	"github.com/apstndb/spanvalue/writer"
 )
 
+// Lazily format rows when the caller needs cell slices rather than serialized
+// CSV, JSONL, or SQL output.
+func ExampleFormatConfig_FormatRowSeq() {
+	row1, err := spanner.NewRow([]string{"id", "name"}, []any{int64(1), "Alice"})
+	if err != nil {
+		panic(err)
+	}
+	row2, err := spanner.NewRow([]string{"id", "name"}, []any{int64(2), "Bob"})
+	if err != nil {
+		panic(err)
+	}
+
+	for values, err := range spanvalue.SimpleFormatConfig().FormatRowSeq(writer.RowSeq(row1, row2)) {
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(values)
+	}
+	// Output:
+	// [1 Alice]
+	// [2 Bob]
+}
+
 // Tuple-style STRUCT in `ARRAY<STRUCT<...>>` while keeping Spanner CLI scalar formatting.
+// The prepended PluginForStruct override runs before the preset's STRUCT handler.
 func ExampleSpannerCLICompatibleFormatConfig_tupleStruct() {
-	fc := spanvalue.SpannerCLICompatibleFormatConfig().Clone()
-	fc.FormatStruct.FormatStructParen = spanvalue.FormatTupleStruct
+	fc := spanvalue.SpannerCLICompatibleFormatConfig().WithComplexPlugin(
+		spanvalue.PluginForStruct(spanvalue.FormatSimpleStructField, spanvalue.FormatTupleStruct))
 
 	structElem, err := gcvctor.StructValueOf(
 		[]string{"id", "region"},
@@ -33,4 +61,76 @@ func ExampleSpannerCLICompatibleFormatConfig_tupleStruct() {
 	fmt.Println(out)
 	// Output:
 	// [(1, east)]
+}
+
+// Assemble a config from the canonical handlers plus a per-type override:
+// the prepended PluginFromNullable claims NUMERIC, everything else reaches
+// the WithScalarFormatter tail, and NULLs render as the WithNullString value.
+func ExampleNewFormatConfig() {
+	fc, err := spanvalue.NewFormatConfig(
+		spanvalue.WithNullString("NULL"),
+		spanvalue.WithPlugin(spanvalue.PluginFromNullable(spanvalue.NullableFormatterFor(
+			func(v spanner.NullNumeric) (string, error) {
+				return v.Numeric.FloatString(2), nil
+			}))),
+		spanvalue.WithArrayFormat(spanvalue.FormatUntypedArray),
+		spanvalue.WithStructFormat(spanvalue.FormatSimpleStructField, spanvalue.FormatTupleStruct),
+		spanvalue.WithScalarFormatter(spanvalue.FormatNullableSpannerCLICompatible),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	arr, err := gcvctor.ArrayValue(
+		gcvctor.NumericValue(big.NewRat(3, 2)),
+		gcvctor.NullFromCode(sppb.TypeCode_NUMERIC),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	out, err := fc.FormatToplevelColumn(arr)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(out)
+	// Output:
+	// [1.50, NULL]
+}
+
+// Materialize nil cells as explicit protobuf NULL values before low-level
+// ARRAY or STRUCT wire assembly.
+func ExampleWireValues() {
+	wireValues := spanvalue.WireValues([]spanner.GenericColumnValue{
+		gcvctor.Int64Value(7),
+		{Type: &sppb.Type{Code: sppb.TypeCode_INT64}},
+	})
+	arrayWire := structpb.NewListValue(&structpb.ListValue{Values: wireValues})
+
+	fmt.Println(arrayWire.GetListValue().GetValues()[0].GetStringValue())
+	fmt.Println(arrayWire.GetListValue().GetValues()[1].GetNullValue())
+	// Output:
+	// 7
+	// NULL_VALUE
+}
+
+// Opt into GoogleSQL STRUCT constructor syntax while retaining SQL scalar quoting.
+func ExampleFormatTupleStructFormal() {
+	fc := spanvalue.LiteralFormatConfig().WithComplexPlugin(
+		spanvalue.PluginForStruct(spanvalue.FormatSimpleStructField, spanvalue.FormatTupleStructFormal))
+	child, err := gcvctor.StructValueOf([]string{"name"}, []spanner.GenericColumnValue{gcvctor.StringValue("east")})
+	if err != nil {
+		panic(err)
+	}
+	array, err := gcvctor.ArrayValue(child)
+	if err != nil {
+		panic(err)
+	}
+	out, err := fc.FormatToplevelColumn(array)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(out)
+	// Output:
+	// ARRAY<STRUCT<name STRING>>[STRUCT("east")]
 }

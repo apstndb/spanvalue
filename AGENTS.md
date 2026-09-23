@@ -1,6 +1,6 @@
 # Agent instructions for `spanvalue`
 
-Go library: format `spanner.GenericColumnValue` / `*spanner.Row` to text; build GCVs in `gcvctor/`; stream exports in `writer/`. Target **Go 1.23** (`go.mod`; toolchain `go1.23.2`). Alias **`sppb`** = `cloud.google.com/go/spanner/apiv1/spannerpb`.
+Go library: format `spanner.GenericColumnValue` / `*spanner.Row` to text; build GCVs in `gcvctor/`; stream exports in `writer/`. Target **Go 1.25+** (`go.mod`). Alias **`sppb`** = `cloud.google.com/go/spanner/apiv1/spannerpb`.
 
 ## Commands
 
@@ -15,13 +15,17 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 | Root | `FormatConfig`, presets, `ColumnNames`, `FormatRowColumns`, identifier quoting |
 | `gcvctor/` | Build `GenericColumnValue` from Go types (strict; no format) |
 | `writer/` | CSV/TSV/JSONL/SQL INSERT; `WriteGCVs`, `WriteRowIterator` ([writer/README.md](writer/README.md)) |
+| `dbsqlrows/` | **Experimental.** `*sql.Rows` loop; `SQLRowsHooks` / `WriteRows` → `writer.WriteGCVs`; driver-agnostic (package godoc) |
+| `dbsqlrows/gospanner/` | Optional nested module: one-shot `QueryExport` + `DefaultExecOptions` (reference integration; REPLs use core `dbsqlrows` + app `ExecOptions`) |
 | `internal/` | Escape/literal/iterator helpers |
 
 ## Formatting
 
-- `FormatColumn`: `FormatComplexPlugins` first (`ARRAY`/`STRUCT` included), then built-ins; plugins return **`ErrFallthrough`** to defer.
-- Presets (each returns fresh `*FormatConfig`): `LiteralFormatConfig`, `SimpleFormatConfig`, `SpannerCLICompatibleFormatConfig`, `JSONFormatConfig`. Preset-backed convenience wrappers: `FormatRowLiteral`, `FormatColumnLiteral`, `FormatRowSpannerCLICompatible`, `FormatColumnSpannerCLICompatible`. `FormatRowJSONObject` takes an explicit JSON-emitting `*FormatConfig` (typically from `JSONFormatConfig()`), not a preset wrapper.
-- **v0.4.2+ scalar plugins** on presets: `FormatSimpleValue`, `FormatLiteralValue`, `FormatSpannerCLIValue`. Strip via `FormatConfigWithoutScalarPlugins` or edit `FormatComplexPlugins` on a **clone** (singleton configs used by convenience funcs are shared—do not mutate).
+- **FormatConfig is two fields** (v0.8 / #252, #253): `NullString` + `FormatComplexPlugins`. `FormatColumn`: plugin chain only — plugins return **`ErrFallthrough`** to defer; when all defer, NULL (any type) → `GetNullString`, non-NULL → **`ErrUnhandledValue`** (wraps the type; replaced `ErrFormatNullableRequired`, the nil `FormatArray`/`FormatStruct` panics, and the built-in path's `ErrUnknownType` for unknown codes — `ErrUnknownType` remains for Decode-path dispatch). NULL is deliberately NOT pre-filtered (plugins may own type-specific NULL renderings); guard combinators `PluginForType` / `PluginForTypeCode` / `PluginSkippingNull` (#250) lift the boilerplate — protofmt dogfoods them. `PluginFromNullable` lifts `FormatNullableFunc` into the chain (Decode dispatch incl. PG wrappers; unknown codes fall through, other decode errors are real); + `NullableFormatterFor[T]` = per-scalar-type override with the chain as the base. `FormatStructFieldFunc` is Formatter-based (`func(Formatter, *sppb.StructType_Field, *structpb.Value)`); `FormatComplexFunc`/`FormatNullableFunc` are defined types, not aliases (#219).
+- **Combinators:** `PluginForArray(join)` / `PluginForStruct(field, paren)` are the only ARRAY/STRUCT handlers (presets install them; NULL defers to `GetNullString` — typed NULL arrays like `CAST(NULL AS …)` need a plain `PluginForTypeCode(ARRAY, …)` plugin).
+- **Builder:** `NewFormatConfig(WithNullString, WithPlugin…, WithArrayFormat, WithStructFormat, WithScalarFormatter)` (overrides most-recent-first, then array/struct, `PluginFromNullable` tail); scalar+array+struct each **required** (`Err*Required` at build), `WithPlugin` alone never satisfies them. `Validate`: non-empty `NullString` (`ErrEmptyNullString`), non-empty chain (`ErrEmptyFormatComplexPlugins`), non-nil plugins (`ErrNilFormatComplexPlugin`); coverage is a **runtime** property (`ErrUnhandledValue`). Dogfooding: `format_config_dogfood_test.go` pins byte-identical preset rebuilds.
+- Presets (each returns fresh `*FormatConfig`, built on the chain): `LiteralFormatConfig`, `SimpleFormatConfig`, `SpannerCLICompatibleFormatConfig`, `JSONFormatConfig`. Preset-backed convenience wrappers: `FormatRowLiteral`, `FormatColumnLiteral`, `FormatRowSpannerCLICompatible`, `FormatColumnSpannerCLICompatible`. `FormatRowJSONObject` takes an explicit JSON-emitting `*FormatConfig` (typically from `JSONFormatConfig()`), not a preset wrapper.
+- **Scalar plugins** on presets (unconditional chain members; the #217 identity machinery is gone): `FormatSimpleValue`, `FormatSpannerCLIValue`, `FormatJSONSimpleValue` (now gated on the scalar set + wire-validating, #205), and `LiteralValuePlugin(opts)` (constructor capturing `LiteralFormatOptions`; replaced the `FormatLiteralValue` value). Literal quote options live in constructor-captured plugin state (`LiteralFormatConfigWithQuote` / `WithLiteralQuote`; quote-aware PROTO casts only via literal constructors — exported `FormatProtoAsCast` is default-quote). `FormatConfigWithoutScalarPlugins` is removed: replace scalar behavior by **prepending** `PluginFromNullable(f)` via `WithComplexPlugin` (singleton configs used by convenience funcs are shared—do not mutate).
 - **NUMERIC output** (wire `"99.5"` example):
 
   | Preset | Behavior |
@@ -32,25 +36,28 @@ PostgreSQL TypeAnnotation integration probes live in [**spanpg**](https://github
 
   Regolden downstream tests if upgrading from **v0.4.1** Simple export—not a v0.4.3-only change.
 
-- **Tuple STRUCT + CLI scalars:** no new preset constructor; `SpannerCLICompatibleFormatConfig().Clone()` then `FormatStruct.FormatStructParen = FormatTupleStruct` (README/example). Official spanner-cli uses bracket STRUCT `[[…]]`.
+- **Tuple STRUCT + CLI scalars:** no new preset constructor; `SpannerCLICompatibleFormatConfig().WithComplexPlugin(PluginForStruct(FormatSimpleStructField, FormatTupleStruct))` (README/example). Official spanner-cli uses bracket STRUCT `[[…]]`.
 - **JSON rows:** `UnnamedFieldNamer` / `IndexedUnnamedFieldNamer`—non-empty unique names required (`nil` = empty JSON keys).
 
 ## Writer (`writer/`)
 
 - **Native client:** `WriteRow` / `WriteRowIterator` / `RunRowIterator` for `*spanner.RowIterator`. `WriteRowIterator`/`RunRowIterator` with `RowIteratorHooksFromWriter` register metadata and call **`Flush`** in hooks. Manual `RowIterator.Next` loops need first-`Next` metadata and zero-row **`PrepareRowType` + `Flush`** (not `defer Flush`—return `Flush()` error). Do not pass `iter.Metadata` at construction when still nil.
+- **In-memory / virtual rows:** `WriteRowSeq` / `RunRowSeq` (explicit `*sppb.ResultSetMetadata` + `iter.Seq2[*spanner.Row, error]`; `RowSeq(rows...)` adapts pre-built rows) reuse the internal `rowIteratorFacade` loop, so the hook contract (PrepareMetadata-once incl. zero rows, abort-without-Finish, `RowsRead`) matches `RunRowIterator`; `Stats` stays zero. Yielded error aborts; paired row ignored. `RunRowSeqDeferredMetadata` takes a metadata **func** evaluated after the first pull (runRowIterator already resolves metadata lazily) — for merged concurrent sources that publish the row type before their first yield (surveyed from spanner-mycli partitioned-query fan-in, apstndb/spanner-mycli#666).
 - **GCV slice path:** `WriteGCVs` + `WithMetadata` / `WithFormatter` / `WithUnnamedFieldNamer`. Same namer for **out-of-band headers** via root `ColumnNames(fields, namer)`.
 - **Delimited:** `NewCSVWriter(out)`, `NewDelimitedWriter(out, '\t')` = **quoted TSV** (`encoding/csv`), not legacy raw TAB; raw TAB = custom `Writer` (README).
 - **SQL INSERT:** `WithSQLInsertKind`, `WithSQLDialect` (identifier quoting), `WithSQLBatchSize` (>1 multi-row `VALUES`; **`Flush`** ends partial batch). `ErrInvalidSQLInsertKindForDialect`: PostgreSQL + `INSERT OR IGNORE`/`UPDATE`. After any write error, discard writer (documented). Table and formatter are constructor-only (`TableName` / `FormatConfig` accessors on `SQLInsertWriter`).
+- **Constructor-only config (v0.8 / #221):** `DelimitedWriter.Header`, `DelimitedWriter.UnnamedFieldNamer`, `JSONLWriter.UnnamedFieldNamer` are unexported; use `WithHeader` / `WithUnnamedFieldNamer`. `ErrHeaderAfterData` remains only for an explicit `WriteHeader()` call after data with `WithHeader(false)`.
 
 ## Adoption boundaries (do not expand spanvalue into)
 
-- **No `database/sql` / `*sql.Rows` API** in this repo: apps own metadata pseudo-rows, scan loops, stats result sets (e.g. spannersh). Document recipes only ([#109](https://github.com/apstndb/spanvalue/issues/109), [#110](https://github.com/apstndb/spanvalue/issues/110)).
+- **`dbsqlrows/`** owns the shared `*sql.Rows` loop (`RunRows`/`RunRowsAtData` + `SQLRowsHooks`, parallel to `writer.RunRowIterator`); csv/jsonl use `SQLRowsHooksFromGCVWriter`. No go-sql-spanner in root `go.mod`. **`dbsqlrows/gospanner/`** is optional one-shot export + ExecOptions reference (not for REPLs — spannersh uses core only). Table layout and batch orchestration stay in apps. See [#109](https://github.com/apstndb/spanvalue/issues/109) / [#110](https://github.com/apstndb/spanvalue/issues/110).
 - **No string→GCV parsing** in `FormatConfig` (`gcvctor` / app). PG table cells: **spanpg**, not spanvalue.
+- **Reflection / client-tag Go value → GCV** (struct tags, `Null*` wrappers, `spanner.Encoder`, typed-NULL inference mirroring the official client's `encodeValue`) lives in [**spanenc**](https://github.com/apstndb/spanenc) with [**structfields**](https://github.com/apstndb/structfields) (separate Apache-2.0 module hosting the upstream `cloud.google.com/go/internal/fields` fork and `spannertag` port so MIT modules never embed upstream-derived code); `gcvctor` stays explicit, strict constructors with caller-supplied types.
 
 ## gcvctor & errors (short)
 
 - `IsNull`: nil `Value` or protobuf `NullValue`. `NullOf` for typed NULL; empty `ArrayValue` = length 0, not NULL.
-- Strict `ArrayValue` / `StructValueOf`: `ErrTypeMismatch`, `ErrMismatchedCounts`, `ErrNilElementType`. Format: `ErrUnknownType`, `ErrMismatchedFields`.
+- Strict `ArrayValue` / `StructValueOf`: `ErrTypeMismatch`, `ErrMismatchedCounts`, `ErrNilElementType`. Format: `ErrUnknownType` (unsupported type code; coverage problem), `ErrMalformedWire` (known type, invalid wire payload or unexpected NULL at the wire validator; data problem—the two do not `errors.Is`-match each other), `ErrMismatchedFields`.
 - `Float32Value`/`Float64Value`: `NaN`/`±Inf` as strings (Spanner wire).
 - **Tests:** `t.Parallel()`, `cmp.Diff`, `protocmp.Transform()`. `gcvctor` tests: expected GCV via `typector`+`structpb`, not the helper under test. Keep attribution comments in `literal_test.go`, `spanner_cli_compatible_test.go`.
 

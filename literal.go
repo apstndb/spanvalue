@@ -16,26 +16,48 @@ import (
 // Do not mutate: it is shared across all callers.
 var literalFormatConfig = LiteralFormatConfig()
 
+// FormatRowLiteral formats each column of row using [LiteralFormatConfig].
 func FormatRowLiteral(value *spanner.Row) ([]string, error) {
 	return literalFormatConfig.FormatRow(value)
 }
 
+// FormatColumnLiteral formats value using [LiteralFormatConfig] at top level.
 func FormatColumnLiteral(value spanner.GenericColumnValue) (string, error) {
 	return literalFormatConfig.FormatToplevelColumn(value)
 }
 
-// LiteralFormatConfig returns a new FormatConfig that produces parseable SQL
-// literal expressions with type annotations.
+// LiteralFormatConfig returns a new FormatConfig that produces SQL-style
+// literals with type annotations and compact STRUCT-like display. Nested STRUCTs
+// use parentheses even for zero or one field, so their output is not always a
+// GoogleSQL STRUCT expression. For constructor syntax, prepend [PluginForStruct]
+// with [FormatSimpleStructField] and [FormatTupleStructFormal]. That override
+// omits STRUCT field names and declared types; it does not promise type-preserving
+// round trips (for example, NULL and empty arrays may require type context).
+// ARRAY values use
+// [FormatOptionallyTypedArray]: top-level arrays with scalar elements omit the
+// ARRAY<...> prefix (empty or not); arrays of STRUCT or nested ARRAY include it when
+// toplevel is true (empty or not). The chain is [FormatProtoAsCast],
+// [FormatEnumAsCast], [LiteralValuePlugin] for the remaining scalars,
+// [PluginForArray], and [PluginForStruct] with [FormatSimpleStructField] and
+// [FormatTypedStruct]. Use [LiteralFormatConfigWithQuote] or
+// [LiteralFormatConfigWithOptions] for non-default quote options.
 func LiteralFormatConfig() *FormatConfig {
+	return literalFormatConfigFromOptions(LiteralFormatOptions{})
+}
+
+// literalFormatConfigFromOptions assembles the literal preset chain with
+// quote options captured into the quote-sensitive plugins (scalar literals
+// and PROTO casts).
+func literalFormatConfigFromOptions(opts LiteralFormatOptions) *FormatConfig {
+	opts.Quote = normalizeLiteralQuote(opts.Quote)
 	return &FormatConfig{
-		NullString:     nullStringUpperCase,
-		FormatArray:    FormatOptionallyTypedArray,
-		FormatStruct:   TypedStructFormat(),
-		FormatNullable: formatNullableValueLiteral,
+		NullString: nullStringUpperCase,
 		FormatComplexPlugins: []FormatComplexFunc{
-			FormatProtoAsCast,
+			protoAsCastPlugin(opts.Quote),
 			FormatEnumAsCast,
-			FormatLiteralValue,
+			LiteralValuePlugin(opts),
+			PluginForArray(FormatOptionallyTypedArray),
+			PluginForStruct(FormatSimpleStructField, FormatTypedStruct),
 		},
 	}
 }
@@ -43,9 +65,10 @@ func LiteralFormatConfig() *FormatConfig {
 var _ func() *FormatConfig = LiteralFormatConfig
 
 var (
-	_ FormatStructParenFunc = formatTypedStructParen
+	_ FormatStructParenFunc = FormatTypedStruct
 	_ FormatStructParenFunc = FormatTupleStruct
-	_ FormatStructFieldFunc = formatSimpleStructField
+	_ FormatStructParenFunc = FormatTupleStructFormal
+	_ FormatStructFieldFunc = FormatSimpleStructField
 	_ FormatStructFieldFunc = FormatTypelessStructField
 )
 
@@ -61,8 +84,9 @@ func stringLiteralCast(typ, s string, policy internal.QuotePolicy) string {
 	return fmt.Sprintf("CAST(%s AS %s)", internal.ToStringLiteralPolicy(s, policy), typ)
 }
 
-// formatNullableValueLiteral is the identity sentinel for scalarFastPathActive and
-// formatSimpleColumn dispatch. It must stay equivalent to
+// formatNullableValueLiteral is the default-quote Decode-based literal
+// formatter, kept for parity tests and benchmarks comparing the scalar
+// plugin against the [PluginFromNullable] path. It must stay equivalent to
 // formatNullableValueLiteralWithQuote(LiteralQuoteConfig{}, nv).
 func formatNullableValueLiteral(value NullableValue) (string, error) {
 	return formatNullableValueLiteralWithQuote(LiteralQuoteConfig{}, value)

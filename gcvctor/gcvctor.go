@@ -1,6 +1,7 @@
 package gcvctor
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -23,16 +24,24 @@ import (
 )
 
 var (
-	// ErrTypeMismatch is returned by [ArrayValueOf] when an element's type does not match elemType.
+	// ErrTypeMismatch is returned by [ArrayValueOf], [ArrayValue], and [NormalizeArrayElements]
+	// when an element's type does not match the expected element type.
 	ErrTypeMismatch = errors.New("gcvctor: type mismatch")
 	// ErrMismatchedCounts is returned by [StructValueOf] when len(names) != len(gcvs).
 	ErrMismatchedCounts = errors.New("gcvctor: mismatched name/value count")
-	// ErrNilElementType is returned by [ArrayValueOf] when elemType is nil.
+	// ErrNilElementType is returned by [ArrayValueOf], [ArrayValue], and [NormalizeArrayElements]
+	// when elemType is nil.
 	ErrNilElementType = errors.New("gcvctor: nil array element type")
 	// ErrNilFieldType is returned by [StructValueOf] when a field's Type is nil.
 	ErrNilFieldType = errors.New("gcvctor: nil struct field type")
-	// ErrNilNumeric is returned by [NumericValueChecked] and [PGNumericValueChecked] when v is nil.
+	// ErrNilNumeric is returned by [NumericValueChecked], [PGNumericValueChecked],
+	// and [PGNumericValueExact] when v is nil.
 	ErrNilNumeric = errors.New("gcvctor: nil numeric input")
+	// ErrInexactNumeric is returned by [PGNumericValueExact] when v has no
+	// finite decimal expansion and therefore cannot be rendered exactly.
+	ErrInexactNumeric = errors.New("gcvctor: numeric input has no finite decimal expansion")
+	// ErrInvalidJSON is returned by [JSONStringValue] when v is not syntactically valid JSON.
+	ErrInvalidJSON = errors.New("gcvctor: invalid JSON input")
 )
 
 // ArrayElementError adds an element index to an ARRAY construction error while preserving
@@ -111,7 +120,9 @@ func Int64Value(v int64) spanner.GenericColumnValue {
 }
 
 // Float64Value returns a non-null FLOAT64 GenericColumnValue. NaN and ±Inf use string wire values
-// matching Spanner's encoding.
+// ("NaN", "Infinity", "-Infinity") matching what Spanner returns on the wire. The official client's
+// encodeValue sends finite and non-finite floats as protobuf NumberValue when building params;
+// Spanner accepts both forms.
 func Float64Value(v float64) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT64),
@@ -120,7 +131,9 @@ func Float64Value(v float64) spanner.GenericColumnValue {
 }
 
 // Float32Value returns a non-null FLOAT32 GenericColumnValue. NaN and ±Inf use string wire values
-// matching Spanner's encoding.
+// ("NaN", "Infinity", "-Infinity") matching what Spanner returns on the wire. The official client's
+// encodeValue sends finite and non-finite floats as protobuf NumberValue when building params;
+// Spanner accepts both forms.
 func Float32Value(v float32) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.CodeToSimpleType(sppb.TypeCode_FLOAT32),
@@ -153,6 +166,8 @@ func StringValue(v string) spanner.GenericColumnValue {
 }
 
 // BytesValue returns a non-null BYTES GenericColumnValue (base64 wire encoding).
+// A nil slice is non-null empty BYTES (wire base64 ""), not typed SQL NULL; for typed NULL
+// use [BytesFromSlice] with nil.
 func BytesValue(v []byte) spanner.GenericColumnValue {
 	return BytesBasedValueOf(typector.CodeToSimpleType(sppb.TypeCode_BYTES), v)
 }
@@ -166,6 +181,18 @@ func BytesBasedValueOf(typ *sppb.Type, v []byte) spanner.GenericColumnValue {
 	}
 }
 
+// StringBasedValueOf constructs a GenericColumnValue with an arbitrary string-compatible
+// [cloud.google.com/go/spanner/apiv1/spannerpb.Type] and wire string stored as-is (no validation).
+// Prefer typed helpers such as [NumericValue] or [PGNumericFromNullable] when you hold native Go
+// values; use this when the Type carries annotations (for example PG-dialect NUMERIC) or other
+// metadata beyond a bare type code.
+func StringBasedValueOf(typ *sppb.Type, v string) spanner.GenericColumnValue {
+	return spanner.GenericColumnValue{
+		Type:  typ,
+		Value: structpb.NewStringValue(v),
+	}
+}
+
 // StringBasedValueFromCode constructs a GenericColumnValue for a simple scalar type code
 // with a string wire payload.
 //
@@ -175,11 +202,12 @@ func BytesBasedValueOf(typ *sppb.Type, v []byte) spanner.GenericColumnValue {
 // wire string as-is and do not re-normalize. Prefer [NumericValue], [PGNumericValue], or values
 // from the Spanner client (including the emulator and Spanner Omni) over passing arbitrary
 // decimals here.
+//
+// Accepts simple scalar type codes only. ARRAY and STRUCT codes produce a malformed Type
+// (missing array_element_type or struct_type); use [StringBasedValueOf] with typector for
+// annotated or composite shapes.
 func StringBasedValueFromCode(code sppb.TypeCode, v string) spanner.GenericColumnValue {
-	return spanner.GenericColumnValue{
-		Type:  typector.CodeToSimpleType(code),
-		Value: structpb.NewStringValue(v),
-	}
+	return StringBasedValueOf(typector.CodeToSimpleType(code), v)
 }
 
 // DateValue returns a non-null DATE GenericColumnValue.
@@ -199,7 +227,7 @@ func DateStringValue(v string) (spanner.GenericColumnValue, error) {
 
 // TimestampValue returns a non-null TIMESTAMP GenericColumnValue (RFC3339Nano string wire format).
 func TimestampValue(v time.Time) spanner.GenericColumnValue {
-	return StringBasedValueFromCode(sppb.TypeCode_TIMESTAMP, v.Format(time.RFC3339Nano))
+	return StringBasedValueFromCode(sppb.TypeCode_TIMESTAMP, v.UTC().Format(time.RFC3339Nano))
 }
 
 // TimestampStringValue validates an RFC3339Nano timestamp string and returns a non-null
@@ -252,13 +280,40 @@ func UUIDValue(v uuid.UUID) spanner.GenericColumnValue {
 	return StringBasedValueFromCode(sppb.TypeCode_UUID, v.String())
 }
 
-// JSONValue marshals v to JSON and returns a non-null JSON GenericColumnValue.
-func JSONValue(v any) (spanner.GenericColumnValue, error) {
-	b, err := json.Marshal(v)
+// UUIDStringValue validates a UUID string via [github.com/google/uuid.Parse] and returns a
+// non-null UUID GenericColumnValue using the canonical lowercase wire string from
+// [github.com/google/uuid.UUID.String]. Non-canonical forms accepted by uuid.Parse
+// (uppercase hex digits, surrounding braces, a "urn:uuid:" prefix) are normalized to the
+// canonical lowercase 8-4-4-4-12 form on the wire, so the stored payload can differ from v.
+// Use [UUIDValue] when you already hold a [github.com/google/uuid.UUID].
+func UUIDStringValue(v string) (spanner.GenericColumnValue, error) {
+	u, err := uuid.Parse(v)
 	if err != nil {
 		return spanner.GenericColumnValue{}, err
 	}
-	return StringBasedValueFromCode(sppb.TypeCode_JSON, string(b)), nil
+	return UUIDValue(u), nil
+}
+
+// JSONValue marshals v to JSON and returns a non-null JSON GenericColumnValue.
+func JSONValue(v any) (spanner.GenericColumnValue, error) {
+	s, err := jsonWireString(v)
+	if err != nil {
+		return spanner.GenericColumnValue{}, err
+	}
+	return StringBasedValueFromCode(sppb.TypeCode_JSON, s), nil
+}
+
+// JSONStringValue validates that v is syntactically valid JSON ([encoding/json.Valid]) and
+// returns a non-null JSON GenericColumnValue with v stored as-is on the wire. It does not
+// normalize, compact, or re-marshal the payload, matching the package's wire-as-is convention
+// for string payloads (see [StringBasedValueFromCode]); whitespace and key order are preserved
+// exactly as given. Invalid JSON returns [ErrInvalidJSON]. Use [JSONValue] to marshal a Go
+// value to a canonical compact wire string instead.
+func JSONStringValue(v string) (spanner.GenericColumnValue, error) {
+	if !json.Valid([]byte(v)) {
+		return spanner.GenericColumnValue{}, ErrInvalidJSON
+	}
+	return StringBasedValueFromCode(sppb.TypeCode_JSON, v), nil
 }
 
 // PGNumericValue returns a PostgreSQL-dialect NUMERIC GenericColumnValue
@@ -270,10 +325,54 @@ func PGNumericValue(v *big.Rat) spanner.GenericColumnValue {
 	if v == nil {
 		return NullOf(typector.PGNumeric())
 	}
-	return spanner.GenericColumnValue{
-		Type:  typector.PGNumeric(),
-		Value: structpb.NewStringValue(spanner.NumericString(v)),
+	return StringBasedValueOf(typector.PGNumeric(), spanner.NumericString(v))
+}
+
+// PGNumericValueExact returns a non-null PostgreSQL-dialect NUMERIC
+// GenericColumnValue ([sppb.TypeAnnotationCode_PG_NUMERIC]) whose wire string
+// is the exact decimal rendering of v. Unlike [PGNumericValue], which formats
+// with the GoogleSQL-scale [cloud.google.com/go/spanner.NumericString]
+// (9 fractional digits, silently rounding), this constructor refuses to lose
+// precision for the wider PostgreSQL-dialect numeric value space: a rational
+// without a finite decimal expansion (a reduced denominator with prime
+// factors other than 2 and 5, such as 1/3) returns [ErrInexactNumeric], and
+// nil returns [ErrNilNumeric]. Callers holding exact decimal wire text can
+// use [StringBasedValueOf] or [PGNumericFromNullable] instead.
+func PGNumericValueExact(v *big.Rat) (spanner.GenericColumnValue, error) {
+	if v == nil {
+		return spanner.GenericColumnValue{}, ErrNilNumeric
 	}
+	scale, ok := finiteDecimalScale(v)
+	if !ok {
+		return spanner.GenericColumnValue{}, fmt.Errorf("%w: %s", ErrInexactNumeric, v.RatString())
+	}
+	return StringBasedValueOf(typector.PGNumeric(), v.FloatString(scale)), nil
+}
+
+// finiteDecimalScale reports the smallest scale that renders v exactly in
+// decimal, or ok == false when v has no finite decimal expansion. big.Rat is
+// always normalized, so the reduced denominator must factor into 2^a * 5^b.
+func finiteDecimalScale(v *big.Rat) (int, bool) {
+	d := new(big.Int).Set(v.Denom())
+	twos := 0
+	for d.Bit(0) == 0 {
+		d.Rsh(d, 1)
+		twos++
+	}
+	five := big.NewInt(5)
+	fives := 0
+	for {
+		q, r := new(big.Int).QuoRem(d, five, new(big.Int))
+		if r.Sign() != 0 {
+			break
+		}
+		d = q
+		fives++
+	}
+	if d.Cmp(big.NewInt(1)) != 0 {
+		return 0, false
+	}
+	return max(twos, fives), true
 }
 
 // PGNumericValueChecked returns a non-null PostgreSQL-dialect NUMERIC GenericColumnValue
@@ -286,29 +385,48 @@ func PGNumericValueChecked(v *big.Rat) (spanner.GenericColumnValue, error) {
 	return PGNumericValue(v), nil
 }
 
+// PGOIDValue returns a non-null PostgreSQL-dialect OID GenericColumnValue
+// ([sppb.TypeAnnotationCode_PG_OID]) with a decimal string wire payload like [Int64Value].
+func PGOIDValue(v int64) spanner.GenericColumnValue {
+	return StringBasedValueOf(typector.PGOID(), strconv.FormatInt(v, 10))
+}
+
 // PGJSONBValue marshals v to JSON and returns a non-null PostgreSQL-dialect JSON GenericColumnValue
 // ([sppb.TypeAnnotationCode_PG_JSONB]).
 func PGJSONBValue(v any) (spanner.GenericColumnValue, error) {
-	b, err := json.Marshal(v)
+	s, err := jsonWireString(v)
 	if err != nil {
 		return spanner.GenericColumnValue{}, err
 	}
-	return spanner.GenericColumnValue{
-		Type:  typector.PGJSONB(),
-		Value: structpb.NewStringValue(string(b)),
-	}, nil
+	return StringBasedValueOf(typector.PGJSONB(), s), nil
+}
+
+// jsonWireString marshals v to compact JSON without HTML character escaping,
+// matching Spanner-emitted JSON wire strings for comparison fixtures.
+func jsonWireString(v any) (string, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return "", err
+	}
+	b := buf.Bytes()
+	if n := len(b); n > 0 && b[n-1] == '\n' {
+		b = b[:n-1]
+	}
+	return string(b), nil
 }
 
 // ProtoValue returns a non-null PROTO GenericColumnValue for the fully qualified message name fqn.
 // The message bytes are stored in the GCV as a base64-encoded string. Delimited export decodes that
-// wire payload for SimpleFormatConfig when possible (see writer.TestDelimitedWriterWriteGCVsEnumProto).
+// wire payload for SimpleFormatConfig when possible.
 func ProtoValue(fqn string, b []byte) spanner.GenericColumnValue {
 	return BytesBasedValueOf(typector.FQNToProtoType(fqn), b)
 }
 
 // EnumValue returns a non-null ENUM GenericColumnValue for the fully qualified enum name fqn.
 // The structpb value is the enum number as a decimal string; delimited export prints that
-// string (see writer.TestDelimitedWriterWriteGCVsEnumProto).
+// decimal string on the wire.
 func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  typector.FQNToEnumType(fqn),
@@ -325,6 +443,9 @@ func EnumValue(fqn string, v int64) spanner.GenericColumnValue {
 // [github.com/apstndb/spantype/typector.ElemCodeToArrayType] (or [github.com/apstndb/spantype/typector.ElemTypeToArrayType]).
 //
 // For other element types or explicit typing policy, use [ArrayValueOf] or [EmptyArrayOf].
+// At a spread call site ([ArrayValue] (elems...) where elems is a slice), a nil or empty slice
+// still yields ARRAY<INT64>, not an element type inferred from the slice variable. Prefer
+// [ArrayValueOf] or [EmptyArrayOf] when the slice may be empty.
 //
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
 // If the inferred element type from vs[0] is invalid, the error is wrapped in [ArrayElementError]
@@ -371,6 +492,7 @@ func NormalizeArrayElements(elemType *sppb.Type, elems ...spanner.GenericColumnV
 // Each element's Type must match elemType (no coercion). A nil elemType returns [ErrNilElementType].
 // Per-element failures are wrapped in [ArrayElementError]. To accept SQL NULL elements regardless of
 // their current Type metadata, normalize them first with [NormalizeArrayElements].
+// Nil element Values become explicit protobuf NULLs; non-nil Values are borrowed.
 func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if elemType == nil {
 		return spanner.GenericColumnValue{}, ErrNilElementType
@@ -386,7 +508,7 @@ func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spa
 		if !proto.Equal(elemType, v.Type) {
 			return spanner.GenericColumnValue{}, wrapArrayElementError(i, fmt.Errorf("%w: %v is not %v", ErrTypeMismatch, spantype.FormatTypeMoreVerbose(v.Type), spantype.FormatTypeMoreVerbose(elemType)))
 		}
-		values[i] = v.Value
+		values[i] = internal.WireValue(v)
 	}
 	return spanner.GenericColumnValue{
 		Type:  typector.ElemTypeToArrayType(elemType),
@@ -394,8 +516,38 @@ func ArrayValueOf(elemType *sppb.Type, elems ...spanner.GenericColumnValue) (spa
 	}, nil
 }
 
+// StructFieldKV pairs one STRUCT field name with its GCV.
+// An empty Name is valid for unnamed STRUCT fields; see [StructValueOfFields].
+// Prefer [StructFieldKVOf] at call sites; keyed composite literals
+// (StructFieldKV{Name: name, Value: value}) are also valid.
+type StructFieldKV struct {
+	Name  string
+	Value spanner.GenericColumnValue
+}
+
+// StructFieldKVOf returns a [StructFieldKV] with the given name and value.
+// Empty name is valid for unnamed STRUCT fields.
+func StructFieldKVOf(name string, value spanner.GenericColumnValue) StructFieldKV {
+	return StructFieldKV{Name: name, Value: value}
+}
+
+// StructValueOfFields is like [StructValueOf] but takes paired fields.
+// Prefer [StructFieldKVOf] at call sites; keyed composite literals
+// (StructFieldKV{Name: name, Value: value}) are also valid.
+// Empty field names are valid for unnamed STRUCT fields.
+func StructValueOfFields(fields ...StructFieldKV) (spanner.GenericColumnValue, error) {
+	names := make([]string, len(fields))
+	gcvs := make([]spanner.GenericColumnValue, len(fields))
+	for i, f := range fields {
+		names[i] = f.Name
+		gcvs[i] = f.Value
+	}
+	return StructValueOf(names, gcvs)
+}
+
 // StructValueOf constructs STRUCT GenericColumnValue.
 // A nil field Type returns [ErrNilFieldType] wrapped in [StructFieldError].
+// Nil field Values become explicit protobuf NULLs; non-nil Values are borrowed.
 // Note: Currently, it doesn't support implicit type conversion a.k.a. coercion so variant typed input is not supported.
 func StructValueOf(names []string, gcvs []spanner.GenericColumnValue) (spanner.GenericColumnValue, error) {
 	if len(names) != len(gcvs) {
@@ -409,7 +561,7 @@ func StructValueOf(names []string, gcvs []spanner.GenericColumnValue) (spanner.G
 			return spanner.GenericColumnValue{}, wrapStructFieldError(i, names[i], ErrNilFieldType)
 		}
 		types[i] = gcv.Type
-		values[i] = gcv.Value
+		values[i] = internal.WireValue(gcv)
 	}
 
 	typ, err := typector.NameTypeSlicesToStructType(names, types)
@@ -439,6 +591,8 @@ func NullFromCode(code sppb.TypeCode) spanner.GenericColumnValue {
 // It does not represent a non-null STRUCT whose fields are all null—use [StructValueOf] with
 // per-field nulls (using [NullOf] or [NullFromCode] for each field) when you need that shape.
 // A nil typ is normalized to TYPE_CODE_UNSPECIFIED to avoid a malformed nil Type pointer.
+// Spanner rejects TYPE_CODE_UNSPECIFIED at the server, so a nil-Type bug surfaces there
+// rather than at construction time.
 func NullOf(typ *sppb.Type) spanner.GenericColumnValue {
 	return spanner.GenericColumnValue{
 		Type:  normalizeNilType(typ),

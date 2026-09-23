@@ -467,6 +467,81 @@ func TestValidatedStringValueHelpers(t *testing.T) {
 			call:    gcvctor.IntervalStringValue,
 			wantErr: true,
 		},
+		{
+			name:  "UUID valid canonical",
+			input: "0e0b9caa-3f06-4b75-9d97-fadcc9d4b3e1",
+			call:  gcvctor.UUIDStringValue,
+			want: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_UUID),
+				Value: structpb.NewStringValue("0e0b9caa-3f06-4b75-9d97-fadcc9d4b3e1"),
+			},
+		},
+		{
+			name:  "UUID uppercase normalized to lowercase",
+			input: "0E0B9CAA-3F06-4B75-9D97-FADCC9D4B3E1",
+			call:  gcvctor.UUIDStringValue,
+			want: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_UUID),
+				Value: structpb.NewStringValue("0e0b9caa-3f06-4b75-9d97-fadcc9d4b3e1"),
+			},
+		},
+		{
+			name:  "UUID braced normalized to canonical",
+			input: "{0e0b9caa-3f06-4b75-9d97-fadcc9d4b3e1}",
+			call:  gcvctor.UUIDStringValue,
+			want: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_UUID),
+				Value: structpb.NewStringValue("0e0b9caa-3f06-4b75-9d97-fadcc9d4b3e1"),
+			},
+		},
+		{
+			name:    "UUID invalid wrong length",
+			input:   "0e0b9caa-3f06-4b75-9d97",
+			call:    gcvctor.UUIDStringValue,
+			wantErr: true,
+		},
+		{
+			name:    "UUID invalid bad characters",
+			input:   "0e0b9caa-3f06-4b75-9d97-fadcc9d4b3zz",
+			call:    gcvctor.UUIDStringValue,
+			wantErr: true,
+		},
+		{
+			name:    "UUID invalid empty",
+			input:   "",
+			call:    gcvctor.UUIDStringValue,
+			wantErr: true,
+		},
+		{
+			name:  "JSON valid object stored as-is without compaction",
+			input: `{"b": 1, "a": [true, null]}`,
+			call:  gcvctor.JSONStringValue,
+			want: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_JSON),
+				Value: structpb.NewStringValue(`{"b": 1, "a": [true, null]}`),
+			},
+		},
+		{
+			name:  "JSON valid string scalar with HTML characters as-is",
+			input: `"<a>"`,
+			call:  gcvctor.JSONStringValue,
+			want: spanner.GenericColumnValue{
+				Type:  typector.CodeToSimpleType(sppb.TypeCode_JSON),
+				Value: structpb.NewStringValue(`"<a>"`),
+			},
+		},
+		{
+			name:    "JSON invalid truncated object",
+			input:   `{"a":`,
+			call:    gcvctor.JSONStringValue,
+			wantErr: true,
+		},
+		{
+			name:    "JSON invalid empty",
+			input:   "",
+			call:    gcvctor.JSONStringValue,
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -484,6 +559,62 @@ func TestValidatedStringValueHelpers(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if diff := cmp.Diff(tt.want, got, protocmp.Transform()); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestJSONStringValue_invalidReturnsErrInvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	got, err := gcvctor.JSONStringValue(`{"a":`)
+	if !errors.Is(err, gcvctor.ErrInvalidJSON) {
+		t.Fatalf("error = %v, want ErrInvalidJSON", err)
+	}
+	if diff := cmp.Diff(spanner.GenericColumnValue{}, got, protocmp.Transform()); diff != "" {
+		t.Fatalf("got non-zero value (-want +got):\n%s", diff)
+	}
+}
+
+func TestPGOIDValue(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		got  spanner.GenericColumnValue
+		want spanner.GenericColumnValue
+	}{
+		{
+			name: "positive",
+			got:  gcvctor.PGOIDValue(42),
+			want: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_INT64, TypeAnnotation: sppb.TypeAnnotationCode_PG_OID},
+				Value: structpb.NewStringValue("42"),
+			},
+		},
+		{
+			name: "zero",
+			got:  gcvctor.PGOIDValue(0),
+			want: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_INT64, TypeAnnotation: sppb.TypeAnnotationCode_PG_OID},
+				Value: structpb.NewStringValue("0"),
+			},
+		},
+		{
+			name: "negative",
+			got:  gcvctor.PGOIDValue(-1),
+			want: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_INT64, TypeAnnotation: sppb.TypeAnnotationCode_PG_OID},
+				Value: structpb.NewStringValue("-1"),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if diff := cmp.Diff(tt.want, tt.got, protocmp.Transform()); diff != "" {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -970,6 +1101,129 @@ func TestStructValueOf(t *testing.T) {
 	}
 }
 
+func TestStructValueOfFields(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		desc      string
+		fields    []gcvctor.StructFieldKV
+		want      spanner.GenericColumnValue
+		expectErr bool
+		errIs     error
+		errSubstr string
+	}{
+		{
+			desc: "named fields",
+			fields: []gcvctor.StructFieldKV{
+				gcvctor.StructFieldKVOf("name", gcvctor.StringValue("alice")),
+				gcvctor.StructFieldKVOf("id", gcvctor.Int64Value(1)),
+			},
+			want: spanner.GenericColumnValue{
+				Type: must(typector.NameCodeSlicesToStructType(
+					[]string{"name", "id"},
+					[]sppb.TypeCode{sppb.TypeCode_STRING, sppb.TypeCode_INT64},
+				)),
+				Value: structpb.NewListValue(&structpb.ListValue{
+					Values: []*structpb.Value{
+						structpb.NewStringValue("alice"),
+						structpb.NewStringValue("1"),
+					},
+				}),
+			},
+		},
+		{
+			desc: "unnamed fields",
+			fields: []gcvctor.StructFieldKV{
+				gcvctor.StructFieldKVOf("", gcvctor.StringValue("value")),
+				gcvctor.StructFieldKVOf("", gcvctor.Int64Value(42)),
+			},
+			want: spanner.GenericColumnValue{
+				Type: must(typector.NameCodeSlicesToStructType(
+					[]string{"", ""},
+					[]sppb.TypeCode{sppb.TypeCode_STRING, sppb.TypeCode_INT64},
+				)),
+				Value: structpb.NewListValue(&structpb.ListValue{
+					Values: []*structpb.Value{
+						structpb.NewStringValue("value"),
+						structpb.NewStringValue("42"),
+					},
+				}),
+			},
+		},
+		{
+			desc: "nil field type named",
+			fields: []gcvctor.StructFieldKV{
+				gcvctor.StructFieldKVOf("broken", spanner.GenericColumnValue{}),
+			},
+			expectErr: true,
+			errIs:     gcvctor.ErrNilFieldType,
+			errSubstr: `field 0 ("broken")`,
+		},
+		{
+			desc: "nil field type unnamed",
+			fields: []gcvctor.StructFieldKV{
+				gcvctor.StructFieldKVOf("", spanner.GenericColumnValue{}),
+			},
+			expectErr: true,
+			errIs:     gcvctor.ErrNilFieldType,
+			errSubstr: "field 0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := gcvctor.StructValueOfFields(tt.fields...)
+			if tt.expectErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				if tt.errIs != nil && !errors.Is(err, tt.errIs) {
+					t.Fatalf("errors.Is(err, %v) = false; err = %v", tt.errIs, err)
+				}
+				if tt.errSubstr != "" && !strings.Contains(err.Error(), tt.errSubstr) {
+					t.Fatalf("error %q does not contain %q", err, tt.errSubstr)
+				}
+				var zero spanner.GenericColumnValue
+				if diff := cmp.Diff(zero, got, protocmp.Transform()); diff != "" {
+					t.Errorf("expected zero value on error (-want +got):\n%s", diff)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(tt.want, got, protocmp.Transform()); diff != "" {
+				t.Errorf("mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestStructValueOfFields_matchesStructValueOf(t *testing.T) {
+	t.Parallel()
+
+	names := []string{"id", "name"}
+	gcvs := []spanner.GenericColumnValue{gcvctor.Int64Value(1), gcvctor.StringValue("foo")}
+	fields := []gcvctor.StructFieldKV{
+		gcvctor.StructFieldKVOf("id", gcvctor.Int64Value(1)),
+		gcvctor.StructFieldKVOf("name", gcvctor.StringValue("foo")),
+	}
+
+	want, err := gcvctor.StructValueOf(names, gcvs)
+	if err != nil {
+		t.Fatalf("StructValueOf: %v", err)
+	}
+	got, err := gcvctor.StructValueOfFields(fields...)
+	if err != nil {
+		t.Fatalf("StructValueOfFields: %v", err)
+	}
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Fatalf("mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestStructValueOfNilFieldTypeReturnsStructFieldError(t *testing.T) {
 	t.Parallel()
 
@@ -999,6 +1253,60 @@ func TestStructValueOfNilFieldTypeReturnsStructFieldError(t *testing.T) {
 			}
 			if ctx.Name != tt.fieldName {
 				t.Fatalf("ctx.Name = %q, want %q", ctx.Name, tt.fieldName)
+			}
+		})
+	}
+}
+
+func TestTimestampValue_normalizesNonUTCToZuluWire(t *testing.T) {
+	t.Parallel()
+
+	jst := time.FixedZone("JST", 9*60*60)
+	ts := time.Date(2024, 1, 15, 21, 34, 56, 789000000, jst)
+	got := gcvctor.TimestampValue(ts)
+	want := spanner.GenericColumnValue{
+		Type:  typector.CodeToSimpleType(sppb.TypeCode_TIMESTAMP),
+		Value: structpb.NewStringValue("2024-01-15T12:34:56.789Z"),
+	}
+	if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+		t.Fatalf("mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestJSONValue_doesNotHTMLEscapeWireString(t *testing.T) {
+	t.Parallel()
+
+	payload := map[string]string{"a": "<b>&c"}
+	for _, ctor := range []struct {
+		name string
+		fn   func(any) (spanner.GenericColumnValue, error)
+		typ  *sppb.Type
+	}{
+		{
+			name: "JSON",
+			fn:   gcvctor.JSONValue,
+			typ:  typector.CodeToSimpleType(sppb.TypeCode_JSON),
+		},
+		{
+			name: "PG_JSONB",
+			fn:   gcvctor.PGJSONBValue,
+			typ:  typector.PGJSONB(),
+		},
+	} {
+		t.Run(ctor.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := ctor.fn(payload)
+			if err != nil {
+				t.Fatalf("constructor error: %v", err)
+			}
+			wantWire := `{"a":"<b>&c"}`
+			want := spanner.GenericColumnValue{
+				Type:  ctor.typ,
+				Value: structpb.NewStringValue(wantWire),
+			}
+			if diff := cmp.Diff(want, got, protocmp.Transform()); diff != "" {
+				t.Fatalf("mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

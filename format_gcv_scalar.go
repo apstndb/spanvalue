@@ -3,8 +3,6 @@ package spanvalue
 import (
 	"fmt"
 	"math"
-	"reflect"
-	"slices"
 	"strconv"
 
 	"cloud.google.com/go/spanner"
@@ -16,48 +14,9 @@ import (
 
 var (
 	_ FormatComplexFunc = FormatSimpleValue
-	_ FormatComplexFunc = FormatLiteralValue
 	_ FormatComplexFunc = FormatSpannerCLIValue
 	_ FormatComplexFunc = FormatJSONSimpleValue
 )
-
-var presetScalarPlugins = []FormatComplexFunc{
-	FormatSimpleValue,
-	FormatLiteralValue,
-	FormatSpannerCLIValue,
-	FormatJSONSimpleValue,
-}
-
-func isPresetScalarPlugin(f FormatComplexFunc) bool {
-	if f == nil {
-		return false
-	}
-	fp := reflect.ValueOf(f).Pointer()
-	for _, p := range presetScalarPlugins {
-		if reflect.ValueOf(p).Pointer() == fp {
-			return true
-		}
-	}
-	return false
-}
-
-func nullableFuncsEqual(a, b FormatNullableFunc) bool {
-	if a == nil || b == nil {
-		return a == nil && b == nil
-	}
-	return reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
-}
-
-// FormatConfigWithoutScalarPlugins returns a clone of fc with preset scalar fast-path plugins
-// removed so scalars use Decode and [FormatNullable].
-func FormatConfigWithoutScalarPlugins(fc *FormatConfig) *FormatConfig {
-	if fc == nil {
-		return nil
-	}
-	clone := fc.Clone()
-	clone.FormatComplexPlugins = slices.DeleteFunc(clone.FormatComplexPlugins, isPresetScalarPlugin)
-	return clone
-}
 
 // scalarTypeCode returns the column type code, or ok false to fall through when Type is nil.
 func scalarTypeCode(value spanner.GenericColumnValue) (sppb.TypeCode, bool) {
@@ -67,20 +26,12 @@ func scalarTypeCode(value spanner.GenericColumnValue) (sppb.TypeCode, bool) {
 	return value.Type.GetCode(), true
 }
 
-func scalarFastPathActive(formatter Formatter, presetNullable FormatNullableFunc) bool {
-	fc, ok := formatter.(*FormatConfig)
-	if !ok {
-		return true
-	}
-	return nullableFuncsEqual(fc.FormatNullable, presetNullable)
-}
-
-// FormatSimpleValue is a [FormatComplexFunc] that formats non-ARRAY, non-STRUCT scalars for
-// [SimpleFormatConfig] without constructing a [NullableValue]. It returns [ErrFallthrough] for
-// ARRAY, STRUCT, and type codes outside [isScalarFastPathTypeCode], when
-// [FormatConfig.FormatNullable] is not the preset default, or for types handled by earlier
-// plugins. NUMERIC uses the string wire payload as-is; canonical wire is the GCV constructor's
-// responsibility (see [github.com/apstndb/spanvalue/gcvctor.StringBasedValueFromCode]).
+// FormatSimpleValue is a [FormatComplexFunc] that formats scalars for
+// [SimpleFormatConfig] without constructing a [NullableValue]. It returns
+// [ErrFallthrough] for ARRAY, STRUCT, and type codes outside the supported
+// scalar set ([isScalarFastPathTypeCode]). NUMERIC uses the string wire
+// payload as-is; canonical wire is the GCV constructor's responsibility (see
+// [github.com/apstndb/spanvalue/gcvctor.StringBasedValueFromCode]).
 func FormatSimpleValue(formatter Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
 	code, ok := scalarTypeCode(value)
 	if !ok {
@@ -93,37 +44,47 @@ func FormatSimpleValue(formatter Formatter, value spanner.GenericColumnValue, _ 
 	if !isScalarFastPathTypeCode(code) {
 		return "", ErrFallthrough
 	}
-	if !scalarFastPathActive(formatter, formatNullableValueSimple) {
-		return "", ErrFallthrough
-	}
 	if IsNull(value) {
 		return formatter.GetNullString(), nil
 	}
 	return formatGCVScalarSimple(value)
 }
 
-// FormatLiteralValue is a [FormatComplexFunc] for [LiteralFormatConfig]. It returns
-// [ErrFallthrough] for ARRAY, STRUCT, PROTO, and ENUM so [FormatProtoAsCast] and
-// [FormatEnumAsCast] run first.
-func FormatLiteralValue(formatter Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
-	switch value.Type.GetCode() {
-	case sppb.TypeCode_ARRAY, sppb.TypeCode_STRUCT, sppb.TypeCode_PROTO, sppb.TypeCode_ENUM:
-		return "", ErrFallthrough
+// LiteralValuePlugin returns the literal preset's scalar [FormatComplexFunc]
+// with quote options captured at construction (invalid enum values are
+// normalized). It returns [ErrFallthrough] for ARRAY, STRUCT, PROTO, and ENUM
+// — the literal preset handles PROTO/ENUM with [FormatProtoAsCast] and
+// [FormatEnumAsCast] earlier in the chain — and for type codes outside the
+// supported scalar set.
+//
+// LiteralValuePlugin replaces the pre-v0.8 exported plugin value
+// FormatLiteralValue, which read quote options from the removed
+// FormatConfig.Literal field; LiteralValuePlugin(LiteralFormatOptions{}) is
+// the default-quote equivalent.
+func LiteralValuePlugin(opts LiteralFormatOptions) FormatComplexFunc {
+	q := normalizeLiteralQuote(opts.Quote)
+	return func(formatter Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
+		code, ok := scalarTypeCode(value)
+		if !ok {
+			return "", ErrFallthrough
+		}
+		switch code {
+		case sppb.TypeCode_ARRAY, sppb.TypeCode_STRUCT, sppb.TypeCode_PROTO, sppb.TypeCode_ENUM:
+			return "", ErrFallthrough
+		}
+		if !isScalarFastPathTypeCode(code) {
+			return "", ErrFallthrough
+		}
+		if IsNull(value) {
+			return formatter.GetNullString(), nil
+		}
+		return formatGCVScalarLiteral(q, value)
 	}
-	if !isScalarFastPathTypeCode(value.Type.GetCode()) {
-		return "", ErrFallthrough
-	}
-	if !scalarFastPathActive(formatter, formatNullableValueLiteral) {
-		return "", ErrFallthrough
-	}
-	if IsNull(value) {
-		return formatter.GetNullString(), nil
-	}
-	q := literalQuoteForFormatter(formatter)
-	return formatGCVScalarLiteral(q, value)
 }
 
-// FormatSpannerCLIValue is a [FormatComplexFunc] for [SpannerCLICompatibleFormatConfig].
+// FormatSpannerCLIValue is a [FormatComplexFunc] that formats scalars for
+// [SpannerCLICompatibleFormatConfig]. It returns [ErrFallthrough] for ARRAY,
+// STRUCT, and type codes outside the supported scalar set.
 func FormatSpannerCLIValue(formatter Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
 	code, ok := scalarTypeCode(value)
 	if !ok {
@@ -134,9 +95,6 @@ func FormatSpannerCLIValue(formatter Formatter, value spanner.GenericColumnValue
 		return "", ErrFallthrough
 	}
 	if !isScalarFastPathTypeCode(code) {
-		return "", ErrFallthrough
-	}
-	if !scalarFastPathActive(formatter, FormatNullableSpannerCLICompatible) {
 		return "", ErrFallthrough
 	}
 	if IsNull(value) {
@@ -273,13 +231,29 @@ func formatFloatSpannerCLI(gcv spanner.GenericColumnValue, bits int) (string, er
 		if err != nil {
 			return "", err
 		}
-		return strconv.FormatFloat(float64(f), 'f', 6, 32), nil
+		return formatSpannerCLIFloat(float64(f), 32), nil
 	}
 	f, err := gcvFloat64(gcv.Value)
 	if err != nil {
 		return "", err
 	}
-	return strconv.FormatFloat(f, 'f', 6, 64), nil
+	return formatSpannerCLIFloat(f, 64), nil
+}
+
+// formatSpannerCLIFloat matches spanner-cli: integral finite values omit the
+// fractional part; non-integral values use six digits after the decimal.
+func formatSpannerCLIFloat(f float64, bits int) string {
+	if isFiniteIntegralFloat(f) {
+		return strconv.FormatFloat(f, 'f', 0, bits)
+	}
+	return strconv.FormatFloat(f, 'f', 6, bits)
+}
+
+func isFiniteIntegralFloat(f float64) bool {
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return false
+	}
+	return f == math.Trunc(f)
 }
 
 // gcvFloat64 reads a FLOAT64 wire value (NumberValue or NaN/±Inf strings).
@@ -297,10 +271,10 @@ func gcvFloat64(v *structpb.Value) (float64, error) {
 		case "-Infinity":
 			return math.Inf(-1), nil
 		default:
-			return 0, fmt.Errorf("%w: unexpected FLOAT64 string %q", ErrUnknownType, x.StringValue)
+			return 0, fmt.Errorf("%w: FLOAT64 unexpected float string %q", ErrMalformedWire, x.StringValue)
 		}
 	default:
-		return 0, fmt.Errorf("%w: FLOAT64 value kind %T", ErrUnknownType, v.GetKind())
+		return 0, fmt.Errorf("%w: FLOAT64 value kind %T", ErrMalformedWire, v.GetKind())
 	}
 }
 
@@ -318,10 +292,10 @@ func gcvFloat32(v *structpb.Value) (float32, error) {
 		case "-Infinity":
 			return float32(math.Inf(-1)), nil
 		default:
-			return 0, fmt.Errorf("%w: unexpected FLOAT32 string %q", ErrUnknownType, x.StringValue)
+			return 0, fmt.Errorf("%w: FLOAT32 unexpected float string %q", ErrMalformedWire, x.StringValue)
 		}
 	default:
-		return 0, fmt.Errorf("%w: FLOAT32 value kind %T", ErrUnknownType, v.GetKind())
+		return 0, fmt.Errorf("%w: FLOAT32 value kind %T", ErrMalformedWire, v.GetKind())
 	}
 }
 

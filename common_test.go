@@ -24,9 +24,10 @@ func TestFormatColumnComplexPlugins(t *testing.T) {
 		[]spanner.GenericColumnValue{gcvctor.StringValue("Alice")},
 	))
 
-	fc := SimpleFormatConfig()
 	calls := make([]sppb.TypeCode, 0, 3)
-	fc.FormatComplexPlugins = []FormatComplexFunc{
+	// Prepend the tracking plugin: it claims ARRAY/STRUCT before the preset
+	// handlers and defers scalars to the preset scalar plugin.
+	fc := SimpleFormatConfig().WithComplexPlugin(
 		func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
 			calls = append(calls, value.Type.GetCode())
 			switch value.Type.GetCode() {
@@ -38,7 +39,7 @@ func TestFormatColumnComplexPlugins(t *testing.T) {
 				return "", ErrFallthrough
 			}
 		},
-	}
+	)
 
 	tests := []struct {
 		name string
@@ -318,6 +319,126 @@ func TestFormatColumnRejectsNilStructFieldDescriptor(t *testing.T) {
 			_, err := tt.fc.FormatToplevelColumn(gcv)
 			if !errors.Is(err, ErrNilStructField) {
 				t.Fatalf("error = %v, want ErrNilStructField", err)
+			}
+		})
+	}
+}
+
+func TestFormatProtoEnumCastRejectsNonStringWire(t *testing.T) {
+	t.Parallel()
+
+	const (
+		protoFQN = "package.ProtoType"
+		enumFQN  = "package.EnumType"
+	)
+
+	tests := []struct {
+		name string
+		gcv  spanner.GenericColumnValue
+	}{
+		{
+			name: "proto bool wire",
+			gcv: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_PROTO, ProtoTypeFqn: protoFQN},
+				Value: structpb.NewBoolValue(true),
+			},
+		},
+		{
+			name: "proto number wire",
+			gcv: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_PROTO, ProtoTypeFqn: protoFQN},
+				Value: structpb.NewNumberValue(1),
+			},
+		},
+		{
+			name: "enum bool wire",
+			gcv: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_ENUM, ProtoTypeFqn: enumFQN},
+				Value: structpb.NewBoolValue(true),
+			},
+		},
+		{
+			name: "enum number wire",
+			gcv: spanner.GenericColumnValue{
+				Type:  &sppb.Type{Code: sppb.TypeCode_ENUM, ProtoTypeFqn: enumFQN},
+				Value: structpb.NewNumberValue(42),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := LiteralFormatConfig().FormatToplevelColumn(tt.gcv)
+			if !errors.Is(err, ErrMalformedWire) {
+				t.Fatalf("error = %v, want ErrMalformedWire", err)
+			}
+			if errors.Is(err, ErrUnknownType) {
+				t.Fatalf("error = %v, must not match ErrUnknownType", err)
+			}
+		})
+	}
+}
+
+func TestFormatEnumAsCastRejectsInvalidWirePayload(t *testing.T) {
+	t.Parallel()
+
+	const enumFQN = "package.EnumType"
+	gcv := spanner.GenericColumnValue{
+		Type:  &sppb.Type{Code: sppb.TypeCode_ENUM, ProtoTypeFqn: enumFQN},
+		Value: structpb.NewStringValue("notanumber"),
+	}
+	_, err := LiteralFormatConfig().FormatToplevelColumn(gcv)
+	if err == nil {
+		t.Fatal("expected error for non-integer ENUM wire payload")
+	}
+}
+
+// TestErrMalformedWireClassification pins the split introduced for
+// https://github.com/apstndb/spanvalue/issues/216: a known type with an
+// invalid wire payload is ErrMalformedWire (and not a coverage error), while
+// a genuinely unknown type code is a coverage error — since v0.8 the chain
+// reports ErrUnhandledValue (previously the built-in path's ErrUnknownType) —
+// and is not ErrMalformedWire.
+func TestErrMalformedWireClassification(t *testing.T) {
+	t.Parallel()
+
+	malformedBool := spanner.GenericColumnValue{
+		Type:  typector.CodeToSimpleType(sppb.TypeCode_BOOL),
+		Value: structpb.NewStringValue("true"),
+	}
+	unknownCode := spanner.GenericColumnValue{
+		Type:  &sppb.Type{Code: sppb.TypeCode(9999)},
+		Value: structpb.NewStringValue("whatever"),
+	}
+
+	configs := []struct {
+		name string
+		fc   *FormatConfig
+	}{
+		{name: "simple", fc: SimpleFormatConfig()},
+		{name: "literal", fc: LiteralFormatConfig()},
+		{name: "spanner cli compatible", fc: SpannerCLICompatibleFormatConfig()},
+	}
+
+	for _, tt := range configs {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := tt.fc.FormatToplevelColumn(malformedBool)
+			if !errors.Is(err, ErrMalformedWire) {
+				t.Errorf("malformed BOOL wire: error = %v, want ErrMalformedWire", err)
+			}
+			if errors.Is(err, ErrUnhandledValue) {
+				t.Errorf("malformed BOOL wire: error = %v, must not match ErrUnhandledValue", err)
+			}
+
+			_, err = tt.fc.FormatToplevelColumn(unknownCode)
+			if !errors.Is(err, ErrUnhandledValue) {
+				t.Errorf("unknown type code: error = %v, want ErrUnhandledValue", err)
+			}
+			if errors.Is(err, ErrMalformedWire) {
+				t.Errorf("unknown type code: error = %v, must not match ErrMalformedWire", err)
 			}
 		})
 	}

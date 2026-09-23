@@ -4,19 +4,23 @@
 
 Helpers for working with Cloud Spanner’s [`spanner.GenericColumnValue`](https://pkg.go.dev/cloud.google.com/go/spanner#GenericColumnValue) and related client types: **format** values to text (literals, JSON, CLI-style output) and **construct** values from Go types.
 
+Requires **Go 1.25** or later (see [`go.mod`](go.mod)).
+
 | Package | Role |
 |--------|------|
 | [`github.com/apstndb/spanvalue`](https://pkg.go.dev/github.com/apstndb/spanvalue) | Format `spanner.GenericColumnValue` and `*spanner.Row` using [`FormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig) and presets such as [`LiteralFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#LiteralFormatConfig), [`JSONFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#JSONFormatConfig), [`SpannerCLICompatibleFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#SpannerCLICompatibleFormatConfig). |
 | [`github.com/apstndb/spanvalue/gcvctor`](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor) | Build `spanner.GenericColumnValue` (scalars, `ARRAY`, `STRUCT`, typed nulls). Types are often composed with [`github.com/apstndb/spantype/typector`](https://pkg.go.dev/github.com/apstndb/spantype/typector). |
 | [`github.com/apstndb/spanvalue/protofmt`](https://pkg.go.dev/github.com/apstndb/spanvalue/protofmt) | Opt-in descriptor-aware PROTO and ENUM display plugins for [`FormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig). |
 | [`github.com/apstndb/spanvalue/writer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer) | Stream Spanner rows to CSV, TSV, JSONL, or SQL INSERT ([writer/README.md](writer/README.md)). |
+| [`github.com/apstndb/spanvalue/dbsqlrows`](https://pkg.go.dev/github.com/apstndb/spanvalue/dbsqlrows) | **Experimental.** Driver-agnostic `database/sql` export — see [package documentation](https://pkg.go.dev/github.com/apstndb/spanvalue/dbsqlrows). |
 
 ## Identifier quoting helpers
 
 `QuoteIdentifier` and `QuoteQualifiedIdentifier` are conservative quoting
 helpers. They always quote for the selected dialect, escape embedded quote
-characters, and do **not** attempt a minimal "quote only when necessary"
-strategy.
+characters (for GoogleSQL, string-literal escapes: backslash to `\\` and
+backtick to ``\` ``), and do **not** attempt a minimal "quote only when
+necessary" strategy.
 
 - `DATABASE_DIALECT_UNSPECIFIED` follows the Spanner default and uses GoogleSQL
   quoting.
@@ -42,16 +46,37 @@ quotedColumn := spanvalue.QuoteIdentifier(
 [SpannerCLICompatibleFormatConfig](https://pkg.go.dev/github.com/apstndb/spanvalue#SpannerCLICompatibleFormatConfig)
 matches official [spanner-cli](https://github.com/cloudspannerecosystem/spanner-cli)
 output, including bracket-style STRUCT in arrays (`[[1, east]]`). For tuple
-parentheses (`[(1, east)]`) while keeping CLI scalar rules, clone the preset and
-set [FormatTupleStruct](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatTupleStruct):
+parentheses (`[(1, east)]`) while keeping CLI scalar rules, prepend a
+[PluginForStruct](https://pkg.go.dev/github.com/apstndb/spanvalue#PluginForStruct)
+override with [FormatTupleStruct](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatTupleStruct)
+(prepended plugins run before the preset handlers):
 
 ```go
-fc := spanvalue.SpannerCLICompatibleFormatConfig().Clone()
-fc.FormatStruct.FormatStructParen = spanvalue.FormatTupleStruct
+fc := spanvalue.SpannerCLICompatibleFormatConfig().WithComplexPlugin(
+    spanvalue.PluginForStruct(spanvalue.FormatSimpleStructField, spanvalue.FormatTupleStruct))
 ```
 
 See [ExampleSpannerCLICompatibleFormatConfig_tupleStruct](https://pkg.go.dev/github.com/apstndb/spanvalue#example-SpannerCLICompatibleFormatConfig-TupleStruct).
 Keep product-specific combinations in your application (not as new spanvalue presets).
+
+## Hand-built FormatConfig
+
+[`FormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig) holds exactly two fields: `NullString` and the ordered `FormatComplexPlugins` chain. Preset constructors ([`LiteralFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#LiteralFormatConfig), [`SimpleFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#SimpleFormatConfig), and others) return configs that pass [`FormatConfig.Validate`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig.Validate). Prefer assembling custom configs with [`NewFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanvalue#NewFormatConfig), which validates the canonical array/struct/scalar handlers at build time. After hand-assembling or mutating a config—[`Clone()`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig.Clone) then edit [`FormatComplexPlugins`](https://pkg.go.dev/github.com/apstndb/spanvalue#FormatConfig.FormatComplexPlugins)—call `Validate` before the first format or export so an empty chain or an empty `NullString` fails at construction time rather than on the first row.
+
+`Validate` cannot prove chain coverage: a non-NULL value that every plugin defers fails at format time with [`ErrUnhandledValue`](https://pkg.go.dev/github.com/apstndb/spanvalue#ErrUnhandledValue). Writers accept any `*FormatConfig` via [`writer.WithFormatter`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithFormatter) but do **not** call `Validate` today—validate hand-built formatters before passing them to writers.
+
+```go
+fc, err := spanvalue.NewFormatConfig(
+    spanvalue.WithNullString("NULL"),
+    spanvalue.WithPlugin(myPlugin), // optional overrides, most recent first
+    spanvalue.WithArrayFormat(spanvalue.FormatUntypedArray),
+    spanvalue.WithStructFormat(spanvalue.FormatSimpleStructField, spanvalue.FormatTupleStruct),
+    spanvalue.WithScalarFormatter(spanvalue.FormatNullableSpannerCLICompatible),
+)
+if err != nil {
+	return err
+}
+```
 
 ## Adoption snippets
 
@@ -76,6 +101,19 @@ if err := w.WriteValues(columnNames, gcvs); err != nil {
     return err
 }
 return w.Flush()
+```
+
+Nested ARRAY/STRUCT test fixtures: [`gcvctor.MustStructValueOf`](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor#MustStructValueOf) and [`gcvctor.MustArrayValueOf`](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor#MustArrayValueOf) wrap the error-returning constructors and panic on construction errors—use only in tests with schema-known inputs (see [`gcvctor`](https://pkg.go.dev/github.com/apstndb/spanvalue/gcvctor) package docs).
+
+```go
+elemType := typector.CodeToSimpleType(sppb.TypeCode_STRING)
+row := gcvctor.MustStructValueOf(
+	[]string{"id", "tags"},
+	[]spanner.GenericColumnValue{
+		gcvctor.Int64Value(1),
+		gcvctor.MustArrayValueOf(elemType, gcvctor.StringValue("a"), gcvctor.StringValue("b")),
+	},
+)
 ```
 
 ## Streaming row exports
@@ -113,9 +151,8 @@ Writer package details (GCV export options, `RowIterator` vs `WriteGCVs`): [writ
 
 [go-sql-spanner](https://github.com/googleapis/go-sql-spanner) apps often decode query
 rows into `[]spanner.GenericColumnValue` (for example via proto decode options) and
-export with `spanvalue` writers. `spanvalue` does **not** wrap `database/sql` or
-`*sql.Rows`; keep a thin application loop (scan → GCV slice →
-[`writer.WriteGCVs`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#DelimitedWriter.WriteGCVs)).
+export with `spanvalue` writers: scan → GCV slice →
+[`writer.WriteGCVs`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#DelimitedWriter.WriteGCVs).
 
 **Column names:** `database/sql` does not surface Spanner
 `*spannerpb.ResultSetMetadata`; register columns with
@@ -128,6 +165,8 @@ is appropriate. For display headers outside the writer, use
 on the **same** field list with the **same**
 [`spanvalue.UnnamedFieldNamer`](https://pkg.go.dev/github.com/apstndb/spanvalue#UnnamedFieldNamer)
 as [`writer.WithUnnamedFieldNamer`](https://pkg.go.dev/github.com/apstndb/spanvalue/writer#WithUnnamedFieldNamer).
+
+**Duplicate aliases:** explicit duplicate field names from Spanner (for example `SELECT 1 AS a, 2 AS a`) are preserved in `ColumnNames` output (`["a", "a"]`). Only `UnnamedFieldNamer` collisions return errors. CSV/TSV headers and JSONL field names follow the same resolved names; see [writer/README.md](writer/README.md).
 
 **CSV / JSONL:** register schema and formatting at construction, stream rows, then
 `Flush` (CSV may emit a header on zero-row `SELECT`; JSONL `Flush` is a no-op).
@@ -214,8 +253,9 @@ prototext, nested ARRAY/STRUCT cells and delimited-output fields can contain
 embedded newlines.
 Delimited, JSONL, and SQL encodings differ after
 spanvalue formats each column; see [writer/README.md](writer/README.md). For
-non-streaming paths, use
-`writer.RowData`, `writer.FormatDelimitedRow`, or `writer.FormatJSONLRow`
+value-oriented paths, use
+`writer.RowData`, `writer.FormatDelimitedRow`, `writer.FormatJSONLRow`, or
+`writer.FormatJSONLRowSeq`
 directly. Pass the JSON field-name policy explicitly, for example:
 
 ```go
@@ -290,9 +330,14 @@ func writeJSONL(out io.Writer, rows []*spanner.Row) error {
 }
 ```
 
-SQL INSERT output uses Spanner GoogleSQL quoting. Use
+SQL INSERT output uses Spanner GoogleSQL quoting by default. Use
 `writer.WithSQLInsertKind` for `INSERT OR IGNORE` or `INSERT OR UPDATE`; see
 [INSERT DML syntax](https://cloud.google.com/spanner/docs/reference/standard-sql/dml-syntax).
+`writer.WithSQLDialect` controls identifier quoting and insert-kind validation,
+not value literal formatting. For PostgreSQL-dialect value literals, pass a
+PostgreSQL-aware formatter with `writer.WithFormatter` (for example
+[`spanpg.PostgreSQLLiteralFormatConfig`](https://pkg.go.dev/github.com/apstndb/spanpg#PostgreSQLLiteralFormatConfig))
+together with `writer.WithSQLDialect`.
 
 ```go
 func writeInserts(out io.Writer, table string, rows []*spanner.Row) error {

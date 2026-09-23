@@ -18,6 +18,16 @@ import (
 
 var ErrMismatchedJSONObjectFields = errors.New("mismatched JSON object key/value count")
 
+// WireValue materializes nil as a fresh protobuf NULL and borrows non-nil values.
+// A nil list element becomes an empty, kind-less Value after protobuf transport,
+// so composite assembly must encode NULL explicitly. Type validation is the caller's responsibility.
+func WireValue(gcv spanner.GenericColumnValue) *structpb.Value {
+	if gcv.Value == nil {
+		return structpb.NewNullValue()
+	}
+	return gcv.Value
+}
+
 // IsNullGenericColumnValue reports whether gcv represents SQL NULL.
 // A nil gcv.Value is treated as NULL.
 func IsNullGenericColumnValue(gcv spanner.GenericColumnValue) bool {
@@ -133,11 +143,6 @@ func AssembleJSONObjectWithMarshaledKeys(keys [][]byte, values []string) (string
 	return b.String(), nil
 }
 
-// ByteToEscapeSequenceReadable formats a byte as a string without quote processing
-func ByteToEscapeSequenceReadable(b byte) string {
-	return EscapeRune(rune(b), false, -1)
-}
-
 func EscapeRune(r rune, isString bool, quote rune) string {
 	switch {
 	case r == quote || r == '\\':
@@ -162,52 +167,36 @@ func EscapeRune(r rune, isString bool, quote rune) string {
 	}
 }
 
-func Float64ToLiteral(v float64) string {
-	return Float64ToLiteralPolicy(v, QuotePolicy{})
-}
-
 func Float64ToLiteralPolicy(v float64, policy QuotePolicy) string {
 	switch {
 	case math.IsNaN(v):
-		return sqlCastQuotedString("nan", "FLOAT64", nonFiniteCastDelimiter(policy))
+		return sqlCastQuotedString("nan", "FLOAT64", quoteForPayload(policy, "nan"))
 	case math.IsInf(v, 1):
-		return sqlCastQuotedString("inf", "FLOAT64", nonFiniteCastDelimiter(policy))
+		return sqlCastQuotedString("inf", "FLOAT64", quoteForPayload(policy, "inf"))
 	case math.IsInf(v, -1):
-		return sqlCastQuotedString("-inf", "FLOAT64", nonFiniteCastDelimiter(policy))
+		return sqlCastQuotedString("-inf", "FLOAT64", quoteForPayload(policy, "-inf"))
 	default:
-		return strconv.FormatFloat(v, 'g', -1, 64)
+		s := strconv.FormatFloat(v, 'g', -1, 64)
+		if !strings.ContainsAny(s, ".eE") {
+			s += ".0"
+		}
+		return s
 	}
-}
-
-func Float32ToLiteral(v float32) string {
-	return Float32ToLiteralPolicy(v, QuotePolicy{})
 }
 
 func Float32ToLiteralPolicy(v float32, policy QuotePolicy) string {
 	switch {
 	case math.IsNaN(float64(v)):
-		return sqlCastQuotedString("nan", "FLOAT32", nonFiniteCastDelimiter(policy))
+		return sqlCastQuotedString("nan", "FLOAT32", quoteForPayload(policy, "nan"))
 	case math.IsInf(float64(v), 1):
-		return sqlCastQuotedString("inf", "FLOAT32", nonFiniteCastDelimiter(policy))
+		return sqlCastQuotedString("inf", "FLOAT32", quoteForPayload(policy, "inf"))
 	case math.IsInf(float64(v), -1):
-		return sqlCastQuotedString("-inf", "FLOAT32", nonFiniteCastDelimiter(policy))
+		return sqlCastQuotedString("-inf", "FLOAT32", quoteForPayload(policy, "-inf"))
+	case v == 0 && math.Signbit(float64(v)):
+		// An integer -0 operand loses its sign before the FLOAT32 cast.
+		return "CAST(-0.0 AS FLOAT32)"
 	default:
 		return fmt.Sprintf("CAST(%v AS FLOAT32)", strconv.FormatFloat(float64(v), 'g', -1, 32))
-	}
-}
-
-// nonFiniteCastDelimiter selects the outer delimiter for NaN/±Inf CAST payloads.
-// v0.5 compat: QuoteStrategyLegacy keeps historical single quotes; Always and
-// MinEscape use PreferredQuote. Planned v0.6: align with quoteForPayload.
-func nonFiniteCastDelimiter(policy QuotePolicy) rune {
-	switch policy.Strategy {
-	case QuoteStrategyAlways, QuoteStrategyMinEscape:
-		if policy.Preferred == PreferredQuoteDouble {
-			return '"'
-		}
-		return '\''
-	default:
-		return '\''
 	}
 }
 
@@ -238,12 +227,9 @@ func Pointers[T any, E ~[]T](e E) iter.Seq[*T] {
 	}
 }
 
+// suitableQuote is retained as the historical test oracle for legacyQuote behavior.
 func suitableQuote(b []byte) rune {
 	return legacyQuote(b, PreferredQuoteDouble)
-}
-
-func ToReadableBytesLiteral(v []byte) string {
-	return ToReadableBytesLiteralPolicy(v, QuotePolicy{})
 }
 
 func ToReadableBytesLiteralPolicy(v []byte, policy QuotePolicy) string {
@@ -261,10 +247,6 @@ func ToReadableBytesLiteralPolicy(v []byte, policy QuotePolicy) string {
 	encoded.WriteRune(quote)
 
 	return encoded.String()
-}
-
-func ToStringLiteral(s string) string {
-	return ToStringLiteralPolicy(s, QuotePolicy{})
 }
 
 func ToStringLiteralPolicy(s string, policy QuotePolicy) string {

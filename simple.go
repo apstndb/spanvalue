@@ -5,18 +5,16 @@ var (
 )
 
 // SimpleFormatConfig returns a new FormatConfig that produces human-readable
-// output using client library conventions.
+// output using client library conventions. The chain is [FormatSimpleValue]
+// for scalars, [PluginForArray] with [FormatUntypedArray], and
+// [PluginForStruct] with [FormatTypelessStructField] and [FormatTupleStruct].
 func SimpleFormatConfig() *FormatConfig {
 	return &FormatConfig{
-		NullString:  nullStringClientLib,
-		FormatArray: FormatUntypedArray,
-		FormatStruct: FormatStruct{
-			FormatStructField: FormatTypelessStructField,
-			FormatStructParen: FormatTupleStruct,
-		},
-		FormatNullable: formatNullableValueSimple,
+		NullString: nullStringClientLib,
 		FormatComplexPlugins: []FormatComplexFunc{
 			FormatSimpleValue,
+			PluginForArray(FormatUntypedArray),
+			PluginForStruct(FormatTypelessStructField, FormatTupleStruct),
 		},
 	}
 }

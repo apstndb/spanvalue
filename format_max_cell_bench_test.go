@@ -36,7 +36,7 @@ func BenchmarkFormatMaxCell(b *testing.B) {
 				fc   *FormatConfig
 			}{
 				{name: "Literal/Direct", fc: LiteralFormatConfig()},
-				{name: "Literal/Nullable", fc: formatConfigNullableOnly(LiteralFormatConfig())},
+				{name: "Literal/Nullable", fc: literalNullablePathConfig(LiteralQuoteConfig{})},
 				{name: "Simple/Direct", fc: SimpleFormatConfig()},
 			} {
 				b.Run(preset.name, func(b *testing.B) {

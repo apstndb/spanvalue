@@ -107,9 +107,19 @@ func TestDecodeColumn(t *testing.T) {
 			want:  "1.230000",
 		},
 		{
+			desc:  "float32 integral",
+			value: float32(1),
+			want:  "1",
+		},
+		{
 			desc:  "float64",
 			value: 1.23,
 			want:  "1.230000",
+		},
+		{
+			desc:  "float64 integral",
+			value: float64(1),
+			want:  "1",
 		},
 		{
 			desc:  "int64",

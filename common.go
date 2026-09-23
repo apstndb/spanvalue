@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
@@ -15,12 +16,55 @@ import (
 )
 
 var (
-	ErrNilRow                     = errors.New("nil row")
-	ErrNilStructField             = errors.New("nil struct field descriptor")
-	ErrUnknownType                = errors.New("unknown type")
+	ErrNilRow         = errors.New("nil row")
+	ErrNilStructField = errors.New("nil struct field descriptor")
+	// ErrUnknownType is returned when a type code (or, on the Decode path, a Go
+	// value type) is not supported by the formatter. It signals a
+	// configuration/coverage problem: the value may become formattable by adding
+	// a [FormatComplexFunc] plugin or choosing a different preset. For known
+	// types whose wire payload is invalid, see [ErrMalformedWire].
+	ErrUnknownType = errors.New("unknown type")
+	// ErrMalformedWire is returned when the type code of a value is known but
+	// its wire payload does not match the encoding Spanner uses for that type —
+	// for example a BOOL whose [structpb.Value] kind is a string, a FLOAT64
+	// string other than "NaN"/"Infinity"/"-Infinity", or a NULL that
+	// unexpectedly reaches the scalar wire validator. Unlike [ErrUnknownType]
+	// (a configuration problem that a plugin or preset change can address),
+	// ErrMalformedWire means the [cloud.google.com/go/spanner.GenericColumnValue]
+	// itself is corrupt: consumers should treat it as a data problem and fail
+	// the export rather than reconfigure formatting. It does not match
+	// [ErrUnknownType] via [errors.Is].
+	ErrMalformedWire              = errors.New("malformed wire value")
 	ErrMismatchedFields           = errors.New("mismatched struct value/field count")
 	ErrUnexpectedComplexValueKind = errors.New("unexpected complex value kind")
 	ErrEmptyTypeFQN               = errors.New("empty type FQN")
+	// ErrNilFormatConfig is returned by [*FormatConfig.Validate] and
+	// [*FormatConfig.FormatRowSeq] when the receiver is nil.
+	ErrNilFormatConfig = errors.New("nil format config")
+	// ErrEmptyNullString is returned by [*FormatConfig.Validate] when [FormatConfig.NullString] is empty.
+	ErrEmptyNullString = errors.New("empty null string")
+	// ErrNilFormatComplexPlugin is returned by [*FormatConfig.Validate] when
+	// [FormatConfig.FormatComplexPlugins] contains a nil element.
+	ErrNilFormatComplexPlugin = errors.New("nil format complex plugin")
+	// ErrEmptyFormatComplexPlugins is returned by [*FormatConfig.Validate] when
+	// [FormatConfig.FormatComplexPlugins] is empty: with no plugins, every
+	// non-NULL value fails with [ErrUnhandledValue], so an empty chain is
+	// treated as a construction mistake.
+	ErrEmptyFormatComplexPlugins = errors.New("empty format complex plugins")
+	// ErrUnhandledValue is returned by [*FormatConfig.FormatColumn] when every
+	// plugin in [FormatConfig.FormatComplexPlugins] defers ([ErrFallthrough])
+	// for a non-NULL value. The wrapped message includes the value's
+	// [sppb.Type]. It signals a coverage problem in the chain: register a
+	// plugin that claims the value (for example [PluginForArray],
+	// [PluginForStruct], or [PluginFromNullable]) or choose a preset that
+	// covers it. NULL values never reach this error; they render as
+	// [FormatConfig.NullString] when no plugin claims them.
+	//
+	// ErrUnhandledValue replaces the pre-v0.8 built-in fallbacks: the
+	// ErrFormatNullableRequired error for scalars, the nil FormatArray /
+	// FormatStruct callback panics, and the built-in path's ErrUnknownType
+	// for unknown scalar type codes.
+	ErrUnhandledValue = errors.New("no plugin handled value")
 )
 
 const (
@@ -28,6 +72,8 @@ const (
 	nullStringClientLib = "<null>"
 )
 
+// NullableValue is the scalar null wrapper type accepted by [FormatNullableFunc].
+// It includes [cloud.google.com/go/spanner] null types and [NullBytes] for BYTES/PROTO.
 type NullableValue interface {
 	spanner.NullableValue
 	fmt.Stringer
@@ -52,10 +98,13 @@ var _, _ NullableValue = spanner.NullDate{}, (*spanner.NullDate)(nil)
 var _, _ NullableValue = spanner.PGNumeric{}, (*spanner.PGNumeric)(nil)
 var _, _ NullableValue = spanner.PGJsonB{}, (*spanner.PGJsonB)(nil)
 
-// FormatComplexFunc is a function to format spanner.GenericColumnValue.
-// If it returns ErrFallthrough, value will pass through to next step.
-type FormatComplexFunc = func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error)
+// FormatComplexFunc formats one [cloud.google.com/go/spanner.GenericColumnValue]
+// as an element of [FormatConfig.FormatComplexPlugins]. Returning
+// [ErrFallthrough] defers the value to the next plugin in the chain (and, when
+// every plugin defers, to the built-in NULL handling or [ErrUnhandledValue]).
+type FormatComplexFunc func(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error)
 
+// ErrFallthrough tells [FormatComplexFunc] plugins to defer to the next plugin or built-in path.
 var ErrFallthrough = errors.New("fallthrough")
 
 func typeValueToGCV(typ *sppb.Type, value *structpb.Value) spanner.GenericColumnValue {
@@ -107,20 +156,6 @@ func decodeScalar[T NullableValue](gcv spanner.GenericColumnValue) (T, error) {
 	return v, err
 }
 
-func (fc *FormatConfig) formatSimpleColumn(value spanner.GenericColumnValue) (string, error) {
-	if IsNull(value) {
-		return fc.GetNullString(), nil
-	}
-	nv, err := simpleGCVToNullable(value)
-	if err != nil {
-		return "", err
-	}
-	if nullableFuncsEqual(fc.FormatNullable, formatNullableValueLiteral) {
-		return formatNullableValueLiteralWithQuote(fc.Literal.Quote, nv)
-	}
-	return fc.FormatNullable(nv)
-}
-
 func isComplexType(elemCode sppb.TypeCode) bool {
 	return sppb.TypeCode_STRUCT == elemCode || sppb.TypeCode_ARRAY == elemCode
 }
@@ -136,13 +171,59 @@ func IsNull(gcv spanner.GenericColumnValue) bool {
 	return internal.IsNullGenericColumnValue(gcv)
 }
 
+// WireValue returns gcv's protobuf wire value for low-level ARRAY or STRUCT
+// assembly. When gcv.Value is nil, it returns a fresh explicit protobuf NULL,
+// so the result is never nil. Otherwise it returns gcv.Value without cloning;
+// callers must treat the returned value as read-only.
+//
+// WireValue does not validate that gcv.Type and gcv.Value form a valid Spanner
+// wire value. Use it when the caller already owns type validation and needs to
+// preserve the encoded value as-is.
+func WireValue(gcv spanner.GenericColumnValue) *structpb.Value {
+	return internal.WireValue(gcv)
+}
+
+// WireValues maps [WireValue] over gcvs for low-level ARRAY or STRUCT
+// assembly. It always returns a newly allocated, non-nil slice, including for
+// nil or empty input. Non-nil element values are borrowed from gcvs and must
+// be treated as read-only.
+func WireValues(gcvs []spanner.GenericColumnValue) []*structpb.Value {
+	values := make([]*structpb.Value, len(gcvs))
+	for i, gcv := range gcvs {
+		values[i] = WireValue(gcv)
+	}
+	return values
+}
+
+// FormatProtoAsCast formats PROTO values as CAST(b"..." AS `fqn`) with the
+// default (legacy double-quote) bytes-literal quoting. The literal preset
+// constructors install a quote-aware equivalent that follows the
+// constructor-captured [LiteralQuoteConfig] ([LiteralFormatConfigWithQuote]
+// and friends), so quote options apply to PROTO casts only through those
+// constructors.
 func FormatProtoAsCast(formatter Formatter, value spanner.GenericColumnValue, toplevel bool) (string, error) {
-	if value.Type.GetCode() != sppb.TypeCode_PROTO {
+	return formatProtoAsCast(LiteralQuoteConfig{}, formatter, value)
+}
+
+// protoAsCastPlugin returns a [FormatProtoAsCast] equivalent whose bytes
+// literal quoting follows q, captured at construction.
+func protoAsCastPlugin(q LiteralQuoteConfig) FormatComplexFunc {
+	q = normalizeLiteralQuote(q)
+	return func(formatter Formatter, value spanner.GenericColumnValue, _ bool) (string, error) {
+		return formatProtoAsCast(q, formatter, value)
+	}
+}
+
+func formatProtoAsCast(q LiteralQuoteConfig, formatter Formatter, value spanner.GenericColumnValue) (string, error) {
+	if value.Type == nil || value.Type.GetCode() != sppb.TypeCode_PROTO {
 		return "", ErrFallthrough
 	}
 
 	if IsNull(value) {
 		return formatter.GetNullString(), nil
+	}
+	if err := requireStringWire(value.Value, sppb.TypeCode_PROTO); err != nil {
+		return "", err
 	}
 
 	b, err := base64.StdEncoding.DecodeString(value.Value.GetStringValue())
@@ -153,7 +234,7 @@ func FormatProtoAsCast(formatter Formatter, value spanner.GenericColumnValue, to
 	if err != nil {
 		return "", err
 	}
-	policy := toInternalQuotePolicy(literalQuoteForFormatter(formatter))
+	policy := toInternalQuotePolicy(q)
 	return fmt.Sprintf("CAST(%v AS `%v`)", internal.ToReadableBytesLiteralPolicy(b, policy), typeFQN), nil
 }
 
@@ -165,68 +246,66 @@ func FormatEnumAsCast(formatter Formatter, value spanner.GenericColumnValue, top
 	if IsNull(value) {
 		return formatter.GetNullString(), nil
 	}
+	if err := requireStringWire(value.Value, sppb.TypeCode_ENUM); err != nil {
+		return "", err
+	}
 
+	s := value.Value.GetStringValue()
+	if _, err := strconv.ParseInt(s, 10, 64); err != nil {
+		return "", fmt.Errorf("failed to parse enum wire payload %q: %w", s, err)
+	}
 	typeFQN, err := requireTypeFQN(value.Type)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("CAST(%v AS `%v`)", value.Value.GetStringValue(), typeFQN), nil
+	return fmt.Sprintf("CAST(%v AS `%v`)", s, typeFQN), nil
 }
 
+// Formatter is the minimal surface [FormatComplexFunc] plugins use to recurse into nested values.
 type Formatter interface {
 	FormatColumn(value spanner.GenericColumnValue, toplevel bool) (string, error)
 	GetNullString() string
 }
 
-// FormatConfig controls how Spanner values are formatted. Preset constructors
-// such as [LiteralFormatConfig] return a fresh instance with non-nil callbacks
-// for the value kinds they support. [FormatConfig.FormatColumn] calls FormatArray,
-// FormatStruct, and FormatNullable directly; a nil callback panics when that
-// branch runs unless a [FormatComplexFunc] plugin handles the value first.
+// FormatConfig controls how Spanner values are formatted. Behavior lives
+// entirely in the two fields: NullString (the global NULL rendering) and
+// FormatComplexPlugins (the ordered [FormatComplexFunc] chain).
 //
-// Nil field behavior:
-//   - FormatArray: required for non-NULL ARRAY values. NULL ARRAY values use
-//     [FormatConfig.GetNullString] before FormatArray is called.
-//   - FormatStruct.FormatStructField and FormatStruct.FormatStructParen: required
-//     for non-NULL STRUCT values. NULL STRUCT values use [FormatConfig.GetNullString]
-//     before struct callbacks run.
-//   - FormatComplexPlugins: nil or empty means no plugins run. Preset constructors
-//     append a trailing scalar plugin ([FormatSimpleValue], [FormatLiteralValue],
-//     [FormatSpannerCLIValue], or [FormatJSONSimpleValue]) that formats scalars directly
-//     from GenericColumnValue without Decode; use [FormatConfigWithoutScalarPlugins] or remove
-//     them on a clone to use the legacy path. Plugins fall through when [FormatNullable] is replaced.
-//   - FormatNullable: formats non-NULL scalars after Decode when no scalar plugin handles
-//     the value. NULL scalars use [FormatConfig.GetNullString] before FormatNullable runs.
+// [*FormatConfig.FormatColumn] tries every plugin in order; a plugin returns
+// [ErrFallthrough] to defer. When every plugin defers, NULL values (of any
+// type) render as NullString and non-NULL values fail with
+// [ErrUnhandledValue]. Coverage is therefore a property of the chain: preset
+// constructors ([SimpleFormatConfig], [LiteralFormatConfig],
+// [SpannerCLICompatibleFormatConfig], [JSONFormatConfig]) install a scalar
+// plugin plus [PluginForArray] and [PluginForStruct] handlers, and
+// [NewFormatConfig] assembles a chain from the same combinators with
+// build-time validation.
 //
-// Use [FormatConfig.Clone] to customize a preset without mutating shared instances.
+// Use [*FormatConfig.Clone] or [*FormatConfig.WithComplexPlugin] (prepends
+// plugins, so the most recent addition runs first) to customize a preset
+// without mutating shared instances. Call [*FormatConfig.Validate] after
+// hand-assembling a config to fail fast on an empty NullString, an empty
+// chain, or nil plugins; Validate cannot prove that the chain covers every
+// type — coverage gaps surface at format time as [ErrUnhandledValue].
 type FormatConfig struct {
 	NullString           string
-	FormatArray          FormatArrayFunc
-	FormatStruct         FormatStruct
 	FormatComplexPlugins []FormatComplexFunc
-	FormatNullable       FormatNullableFunc
-	// Literal holds options for the literal preset only ([LiteralFormatOptions]).
-	// Quote is read when FormatNullable is the preset formatNullableValueLiteral (including the
-	// formatSimpleColumn slow-path intercept) and by literal preset complex plugins such as
-	// [FormatLiteralValue] and [FormatProtoAsCast]. Custom FormatNullable callbacks do not
-	// consult this field. Other presets leave Literal at the zero value. Quote zero value is
-	// legacy suitableQuote behavior (QuoteLegacy + PreferredDoubleQuote). Invalid enum values
-	// are normalized when literal options are applied and again when Quote is read at format
-	// time. Escaping uses GoogleSQL backslash rules; not PostgreSQL (#126).
-	Literal LiteralFormatOptions
-}
-
-type FormatStruct struct {
-	FormatStructField FormatStructFieldFunc
-	FormatStructParen FormatStructParenFunc
 }
 
 func (fc *FormatConfig) GetNullString() string { return fc.NullString }
 
 type FormatArrayFunc func(typ *sppb.Type, toplevel bool, elemStrings []string) (string, error)
 type FormatStructParenFunc func(typ *sppb.Type, toplevel bool, fieldStrings []string) (string, error)
-type FormatStructFieldFunc func(fc *FormatConfig, field *sppb.StructType_Field, value *structpb.Value) (string, error)
-type FormatNullableFunc = func(value NullableValue) (string, error)
+
+// FormatStructFieldFunc formats one STRUCT field value for [PluginForStruct]
+// and [WithStructFormat]. Use formatter.FormatColumn(fieldGCV, false) to
+// recurse into the field value through the whole plugin chain.
+type FormatStructFieldFunc func(formatter Formatter, field *sppb.StructType_Field, value *structpb.Value) (string, error)
+
+// FormatNullableFunc formats one non-NULL scalar value decoded to its
+// [NullableValue] wrapper. Lift it into the plugin chain with
+// [PluginFromNullable] (or [WithScalarFormatter] on [NewFormatConfig]).
+type FormatNullableFunc func(value NullableValue) (string, error)
 
 func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel bool) (string, error) {
 	// Plugins are tried first so they can handle any type including ARRAY and
@@ -240,49 +319,52 @@ func (fc *FormatConfig) FormatColumn(value spanner.GenericColumnValue, toplevel 
 			return s, err
 		}
 	}
-
-	valType := value.Type
-	switch valType.GetCode() {
-	case sppb.TypeCode_ARRAY:
-		if IsNull(value) {
-			return fc.GetNullString(), nil
-		}
-		listValue, err := getComplexListValue(valType.GetCode(), value.Value)
-		if err != nil {
-			return "", err
-		}
-		elemStrings, err := lo.MapErr(listValue.GetValues(), func(v *structpb.Value, _ int) (string, error) {
-			return fc.FormatColumn(typeValueToGCV(valType.GetArrayElementType(), v), false)
-		})
-		if err != nil {
-			return "", err
-		}
-
-		return fc.FormatArray(valType, toplevel, elemStrings)
-	case sppb.TypeCode_STRUCT:
-		if IsNull(value) {
-			return fc.GetNullString(), nil
-		}
-		listValue, err := getComplexListValue(valType.GetCode(), value.Value)
-		if err != nil {
-			return "", err
-		}
-		fields := valType.GetStructType().GetFields()
-		fieldValues := listValue.GetValues()
-		if len(fieldValues) != len(fields) {
-			return "", fmt.Errorf("%w: got %d values, want %d", ErrMismatchedFields, len(fieldValues), len(fields))
-		}
-		fieldStrings, err := lo.MapErr(fields, func(field *sppb.StructType_Field, i int) (string, error) {
-			return fc.FormatStruct.FormatStructField(fc, field, fieldValues[i])
-		})
-		if err != nil {
-			return "", err
-		}
-
-		return fc.FormatStruct.FormatStructParen(valType, toplevel, fieldStrings)
-	default:
-		return fc.formatSimpleColumn(value)
+	if IsNull(value) {
+		return fc.GetNullString(), nil
 	}
+	return "", fmt.Errorf("%w: %v", ErrUnhandledValue, value.Type)
+}
+
+// formatArrayElems is the non-NULL ARRAY shape behind [PluginForArray]:
+// extract the wire list value (non-list payloads are
+// [ErrUnexpectedComplexValueKind]), recurse into each element with
+// formatter.FormatColumn(elem, false), and hand the element strings to join.
+func formatArrayElems(formatter Formatter, value spanner.GenericColumnValue, toplevel bool, join FormatArrayFunc) (string, error) {
+	listValue, err := getComplexListValue(sppb.TypeCode_ARRAY, value.Value)
+	if err != nil {
+		return "", err
+	}
+	elemStrings, err := lo.MapErr(listValue.GetValues(), func(v *structpb.Value, _ int) (string, error) {
+		return formatter.FormatColumn(typeValueToGCV(value.Type.GetArrayElementType(), v), false)
+	})
+	if err != nil {
+		return "", err
+	}
+	return join(value.Type, toplevel, elemStrings)
+}
+
+// formatStructFields is the non-NULL STRUCT shape behind [PluginForStruct]:
+// extract the wire list value (non-list payloads are
+// [ErrUnexpectedComplexValueKind]), check the value count against the field
+// descriptors ([ErrMismatchedFields]), format each field with the field
+// callback, and hand the field strings to paren.
+func formatStructFields(formatter Formatter, value spanner.GenericColumnValue, toplevel bool, field FormatStructFieldFunc, paren FormatStructParenFunc) (string, error) {
+	listValue, err := getComplexListValue(sppb.TypeCode_STRUCT, value.Value)
+	if err != nil {
+		return "", err
+	}
+	fields := value.Type.GetStructType().GetFields()
+	fieldValues := listValue.GetValues()
+	if len(fieldValues) != len(fields) {
+		return "", fmt.Errorf("%w: got %d values, want %d", ErrMismatchedFields, len(fieldValues), len(fields))
+	}
+	fieldStrings, err := lo.MapErr(fields, func(f *sppb.StructType_Field, i int) (string, error) {
+		return field(formatter, f, fieldValues[i])
+	})
+	if err != nil {
+		return "", err
+	}
+	return paren(value.Type, toplevel, fieldStrings)
 }
 
 func getComplexListValue(code sppb.TypeCode, value *structpb.Value) (*structpb.ListValue, error) {

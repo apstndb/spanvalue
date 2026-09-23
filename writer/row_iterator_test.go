@@ -8,7 +8,6 @@ import (
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/api/iterator"
 )
 
 var (
@@ -36,7 +35,7 @@ func (s *stubRowIterator) next() (*spanner.Row, error) {
 		s.i++
 		return row, nil
 	}
-	return nil, iterator.Done
+	return nil, errRowSourceDone
 }
 
 func (s *stubRowIterator) stop() {
@@ -114,6 +113,38 @@ func TestWriteRowIterator_emptyZeroColumnMetadata(t *testing.T) {
 	}
 	if out.Len() != 0 {
 		t.Fatalf("output = %q, want empty", out.String())
+	}
+}
+
+func TestWriteRowIterator_withFlushEachRow(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithColumnNames("id", "name")
+	row, err := spanner.NewRow([]string{"id", "name"}, []any{int64(1), "a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stub := &stubRowIterator{
+		md:       md,
+		wantStat: RowIteratorStats{RowCount: 1},
+		rows:     []*spanner.Row{row},
+	}
+
+	var out bytes.Buffer
+	w := mustNewDelimitedWriter(t, &out, ',', WithHeader(true), WithFlushEachRow())
+	got, err := runRowIterator(stub, RowIteratorHooksFromWriter(w))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Metadata != md {
+		t.Fatal("metadata not returned")
+	}
+	if got.Stats.RowCount != 1 {
+		t.Fatalf("RowCount = %d, want 1", got.Stats.RowCount)
+	}
+	want := "id,name\n1,a\n"
+	if out.String() != want {
+		t.Fatalf("output = %q, want %q", out.String(), want)
 	}
 }
 

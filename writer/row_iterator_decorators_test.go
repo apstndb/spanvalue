@@ -213,7 +213,7 @@ func TestAfterEachSuccessfulWriteRow(t *testing.T) {
 			flushes++
 			return nil
 		})
-		_, err = runRowIterator(stub, hooks)
+		_, err := runRowIterator(stub, hooks)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -239,7 +239,7 @@ func TestAfterEachSuccessfulWriteRow(t *testing.T) {
 			flushes++
 			return nil
 		})
-		_, err = runRowIterator(stub, hooks)
+		_, err := runRowIterator(stub, hooks)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -261,7 +261,7 @@ func TestAfterEachSuccessfulWriteRow(t *testing.T) {
 			}
 			return nil
 		})
-		_, err = runRowIterator(stub, hooks)
+		_, err := runRowIterator(stub, hooks)
 		if err == nil {
 			t.Fatal("expected error")
 		}

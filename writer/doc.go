@@ -5,7 +5,7 @@
 // [FlushWriter] interfaces. Register column schema with [WithColumnNames], [WithRowType],
 // or [WithMetadata] (or [DelimitedWriter.PrepareRowType] / [DelimitedWriter.PrepareColumnNames]
 // after construction). [DelimitedWriter] buffers through encoding/csv—call [Flusher.Flush]
-// after the final row.
+// after the final row, or pass [WithFlushEachRow] for per-row flush during streaming.
 //
 // Extended documentation, RowIterator recipes, and module-split notes:
 // https://github.com/apstndb/spanvalue/blob/main/writer/README.md
@@ -27,6 +27,15 @@
 // may be empty, and read metadata or stats only after consuming to [google.golang.org/api/iterator.Done]; propagate
 // [Flusher.Flush] errors (do not defer Flush).
 //
+// Rows that do not come from a RowIterator — client-side (virtual) result sets or locally
+// constructed rows — go through [WriteRowSeq] and [RunRowSeq], which take explicit metadata
+// plus a fallible row sequence ([RowSeq] adapts pre-built rows) and share the
+// [RunRowIterator] hook contract. When the row type is only known after producing begins
+// (merged concurrent sources such as partitioned-query fan-in),
+// [RunRowSeqDeferredMetadata] and [WriteRowSeqDeferredMetadata] accept a metadata func
+// evaluated after the first pull, so producers publish the row type before their first
+// yield instead of holding rows back.
+//
 // # Direct writers vs hooks
 //
 // Prefer [WriteRowIterator] when the destination is a package writer. Prefer [RunRowIterator]
@@ -35,7 +44,8 @@
 // example [database/sql] scans—see the root README go-sql-spanner section).
 //
 // [DelimitedGCVExportOptions] and [JSONLGCVExportOptions] group metadata, formatter,
-// and unnamed-field namer options for GCV slice export.
+// and unnamed-field namer options for GCV slice export. [WithFormatter] does not call
+// [*spanvalue.FormatConfig.Validate]; validate hand-built formatters before construction.
 //
 // # Quoted delimited text vs raw tab-separated
 //
@@ -52,9 +62,24 @@
 // before the first Next registers an empty schema—use [RowIteratorWriter.PrepareRowType] after
 // the first Next or [WriteRowIterator] instead.
 //
+// # Write errors
+//
+// All three writers latch the first error caused by writing to the underlying
+// io.Writer (the [encoding/csv] Writer.Error pattern): after any Write* or
+// [Flusher.Flush] call fails with an output error, every subsequent Write* or
+// Flush call returns that first error and no further output is attempted.
+// Discard the writer after any write error. Validation errors reported before
+// output is attempted (for example [ErrMissingColumnNames] or
+// [ErrColumnNamesMismatch]) are not latched.
+//
 // # SQL INSERT
 //
 // [NewSQLInsertWriter] accepts [WithSQLInsertKind], [WithSQLDialect], and [WithSQLBatchSize].
-// After any write error from [SQLInsertWriter], discard the writer. [*SQLInsertWriter.Flush]
+// It rejects an empty table name (after strings.TrimSpace) at construction with [ErrEmptyTableName]
+// and an out-of-range [SQLInsertKind] with [ErrInvalidSQLInsertKind]. Qualified names with empty
+// segments are rejected on the first write with [ErrEmptyTableName].
+// Each statement is emitted with a single Write; batched rows are buffered until the multi-row
+// statement completes. After any write error from [SQLInsertWriter], discard the writer; later
+// calls return the latched error (see "Write errors"). [*SQLInsertWriter.Flush]
 // closes a partial batch when batching.
 package writer

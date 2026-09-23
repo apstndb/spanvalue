@@ -112,6 +112,11 @@ func TestDecodeColumnLiteral(t *testing.T) {
 			want:  "1.23",
 		},
 		{
+			desc:  "float64 integral",
+			value: float64(1),
+			want:  "1.0",
+		},
+		{
 			desc:  "math.MaxFloat64",
 			value: math.MaxFloat64,
 			want:  "1.7976931348623157e+308",
@@ -134,17 +139,17 @@ func TestDecodeColumnLiteral(t *testing.T) {
 		{
 			desc:  "NaN",
 			value: math.NaN(),
-			want:  "CAST('nan' AS FLOAT64)",
+			want:  `CAST("nan" AS FLOAT64)`,
 		},
 		{
 			desc:  "Inf",
 			value: math.Inf(+1),
-			want:  "CAST('inf' AS FLOAT64)",
+			want:  `CAST("inf" AS FLOAT64)`,
 		},
 		{
 			desc:  "-Inf",
 			value: math.Inf(-1),
-			want:  "CAST('-inf' AS FLOAT64)",
+			want:  `CAST("-inf" AS FLOAT64)`,
 		},
 		{
 			desc:  "int64",
@@ -478,6 +483,7 @@ func TestDecodeColumnLiteral(t *testing.T) {
 
 func TestDecodeColumn_roundtripFloat64(t *testing.T) {
 	for _, tt := range []float64{
+		1,
 		math.MaxFloat64,
 		-math.MaxFloat64,
 		math.SmallestNonzeroFloat64,
@@ -533,4 +539,53 @@ func mustBigRatFromString(s string) *big.Rat {
 		panic(fmt.Sprintf("invalid string for big.Rat: %q", s))
 	}
 	return r
+}
+
+func TestLiteralFloat32NegativeZero(t *testing.T) {
+	t.Parallel()
+	negativeZero := float32(math.Copysign(0, -1))
+	structValue, err := gcvctor.StructValueOf([]string{"F"}, []spanner.GenericColumnValue{gcvctor.Float32Value(negativeZero)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, quote := range []LiteralQuoteConfig{
+		{},
+		{Strategy: QuoteLegacy, PreferredQuote: PreferredSingleQuote},
+		{Strategy: QuoteAlways, PreferredQuote: PreferredSingleQuote},
+		{Strategy: QuoteAlways, PreferredQuote: PreferredDoubleQuote},
+		{Strategy: QuoteMinEscape, PreferredQuote: PreferredSingleQuote},
+		{Strategy: QuoteMinEscape, PreferredQuote: PreferredDoubleQuote},
+	} {
+		t.Run(fmt.Sprint(quote), func(t *testing.T) {
+			t.Parallel()
+			fc := LiteralFormatConfigWithQuote(quote)
+			for _, tt := range []struct {
+				name  string
+				value any
+				want  string
+			}{
+				{"negative zero", negativeZero, "CAST(-0.0 AS FLOAT32)"},
+				{"nullable negative zero", spanner.NullFloat32{Float32: negativeZero, Valid: true}, "CAST(-0.0 AS FLOAT32)"},
+				{"positive zero", float32(0), "CAST(0 AS FLOAT32)"},
+				{"finite", float32(1.5), "CAST(1.5 AS FLOAT32)"},
+				{"null", spanner.NullFloat32{}, "NULL"},
+				{"array", []spanner.NullFloat32{{Float32: negativeZero, Valid: true}, {Float32: 0, Valid: true}, {}}, "[CAST(-0.0 AS FLOAT32), CAST(0 AS FLOAT32), NULL]"},
+				{"empty array", []float32{}, "[]"},
+				{"null array", []float32(nil), "NULL"},
+				{"float64", math.Copysign(0, -1), "-0.0"},
+				{"struct", structValue, "STRUCT<F FLOAT32>(CAST(-0.0 AS FLOAT32))"},
+			} {
+				t.Run(tt.name, func(t *testing.T) {
+					t.Parallel()
+					got, err := fc.FormatToplevelColumn(createColumnValue(t, tt.value))
+					if err != nil {
+						t.Fatal(err)
+					}
+					if got != tt.want {
+						t.Errorf("got %q, want %q", got, tt.want)
+					}
+				})
+			}
+		})
+	}
 }
