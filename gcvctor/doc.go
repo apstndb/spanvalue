@@ -79,8 +79,10 @@
 //
 // # Wire values and forward compatibility
 //
-// Three questions stay separate. None of them is a KnownTypeCode predicate, and
-// [github.com/apstndb/spantype/typector] is not claimed to export one either.
+// Protobuf recognition, constructor validation, and formatter coverage are
+// separate properties. A type-code-only predicate cannot establish that a
+// value is valid or that a particular formatter covers it. There is no
+// KnownTypeCode helper in this module.
 //
 //   - Protobuf recognition: [cloud.google.com/go/spanner/apiv1/spannerpb.TypeCode] names
 //     the codes this protobuf enum knows. TYPE_CODE_UNSPECIFIED is that enum's zero
@@ -92,7 +94,7 @@
 //     TYPE_CODE_UNSPECIFIED so construction does not leave a nil Type. That
 //     normalization does not infer a SQL type.
 //   - Plugin coverage: preset plugins may return [github.com/apstndb/spanvalue.ErrFallthrough]
-//     to defer to the next plugin. [github.com/apstndb/spanvalue.FormatColumn] consumes
+//     to defer to the next plugin. [github.com/apstndb/spanvalue.FormatConfig.FormatColumn] consumes
 //     that signal. After every plugin defers, the caller sees the configured NULL
 //     string or [github.com/apstndb/spanvalue.ErrUnhandledValue], not ErrFallthrough.
 //
