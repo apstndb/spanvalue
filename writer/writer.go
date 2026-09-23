@@ -24,6 +24,9 @@ const (
 	// Comma is the standard CSV field delimiter. Pass Comma to
 	// NewDelimitedWriter for CSV output.
 	Comma rune = ','
+	// Tab is the quoted-TSV field delimiter for NewDelimitedWriter.
+	// It is not a raw, unquoted tab writer.
+	Tab rune = '\t'
 )
 
 var (
@@ -1626,7 +1629,7 @@ func validatedColumnNames(existing []string, registered bool, columnNames []stri
 			return nil, ErrMissingColumnNames
 		}
 		if registered {
-			return nil, fmt.Errorf("%w: got %v, want zero-column schema (registered empty row type)", ErrColumnNamesMismatch, columnNames)
+			return nil, fmt.Errorf("%w: got %v, want zero-column schema (registered empty row type; was nil metadata registered before the first Next?)", ErrColumnNamesMismatch, columnNames)
 		}
 		return slices.Clone(columnNames), nil
 	}

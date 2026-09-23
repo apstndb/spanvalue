@@ -32,6 +32,7 @@ type stubSQLRows struct {
 	lastErr     error
 	nextRSOK    bool
 	columns     []string
+	columnErr   error
 }
 
 type stubRow struct {
@@ -117,6 +118,9 @@ func (s *stubSQLRows) scan(dest ...any) error {
 }
 
 func (s *stubSQLRows) columnCount() (int, error) {
+	if s.columnErr != nil {
+		return 0, s.columnErr
+	}
 	if len(s.columns) > 0 {
 		return len(s.columns), nil
 	}
@@ -162,6 +166,108 @@ func TestWriteRows_nilWriter(t *testing.T) {
 	_, err := WriteRows(&sql.Rows{}, nil, SQLRowsConfig{})
 	if !errors.Is(err, ErrNilWriter) {
 		t.Fatalf("error = %v, want ErrNilWriter", err)
+	}
+}
+
+func TestMetadataColumnCount(t *testing.T) {
+	t.Parallel()
+
+	md := metadataWithNames("id", "name")
+	columnErr := errors.New("columns failed")
+
+	t.Run("pseudo-row mismatch stops before prepare", func(t *testing.T) {
+		t.Parallel()
+		stub := &stubSQLRows{
+			columns: []string{"id"},
+			resultSets: [][]stubRow{
+				{{values: []any{md}}},
+				{{values: []any{gcvctor.Int64Value(1)}}},
+			},
+		}
+		assertColumnMismatch(t, stub, sqlRowsRunConfig{readMetadataPseudoRow: true}, md, 1)
+	})
+
+	t.Run("at-data mismatch stops before prepare", func(t *testing.T) {
+		t.Parallel()
+		stub := &stubSQLRows{
+			columns:    []string{"id"},
+			resultSets: [][]stubRow{{{values: []any{gcvctor.Int64Value(1)}}}},
+		}
+		assertColumnMismatch(t, stub, sqlRowsRunConfig{
+			metadata:              md,
+			readMetadataPseudoRow: false,
+		}, md, 0)
+	})
+
+	t.Run("matching zero columns", func(t *testing.T) {
+		t.Parallel()
+		stub := &stubSQLRows{resultSets: [][]stubRow{{}}}
+		var prepared, finished int
+		got, err := runRows(stub, SQLRowsHooks{
+			PrepareMetadata: func(*sppb.ResultSetMetadata) error {
+				prepared++
+				return nil
+			},
+			Finish: func(*SQLRowsResult) error {
+				finished++
+				return nil
+			},
+		}, sqlRowsRunConfig{
+			metadata:              &sppb.ResultSetMetadata{RowType: &sppb.StructType{}},
+			readMetadataPseudoRow: false,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if prepared != 1 || finished != 1 || got.RowsRead != 0 {
+			t.Fatalf("prepared=%d finished=%d rows=%d", prepared, finished, got.RowsRead)
+		}
+	})
+
+	t.Run("column count error is preserved", func(t *testing.T) {
+		t.Parallel()
+		stub := &stubSQLRows{columnErr: columnErr}
+		_, err := runRows(stub, SQLRowsHooks{}, sqlRowsRunConfig{
+			metadata:              md,
+			readMetadataPseudoRow: false,
+		})
+		if !errors.Is(err, columnErr) {
+			t.Fatalf("error = %v, want columns failed", err)
+		}
+	})
+}
+
+func assertColumnMismatch(t *testing.T, stub *stubSQLRows, run sqlRowsRunConfig, wantMD *sppb.ResultSetMetadata, wantNextCalls int) {
+	t.Helper()
+	var prepared, written, finished int
+	got, err := runRows(stub, SQLRowsHooks{
+		PrepareMetadata: func(*sppb.ResultSetMetadata) error {
+			prepared++
+			return nil
+		},
+		WriteDataRow: func([]spanner.GenericColumnValue) error {
+			written++
+			return nil
+		},
+		Finish: func(*SQLRowsResult) error {
+			finished++
+			return nil
+		},
+	}, run)
+	if !errors.Is(err, ErrMetadataColumnCount) {
+		t.Fatalf("error = %v, want ErrMetadataColumnCount", err)
+	}
+	if got == nil || got.RowsRead != 0 {
+		t.Fatalf("result = %#v, want retained result with zero rows", got)
+	}
+	if diff := cmp.Diff(wantMD, got.Metadata, protocmp.Transform()); diff != "" {
+		t.Fatalf("Metadata mismatch (-want +got):\n%s", diff)
+	}
+	if prepared != 0 || written != 0 || finished != 0 {
+		t.Fatalf("callbacks prepared=%d written=%d finished=%d", prepared, written, finished)
+	}
+	if stub.nextCalls != wantNextCalls || stub.row != 0 {
+		t.Fatalf("nextCalls=%d row=%d, want nextCalls=%d and no data row", stub.nextCalls, stub.row, wantNextCalls)
 	}
 }
 
