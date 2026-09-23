@@ -75,7 +75,9 @@
 // Formatting these values as strings is provided by the sibling package
 // [github.com/apstndb/spanvalue]. For converting arbitrary Go values with the official
 // Cloud Spanner Go client's encoding semantics (struct tags, null wrappers, Encoder), see
-// [github.com/apstndb/spanenc].
+// [github.com/apstndb/spancodec]. It supersedes the frozen spanenc and spandec
+// modules. The [spancodec migration guide] covers option-signature differences;
+// changing only the import path may not compile for option slices.
 //
 // # Wire values and forward compatibility
 //
@@ -125,4 +127,6 @@
 //     Spanner-canonical wire.
 //
 // See ExampleStringBasedValueFromCode_validatedDate and ExampleNormalizeArrayElements.
+//
+// [spancodec migration guide]: https://github.com/apstndb/spancodec#migrating-from-spanenc--spandec
 package gcvctor
