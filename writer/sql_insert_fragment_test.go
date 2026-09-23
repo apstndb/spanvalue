@@ -1,126 +1,155 @@
 package writer
 
 import (
-	"bytes"
 	"errors"
+	"strings"
 	"testing"
 
-	"cloud.google.com/go/spanner"
 	databasepb "cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
 	"github.com/google/go-cmp/cmp"
-
-	"github.com/apstndb/spanvalue"
-	"github.com/apstndb/spanvalue/gcvctor"
 )
 
-func TestFormatSQLInsertFragmentMatchesWriter(t *testing.T) {
+func TestFormatSQLInsertFragmentsGolden(t *testing.T) {
 	t.Parallel()
 
-	columnNames := []string{"id", "name"}
-	values := []spanner.GenericColumnValue{gcvctor.Int64Value(42), gcvctor.StringValue("Alice")}
-	formatter := spanvalue.LiteralFormatConfig()
+	gs := databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL
+	pg := databasepb.DatabaseDialect_POSTGRESQL
+	unspec := databasepb.DatabaseDialect_DATABASE_DIALECT_UNSPECIFIED
 
-	var writerOut bytes.Buffer
-	w := mustNewSQLInsertWriter(t, &writerOut, "users")
-	if err := w.WriteValues(columnNames, values); err != nil {
-		t.Fatal(err)
-	}
-	if err := w.Flush(); err != nil {
-		t.Fatal(err)
-	}
-
-	formatted, err := spanvalue.FormatRowColumns(formatter, columnNames, values)
-	if err != nil {
-		t.Fatal(err)
-	}
-	prefix, err := FormatSQLInsertPrefix(SQLInsert, databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, "users", columnNames)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := FormatSQLInsertStatement(prefix, formatted)
-	if diff := cmp.Diff(writerOut.String(), got); diff != "" {
-		t.Fatalf("fragment assembly mismatch (-writer +fragment):\n%s", diff)
-	}
-}
-
-func TestFormatSQLInsertFragmentBatchMatchesWriter(t *testing.T) {
-	t.Parallel()
-
-	columnNames := []string{"id", "name"}
-	rows := [][]spanner.GenericColumnValue{
-		{gcvctor.Int64Value(1), gcvctor.StringValue("a")},
-		{gcvctor.Int64Value(2), gcvctor.StringValue("b")},
-		{gcvctor.Int64Value(3), gcvctor.StringValue("c")},
-	}
-	formatter := spanvalue.LiteralFormatConfig()
-
-	var writerOut bytes.Buffer
-	w := mustNewSQLInsertWriter(t, &writerOut, "users", WithSQLBatchSize(2))
-	tuples := make([]string, 0, len(rows))
-	for _, values := range rows {
-		if err := w.WriteValues(columnNames, values); err != nil {
-			t.Fatal(err)
-		}
-		formatted, err := spanvalue.FormatRowColumns(formatter, columnNames, values)
+	prefix := func(kind SQLInsertKind, dialect databasepb.DatabaseDialect, table string, cols []string) string {
+		t.Helper()
+		got, err := FormatSQLInsertPrefix(kind, dialect, table, cols)
 		if err != nil {
 			t.Fatal(err)
 		}
-		tuples = append(tuples, FormatSQLInsertValuesTuple(formatted))
-	}
-	if err := w.Flush(); err != nil {
-		t.Fatal(err)
+		return got
 	}
 
-	prefix, err := FormatSQLInsertPrefix(SQLInsert, databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, "users", columnNames)
-	if err != nil {
-		t.Fatal(err)
+	t.Run("single row", func(t *testing.T) {
+		t.Parallel()
+		p := prefix(SQLInsert, gs, "users", []string{"id", "name"})
+		got := FormatSQLInsertStatement(p, []string{"1", `"a"`})
+		want := "INSERT INTO `users` (`id`, `name`) VALUES (1, \"a\");\n"
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Fatal(diff)
+		}
+	})
+
+	t.Run("caller assembled batch and remainder", func(t *testing.T) {
+		t.Parallel()
+		p := prefix(SQLInsert, gs, "users", []string{"id", "name"})
+		row := func(id, name string) string {
+			return FormatSQLInsertValuesTuple([]string{id, name})
+		}
+		batch := p + "\n  " + row("1", `"a"`) + ",\n  " + row("2", `"b"`) + ";\n"
+		rest := p + "\n  " + row("3", `"c"`) + ";\n"
+		want := "" +
+			"INSERT INTO `users` (`id`, `name`) VALUES\n" +
+			"  (1, \"a\"),\n" +
+			"  (2, \"b\");\n" +
+			"INSERT INTO `users` (`id`, `name`) VALUES\n" +
+			"  (3, \"c\");\n"
+		if diff := cmp.Diff(want, batch+rest); diff != "" {
+			t.Fatal(diff)
+		}
+	})
+
+	t.Run("postgresql literals stay caller text", func(t *testing.T) {
+		t.Parallel()
+		p := prefix(SQLInsert, pg, "users", []string{"id", "name"})
+		got := FormatSQLInsertStatement(p, []string{"1", "'a'"})
+		want := "INSERT INTO \"users\" (\"id\", \"name\") VALUES (1, 'a');\n"
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Fatal(diff)
+		}
+	})
+
+	t.Run("qualified and escaped identifiers", func(t *testing.T) {
+		t.Parallel()
+		got := prefix(SQLInsert, gs, "db.users", []string{"a`b"})
+		want := "INSERT INTO `db`.`users` (`a\\`b`) VALUES"
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Fatal(diff)
+		}
+	})
+
+	t.Run("google SQL kinds", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			kind SQLInsertKind
+			want string
+		}{
+			{SQLInsert, "INSERT INTO `users` (`id`) VALUES"},
+			{SQLInsertOrIgnore, "INSERT OR IGNORE INTO `users` (`id`) VALUES"},
+			{SQLInsertOrUpdate, "INSERT OR UPDATE INTO `users` (`id`) VALUES"},
+		}
+		for _, tt := range cases {
+			got := prefix(tt.kind, gs, "users", []string{"id"})
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Fatal(diff)
+			}
+		}
+	})
+
+	t.Run("unspecified dialect matches GoogleSQL quoting", func(t *testing.T) {
+		t.Parallel()
+		got := prefix(SQLInsert, unspec, "users", []string{"id"})
+		want := "INSERT INTO `users` (`id`) VALUES"
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Fatal(diff)
+		}
+	})
+}
+
+func TestFormatSQLInsertPrefixErrors(t *testing.T) {
+	t.Parallel()
+
+	gs := databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL
+	pg := databasepb.DatabaseDialect_POSTGRESQL
+
+	_, err := FormatSQLInsertPrefix(SQLInsertOrIgnore, pg, "users", []string{"id"})
+	if !errors.Is(err, ErrInvalidSQLInsertKindForDialect) {
+		t.Fatalf("OR IGNORE error = %v", err)
 	}
-	first, err := FormatSQLInsertBatch(prefix, tuples[:2])
-	if err != nil {
-		t.Fatal(err)
+	_, err = FormatSQLInsertPrefix(SQLInsertOrUpdate, pg, "users", []string{"id"})
+	if !errors.Is(err, ErrInvalidSQLInsertKindForDialect) {
+		t.Fatalf("OR UPDATE error = %v", err)
 	}
-	rest, err := FormatSQLInsertBatch(prefix, tuples[2:])
-	if err != nil {
-		t.Fatal(err)
+	_, err = FormatSQLInsertPrefix(SQLInsertKind(9), gs, "users", []string{"id"})
+	if !errors.Is(err, ErrInvalidSQLInsertKind) {
+		t.Fatalf("invalid kind error = %v", err)
 	}
-	if diff := cmp.Diff(writerOut.String(), first+rest); diff != "" {
-		t.Fatalf("batch assembly mismatch (-writer +fragment):\n%s", diff)
+	_, err = FormatSQLInsertPrefix(SQLInsert, gs, "  ", []string{"id"})
+	if !errors.Is(err, ErrEmptyTableName) {
+		t.Fatalf("blank table error = %v", err)
+	}
+	_, err = FormatSQLInsertPrefix(SQLInsert, gs, "db..users", []string{"id"})
+	if !errors.Is(err, ErrEmptyTableName) {
+		t.Fatalf("empty segment error = %v", err)
+	}
+	_, err = FormatSQLInsertPrefix(SQLInsert, gs, "users", nil)
+	if !errors.Is(err, ErrMissingColumnNames) {
+		t.Fatalf("nil columns error = %v", err)
+	}
+	_, err = FormatSQLInsertPrefix(SQLInsert, gs, "users", []string{})
+	if !errors.Is(err, ErrMissingColumnNames) {
+		t.Fatalf("empty columns error = %v", err)
+	}
+	_, err = FormatSQLInsertPrefix(SQLInsert, gs, "users", []string{"id", ""})
+	if !errors.Is(err, ErrEmptyColumnName) || errors.Is(err, ErrMissingColumnNames) {
+		t.Fatalf("empty column element error = %v", err)
 	}
 }
 
-func TestFormatSQLInsertPrefixKindsAndDialect(t *testing.T) {
+func TestFormatSQLInsertTupleDoesNotValidateWidth(t *testing.T) {
 	t.Parallel()
 
-	prefix, err := FormatSQLInsertPrefix(SQLInsertOrIgnore, databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, "users", []string{"id"})
-	if err != nil {
-		t.Fatal(err)
+	got := FormatSQLInsertValuesTuple(nil)
+	if got != "()" {
+		t.Fatalf("tuple = %q, want ()", got)
 	}
-	if diff := cmp.Diff("INSERT OR IGNORE INTO `users` (`id`) VALUES", prefix); diff != "" {
-		t.Fatal(diff)
-	}
-
-	_, err = FormatSQLInsertPrefix(SQLInsertOrUpdate, databasepb.DatabaseDialect_POSTGRESQL, "users", []string{"id"})
-	if !errors.Is(err, ErrInvalidSQLInsertKindForDialect) {
-		t.Fatalf("error = %v, want ErrInvalidSQLInsertKindForDialect", err)
-	}
-	_, err = FormatSQLInsertPrefix(SQLInsertKind(9), databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, "users", []string{"id"})
-	if !errors.Is(err, ErrInvalidSQLInsertKind) {
-		t.Fatalf("error = %v, want ErrInvalidSQLInsertKind", err)
-	}
-	_, err = FormatSQLInsertPrefix(SQLInsert, databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, "  ", nil)
-	if !errors.Is(err, ErrEmptyTableName) {
-		t.Fatalf("error = %v, want ErrEmptyTableName", err)
-	}
-	_, err = FormatSQLInsertPrefix(SQLInsert, databasepb.DatabaseDialect_GOOGLE_STANDARD_SQL, "users", nil)
-	if !errors.Is(err, ErrEmptyColumnName) {
-		t.Fatalf("error = %v, want ErrEmptyColumnName", err)
-	}
-
-	pg, err := FormatSQLInsertPrefix(SQLInsert, databasepb.DatabaseDialect_POSTGRESQL, "users", []string{"id"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if diff := cmp.Diff(`INSERT INTO "users" ("id") VALUES`, pg); diff != "" {
-		t.Fatal(diff)
+	stmt := FormatSQLInsertStatement("INSERT INTO `t` (`a`, `b`) VALUES", []string{"1"})
+	if !strings.HasSuffix(stmt, " (1);\n") {
+		t.Fatalf("statement = %q", stmt)
 	}
 }
