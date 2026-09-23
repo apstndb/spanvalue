@@ -334,3 +334,109 @@ func TestRunRowSeqDeferredMetadata_nilArguments(t *testing.T) {
 		t.Fatal("PrepareMetadata should have been called with nil metadata")
 	}
 }
+
+func TestRunRowSeqWithStats(t *testing.T) {
+	t.Parallel()
+	failure := errors.New("source or hook failure")
+	for _, tc := range []struct {
+		name       string
+		rows       int
+		fail       string
+		wantRead   int
+		wantFinish bool
+	}{
+		{"success", 2, "", 2, true},
+		{"empty", 0, "", 0, true},
+		{"first source error", 0, "source", 0, false},
+		{"late source error", 1, "source", 1, false},
+		{"prepare error", 2, "prepare", 0, false},
+		{"write error", 2, "write", 0, false},
+		{"finish error", 2, "finish", 2, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			row := mustNewSpannerRow(t, []string{"id"}, []any{int64(1)})
+			md := metadataWithColumnNames("id")
+			plan := &sppb.QueryPlan{}
+			var metadata *sppb.ResultSetMetadata
+			var stats RowIteratorStats
+			released, statsCalls := false, 0
+			rows := func(yield func(*spanner.Row, error) bool) {
+				defer func() {
+					released = true
+					stats = RowIteratorStats{QueryPlan: plan, QueryStats: map[string]any{"elapsed_time": "1ms"}, RowCount: 42}
+				}()
+				metadata = md
+				for range tc.rows {
+					if !yield(row, nil) {
+						return
+					}
+				}
+				if tc.fail == "source" {
+					yield(nil, failure)
+				}
+			}
+			var finished *RowIteratorResult
+			hooks := RowIteratorHooks{
+				PrepareMetadata: func(got *sppb.ResultSetMetadata) error {
+					if got != md {
+						t.Fatal("metadata was not published before PrepareMetadata")
+					}
+					if tc.fail == "prepare" {
+						return failure
+					}
+					return nil
+				},
+				WriteRow: func(*spanner.Row) error {
+					if tc.fail == "write" {
+						return failure
+					}
+					return nil
+				},
+				Finish: func(got *RowIteratorResult) error {
+					if statsCalls != 1 {
+						t.Fatal("stats were not read before Finish")
+					}
+					finished = got
+					if tc.fail == "finish" {
+						return failure
+					}
+					return nil
+				},
+			}
+			got, err := RunRowSeqWithStats(func() *sppb.ResultSetMetadata { return metadata }, rows, func() RowIteratorStats {
+				if !released {
+					t.Fatal("stats read before producer cleanup")
+				}
+				statsCalls++
+				return stats
+			}, hooks)
+			var wantErr error
+			if tc.fail != "" {
+				wantErr = failure
+			}
+			if !errors.Is(err, wantErr) {
+				t.Fatalf("error = %v, want %v", err, wantErr)
+			}
+			if got == nil || got.Metadata != md || got.RowsRead != tc.wantRead || got.Stats.QueryPlan != plan || got.Stats.RowCount != 42 || got.Stats.QueryStats["elapsed_time"] != "1ms" {
+				t.Fatalf("unexpected result: %+v", got)
+			}
+			if statsCalls != 1 || (finished != nil) != tc.wantFinish || (finished != nil && finished != got) {
+				t.Fatalf("stats calls = %d, Finish result = %p, returned = %p", statsCalls, finished, got)
+			}
+		})
+	}
+}
+
+func TestRunRowSeqWithStats_nilSeq(t *testing.T) {
+	t.Parallel()
+	got, err := RunRowSeqWithStats(func() *sppb.ResultSetMetadata {
+		t.Fatal("unexpected metadata callback")
+		return nil
+	}, nil, func() RowIteratorStats {
+		t.Fatal("unexpected stats callback")
+		return RowIteratorStats{}
+	}, RowIteratorHooks{})
+	if got != nil || !errors.Is(err, ErrNilRowSeq) {
+		t.Fatalf("got (%v, %v), want (nil, ErrNilRowSeq)", got, err)
+	}
+}

@@ -52,14 +52,7 @@ func RowSeq(rows ...*spanner.Row) iter.Seq2[*spanner.Row, error] {
 // Yielding [google.golang.org/api/iterator.Done], directly or wrapped, is also
 // an error; only returning from the sequence indicates successful exhaustion.
 func RunRowSeq(md *sppb.ResultSetMetadata, rows iter.Seq2[*spanner.Row, error], hooks RowIteratorHooks) (*RowIteratorResult, error) {
-	if rows == nil {
-		return nil, ErrNilRowSeq
-	}
-	next, release := iter.Pull2(rows)
-	// Wrapping the static metadata in a closure costs one allocation per run
-	// (not per row); it keeps the facade single-representation instead of a
-	// two-field variant with a which-field-wins branch.
-	return runRowIterator(&seqRowFacade{md: func() *sppb.ResultSetMetadata { return md }, nextPair: next, release: release}, hooks)
+	return RunRowSeqDeferredMetadata(func() *sppb.ResultSetMetadata { return md }, rows, hooks)
 }
 
 // RunRowSeqDeferredMetadata is [RunRowSeq] for producers that learn the row
@@ -74,6 +67,22 @@ func RunRowSeq(md *sppb.ResultSetMetadata, rows iter.Seq2[*spanner.Row, error], 
 //
 // All other semantics match [RunRowSeq].
 func RunRowSeqDeferredMetadata(metadata func() *sppb.ResultSetMetadata, rows iter.Seq2[*spanner.Row, error], hooks RowIteratorHooks) (*RowIteratorResult, error) {
+	return RunRowSeqWithStats(metadata, rows, nil, hooks)
+}
+
+// RunRowSeqWithStats is [RunRowSeqDeferredMetadata] for row sources that also
+// supply query statistics, such as decoded or retained query results.
+// Metadata follows the same deferred schedule. stats is called exactly once
+// after the sequence is released (including producer defers), before Finish,
+// and on error paths too. A nil stats callback supplies zero statistics.
+// A nil sequence returns [ErrNilRowSeq] without invoking either callback.
+//
+// The producer owns the completeness of its statistics: on a failed or stopped
+// sequence they may be partial or zero. Supplying statistics never turns an
+// iteration or hook error into success; Finish still runs only after all rows
+// succeed. [RowIteratorResult.RowsRead] counts successful WriteRow calls, not
+// the supplied DML RowCount. Maps and protos are borrowed, not deep-copied.
+func RunRowSeqWithStats(metadata func() *sppb.ResultSetMetadata, rows iter.Seq2[*spanner.Row, error], stats func() RowIteratorStats, hooks RowIteratorHooks) (*RowIteratorResult, error) {
 	if rows == nil {
 		return nil, ErrNilRowSeq
 	}
@@ -81,7 +90,7 @@ func RunRowSeqDeferredMetadata(metadata func() *sppb.ResultSetMetadata, rows ite
 		metadata = func() *sppb.ResultSetMetadata { return nil }
 	}
 	next, release := iter.Pull2(rows)
-	return runRowIterator(&seqRowFacade{md: metadata, nextPair: next, release: release}, hooks)
+	return runRowIterator(&seqRowFacade{md: metadata, readStats: stats, nextPair: next, release: release}, hooks)
 }
 
 // WriteRowSeq streams rows into w using [RowIteratorHooksFromWriter], the
@@ -119,9 +128,10 @@ func WriteRowSeqDeferredMetadata(metadata func() *sppb.ResultSetMetadata, rows i
 // md is a func so [RunRowSeqDeferredMetadata] can defer row-type resolution
 // until runRowIterator evaluates it (after the first next call).
 type seqRowFacade struct {
-	md       func() *sppb.ResultSetMetadata
-	nextPair func() (*spanner.Row, error, bool)
-	release  func()
+	md        func() *sppb.ResultSetMetadata
+	readStats func() RowIteratorStats
+	nextPair  func() (*spanner.Row, error, bool)
+	release   func()
 }
 
 func (f *seqRowFacade) next() (*spanner.Row, error) {
@@ -147,5 +157,8 @@ func (f *seqRowFacade) metadata() *sppb.ResultSetMetadata {
 }
 
 func (f *seqRowFacade) stats() RowIteratorStats {
+	if f.readStats != nil {
+		return f.readStats()
+	}
 	return RowIteratorStats{}
 }
