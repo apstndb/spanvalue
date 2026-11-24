@@ -1,6 +1,6 @@
 # CI mirrors local `make check` (fmt-check, vet, build, test, lint) plus
-# race detection, Example tests, and govulncheck (PR-blocking; also scheduled
-# weekly to catch newly published advisories without a code change).
+# race detection, Example tests, and govulncheck. The weekly vulnerability
+# scan tracks newly published advisories.
 
 name: Go
 
@@ -101,8 +101,7 @@ jobs:
   govulncheck:
     name: govulncheck
     # Runs on push, pull_request, and schedule. Symbol-level findings
-    # block PRs. The weekly run tracks advisories affecting main between
-    # merges.
+    # fail this job.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
