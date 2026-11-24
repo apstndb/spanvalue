@@ -100,10 +100,9 @@ jobs:
 
   govulncheck:
     name: govulncheck
-    # Runs on every trigger (push, pull_request, schedule) and is PR-blocking:
-    # the baseline is clean at the symbol level (#177), so any reachable
-    # finding is a regression. The weekly schedule still catches advisories
-    # published between merges.
+    # Runs on push, pull_request, and schedule. Symbol-level findings
+    # block PRs. The weekly run tracks advisories affecting main between
+    # merges.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
