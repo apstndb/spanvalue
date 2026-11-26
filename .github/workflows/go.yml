@@ -1,6 +1,6 @@
 # CI mirrors local `make check` (fmt-check, vet, build, test, lint) plus
-# race detection, Example tests, and govulncheck (PR-blocking; also scheduled
-# weekly to catch newly published advisories without a code change).
+# race detection, Example tests, and govulncheck. The weekly vulnerability
+# scan tracks newly published advisories.
 
 name: Go
 
@@ -100,16 +100,16 @@ jobs:
 
   govulncheck:
     name: govulncheck
-    # Runs on every trigger (push, pull_request, schedule) and is PR-blocking:
-    # the baseline is clean at the symbol level (#177), so any reachable
-    # finding is a regression. The weekly schedule still catches advisories
-    # published between merges.
+    # Compare PRs with their base and report known findings on every run.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Pull-request runs need the first parent of the merge commit.
+          fetch-depth: 2
+          persist-credentials: false
 
-      # The scanner tracks @latest, so use the current Go release for its
-      # installation requirements and current stdlib vulnerability coverage.
+      # Build and run the scanner with the same current Go release.
       # The other root jobs continue to verify go.mod's minimum version.
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -118,5 +118,17 @@ jobs:
           check-latest: true
           cache: false
 
-      - name: Run govulncheck
-        run: make vulncheck
+      - name: Scan both library modules
+        run: |
+          scan_dir="$(mktemp -d "$RUNNER_TEMP/spanvalue-vuln.XXXXXX")"
+          base_checkout=""
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            git rev-parse --verify HEAD^2 >/dev/null
+            base_checkout="$scan_dir/base"
+            mkdir "$base_checkout"
+            git archive HEAD^1 | tar -x -C "$base_checkout"
+          fi
+          GOBIN="$scan_dir" go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
+          curl -fsSL --retry 2 https://vuln.go.dev/vulndb.zip -o "$scan_dir/vulndb.zip"
+          unzip -q "$scan_dir/vulndb.zip" -d "$scan_dir/db"
+          PATH="$scan_dir:$PATH" bash .github/scripts/vulncheck.sh "file://$scan_dir/db" "$base_checkout"
