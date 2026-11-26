@@ -1,0 +1,12 @@
+# Tracked advisories for the root and dbsqlrows/gospanner modules on Go 1.25.
+# Remove each entry when the corresponding finding is resolved.
+
+# x/net HTTP/2 and reverse-proxy paths. The v0.60.0 fix requires Go 1.26.0.
+GO-2026-6603
+GO-2026-6610
+GO-2026-6611
+GO-2026-6612
+GO-2026-6617
+
+# OpenTelemetry tracing. The v1.47.0 fix requires Go 1.26.0.
+GO-2026-6974

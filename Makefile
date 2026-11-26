@@ -27,8 +27,7 @@ test-v:
 vet:
 	go vet ./...
 
-# Mirrors the CI govulncheck job for local parity. Deliberately not part of
-# `check`: it needs network access (vuln DB + @latest scanner) and would slow
-# the inner loop.
+# Report root-module findings for local investigation. CI also scans the
+# nested module and checks PRs for new symbol-level findings.
 vulncheck:
 	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
